@@ -1,95 +1,128 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import * as api from '../api';
+import toast from 'react-hot-toast';
 import { AuthContext } from '../context/AuthContext';
+import ReviewModal from '../components/ReviewModal'; // Import the new modal
+import ReviewCard from '../components/ReviewCard';
+import { PlusCircle, CheckCircle } from 'lucide-react';
+import Skeleton from 'react-loading-skeleton';
 
 const MovieDetailPage = () => {
   const { id } = useParams();
   const { user } = useContext(AuthContext);
   const [movie, setMovie] = useState(null);
   const [reviews, setReviews] = useState([]);
-  const [reviewText, setReviewText] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchMovieData = async () => {
-      try {
-        const { data: movieData } = await api.getMovieDetails(id);
-        const { data: reviewData } = await api.getReviewsForMovie(id);
-        setMovie(movieData);
-        setReviews(reviewData);
-      } catch (error) {
-        console.error("Failed to fetch movie data", error);
-      }
-    };
-    fetchMovieData();
-  }, [id]);
-
-  const handleReviewSubmit = async (e) => {
-    e.preventDefault();
-    const reviewData = {
-        movieId: movie.id,
-        text: reviewText,
-        movieTitle: movie.title,
-        moviePoster: movie.poster_path
-    }
+  const fetchMovieData = async () => {
+    setLoading(true);
     try {
-        const { data } = await api.postReview(reviewData);
-        setReviews([data, ...reviews]);
-        setReviewText('');
-    } catch(err) {
-        console.error(err);
+      const { data: movieData } = await api.getMovieDetails(id);
+      const { data: reviewData } = await api.getReviewsForMovie(id);
+      setMovie(movieData);
+      setReviews(reviewData);
+    } catch (error) {
+      console.error("Failed to fetch movie data", error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (!movie) return <p>Loading...</p>;
+  useEffect(() => {
+    fetchMovieData();
+  }, [id]);
+
+  const handleAddToWatchlist = async () => {
+    try {
+      await api.addToWatchlist(movie.id);
+      toast.success(`${movie.title} added to your watchlist!`);
+    } catch (err) {
+      toast.error(err.response?.data?.msg || 'Could not add to watchlist.');
+    }
+  };
+
+  const handleAddToWatched = async () => {
+    try {
+      await api.addToWatched(movie.id);
+      toast.success(`${movie.title} marked as watched!`);
+    } catch (err) {
+      toast.error(err.response?.data?.msg || 'Could not mark as watched.');
+    }
+  };
+
+
+  if (loading) return <MovieDetailSkeleton />;
+  if (!movie) return <p className="text-center text-2xl">Movie not found.</p>;
   
-  const IMG_BASE_URL = 'https://image.tmdb.org/t/p/w500';
+  const IMG_BASE_URL = 'https://image.tmdb.org/t/p/';
 
   return (
-    <div>
-      <div className="md:flex gap-8 mb-8">
-        <img src={`${IMG_BASE_URL}${movie.poster_path}`} alt={movie.title} className="w-64 rounded-lg shadow-lg mx-auto md:mx-0"/>
+    <>
+      <ReviewModal 
+        isOpen={isModalOpen}
+        setIsOpen={setIsModalOpen}
+        movie={movie}
+        onReviewPosted={() => fetchMovieData()}
+      />
+      <div className="relative h-96 -mt-6 -mx-6">
+        <img src={`${IMG_BASE_URL}original${movie.backdrop_path}`} alt="" className="w-full h-full object-cover"/>
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-transparent" />
+      </div>
+
+      <div className="relative -mt-32 space-y-12">
+        <div className="md:flex gap-8">
+          <img src={`${IMG_BASE_URL}w500${movie.poster_path}`} alt={movie.title} className="w-64 rounded-lg shadow-2xl mx-auto md:mx-0 mb-4 md:mb-0"/>
+          <div className="flex-1 pt-24">
+            <h1 className="text-4xl lg:text-5xl font-bold">{movie.title}</h1>
+            <p className="text-xl text-gray-400 mt-1">{movie.release_date?.substring(0,4)}</p>
+            <p className="my-6 text-gray-300 leading-relaxed">{movie.overview}</p>
+            {user && (
+              <div className="flex flex-wrap gap-4">
+                <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 bg-primary hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+                  <PlusCircle size={20} /> Add a Review
+                </button>
+                <button onClick={handleAddToWatched} className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+                  <CheckCircle size={20} /> Mark as Watched
+                </button>
+                 <button onClick={handleAddToWatchlist} className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+                  <PlusCircle size={20} /> Add to Watchlist
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      
         <div>
-          <h1 className="text-4xl font-bold">{movie.title} <span className="text-2xl text-gray-400">({movie.release_date.substring(0,4)})</span></h1>
-          <p className="my-4 text-gray-300">{movie.overview}</p>
-          {user && (
-            <div className="flex gap-4">
-              <button onClick={() => api.addToWatched(movie.id)} className="bg-green-600 px-4 py-2 rounded-lg">Log as Watched</button>
-              <button onClick={() => api.addToWatchlist(movie.id)} className="bg-blue-600 px-4 py-2 rounded-lg">Add to Watchlist</button>
-            </div>
-          )}
+          <h2 className="text-3xl font-bold mb-4">Reviews</h2>
+          <div className="space-y-4">
+              {reviews.length > 0 ? reviews.map(r => (
+                  <ReviewCard key={r._id} review={r} />
+              )) : <p className="text-gray-400">No reviews yet. Be the first!</p>}
+          </div>
         </div>
       </div>
-      
-      {user && (
-        <div className="my-8">
-            <h3 className="text-2xl font-bold mb-4">Add Your Review</h3>
-            <form onSubmit={handleReviewSubmit}>
-                <textarea 
-                    value={reviewText}
-                    onChange={(e) => setReviewText(e.target.value)}
-                    className="w-full p-2 bg-gray-700 rounded"
-                    rows="4"
-                    placeholder="Write your thoughts...">
-                </textarea>
-                <button type="submit" className="mt-2 bg-green-500 px-4 py-2 rounded-lg">Post Review</button>
-            </form>
-        </div>
-      )}
+    </>
+  );
+};
 
-      <div>
-        <h2 className="text-3xl font-bold mb-4">Reviews</h2>
-        <div className="space-y-4">
-            {reviews.length > 0 ? reviews.map(r => (
-                <div key={r._id} className="bg-gray-800 p-4 rounded-lg">
-                    <p className="font-bold">{r.user.username}</p>
-                    <p>{r.text}</p>
-                </div>
-            )) : <p>No reviews yet. Be the first!</p>}
+// Skeleton component for a better loading experience
+const MovieDetailSkeleton = () => (
+  <>
+    <Skeleton height={384} className="-mt-6 -mx-6" />
+    <div className="relative -mt-32">
+      <div className="md:flex gap-8">
+        <Skeleton height={384} width={256} />
+        <div className="flex-1 pt-24">
+          <Skeleton height={48} width={400} />
+          <Skeleton height={28} width={100} className="mt-2" />
+          <Skeleton count={4} className="my-6" />
         </div>
       </div>
     </div>
-  );
-};
+  </>
+);
+
 
 export default MovieDetailPage;

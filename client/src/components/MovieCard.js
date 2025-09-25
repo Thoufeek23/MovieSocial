@@ -6,14 +6,16 @@ const MovieCard = ({ movie }) => {
 
   return (
     <Link to={`/movie/${movie.id}`}>
-      <div className="bg-gray-800 rounded-lg overflow-hidden shadow-lg hover:shadow-2xl transition-shadow duration-300">
+      {/* Added group class for hover effect and transform/scale for a nice zoom */}
+      <div className="bg-gray-800 rounded-lg overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:scale-105 group">
         <img
           src={movie.poster_path ? `${IMG_BASE_URL}${movie.poster_path}` : 'https://via.placeholder.com/500x750?text=No+Image'}
           alt={movie.title}
           className="w-full"
         />
         <div className="p-4">
-          <h3 className="font-bold text-lg truncate">{movie.title}</h3>
+           {/* Title color changes on group hover */}
+          <h3 className="font-bold text-lg truncate group-hover:text-green-400 transition-colors">{movie.title}</h3>
           <p className="text-gray-400">{movie.release_date?.substring(0, 4)}</p>
         </div>
       </div>

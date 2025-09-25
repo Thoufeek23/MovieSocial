@@ -1,5 +1,6 @@
 // src/App.js
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import Navbar from './components/Navbar';
 import PrivateRoute from './components/PrivateRoute';
 import HomePage from './pages/HomePage';
@@ -12,6 +13,16 @@ import ProfilePage from './pages/ProfilePage'; // <-- FIX: Added import
 function App() {
   return (
     <Router>
+      <Toaster 
+        position="top-center"
+        reverseOrder={false}
+        toastOptions={{
+          style: {
+            background: '#27272a',
+            color: '#fafafa',
+          },
+        }}
+      />
       <Navbar />
       <main className="container mx-auto p-4 md:p-6">
         <Routes>
