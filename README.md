@@ -64,21 +64,6 @@ Run the frontend:
 
 npm start
 
-🗂️ Project Structure
-movie-log/
-├── client/ # React frontend
-│ ├── src/
-│ │ ├── api/ # Axios API calls
-│ │ ├── components/ # UI components
-│ │ ├── context/ # Auth context provider
-│ │ ├── pages/ # App pages
-│ │ └── App.js
-│ └── tailwind.config.js
-└── server/ # Node.js backend
-├── models/ # Mongoose schemas
-├── routes/ # Express routes
-└── index.js # Server entry
-
 🔑 API Routes (Server)
 
 POST /api/auth/register → Register user
