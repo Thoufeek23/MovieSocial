@@ -6,6 +6,7 @@ const { protect } = require('../middleware/authMiddleware');
 router.get('/search', searchUsers);
 router.get('/:username', getUserProfile);
 router.patch('/me', protect, updateProfile);
+router.delete('/me', protect, require('../controllers/userController').deleteMyAccount);
 router.post('/:username/follow', protect, followUser);
 router.delete('/:username/follow', protect, unfollowUser);
 router.post('/watchlist', protect, addToWatchlist);

@@ -1,9 +1,8 @@
 import React, { useContext } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import InstantSearchBar from './InstantSearchBar'; // Import new search bar
-import { useLocation } from 'react-router-dom';
-import { Clapperboard } from 'lucide-react'; // Icon
+import InstantSearchBar from './InstantSearchBar';
+import { Clapperboard } from 'lucide-react';
 
 const Navbar = () => {
   const { user, logout } = useContext(AuthContext);
@@ -21,7 +20,7 @@ const Navbar = () => {
   return (
     <nav className="bg-card/80 backdrop-blur-sm sticky top-0 z-50 p-4 border-b border-gray-800">
       <div className="container mx-auto flex justify-between items-center max-w-6xl">
-        <Link to="/" className="flex items-center gap-2 text-2xl font-bold text-white hover:text-primary transition-colors">
+        <Link to="/" aria-label="Home" className="flex items-center gap-2 text-2xl font-bold text-white hover:text-primary transition-colors">
           <Clapperboard size={28} />
           Movie Social
         </Link>
@@ -33,7 +32,7 @@ const Navbar = () => {
         <div className="flex items-center space-x-4">
           {user ? (
             <>
-              <Link to={`/?mine=true`} className="text-gray-300 hover:text-white transition-colors">Profile</Link>
+              <Link to={`/profile/${user.username}`} className="text-gray-300 hover:text-white transition-colors">Profile</Link>
               <button onClick={handleLogout} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
                 Logout
               </button>
