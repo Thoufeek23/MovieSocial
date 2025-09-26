@@ -20,12 +20,17 @@ const addToWatchlist = async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
         const { movieId } = req.body;
+        // normalize to strings for safe comparison
+        const mid = String(movieId);
 
-        if (user.watchlist.includes(movieId)) {
+        if (user.watchlist.map(String).includes(mid)) {
             return res.status(400).json({ msg: 'Movie already in watchlist' });
         }
 
-        user.watchlist.push(movieId);
+        // If movie is in watched, remove it to enforce exclusivity
+        user.watched = (user.watched || []).filter((id) => String(id) !== mid);
+
+        user.watchlist.push(mid);
         await user.save();
         res.json(user.watchlist);
     } catch (error) {
@@ -39,15 +44,47 @@ const addToWatched = async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
         const { movieId } = req.body;
+        const mid = String(movieId);
 
-        if (user.watched.includes(movieId)) {
+        if ((user.watched || []).map(String).includes(mid)) {
             return res.status(400).json({ msg: 'Movie already in watched list' });
         }
 
-        // Optional: Remove from watchlist if it exists there
-        user.watchlist = user.watchlist.filter((id) => id !== movieId);
+        // Remove from watchlist if it exists there
+        user.watchlist = (user.watchlist || []).filter((id) => String(id) !== mid);
 
-        user.watched.push(movieId);
+        user.watched = user.watched || [];
+        user.watched.push(mid);
+        await user.save();
+        res.json(user.watched);
+    } catch (error) {
+        res.status(500).json({ msg: 'Server Error' });
+    }
+};
+
+// @desc    Remove a movie from the user's watchlist
+// @route   DELETE /api/users/watchlist
+const removeFromWatchlist = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id);
+        const { movieId } = req.body;
+        const mid = String(movieId);
+        user.watchlist = (user.watchlist || []).filter((id) => String(id) !== mid);
+        await user.save();
+        res.json(user.watchlist);
+    } catch (error) {
+        res.status(500).json({ msg: 'Server Error' });
+    }
+};
+
+// @desc    Remove a movie from the user's watched list
+// @route   DELETE /api/users/watched
+const removeFromWatched = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id);
+        const { movieId } = req.body;
+        const mid = String(movieId);
+        user.watched = (user.watched || []).filter((id) => String(id) !== mid);
         await user.save();
         res.json(user.watched);
     } catch (error) {
@@ -60,4 +97,6 @@ module.exports = {
     getUserProfile,
     addToWatchlist,
     addToWatched,
+    removeFromWatchlist,
+    removeFromWatched,
 };
