@@ -2,11 +2,16 @@ import React, { useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import InstantSearchBar from './InstantSearchBar'; // Import new search bar
+import { useLocation } from 'react-router-dom';
 import { Clapperboard } from 'lucide-react'; // Icon
 
 const Navbar = () => {
   const { user, logout } = useContext(AuthContext);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const hideSearchOn = ['/login', '/signup'];
+  const shouldShowSearch = !hideSearchOn.includes(location.pathname);
 
   const handleLogout = () => {
     logout();
@@ -18,15 +23,17 @@ const Navbar = () => {
       <div className="container mx-auto flex justify-between items-center max-w-6xl">
         <Link to="/" className="flex items-center gap-2 text-2xl font-bold text-white hover:text-primary transition-colors">
           <Clapperboard size={28} />
-          MovieLog
+          Movie Social
         </Link>
-        <div className="hidden md:block">
-          <InstantSearchBar />
-        </div>
+        {shouldShowSearch && (
+          <div className="hidden md:block">
+            <InstantSearchBar />
+          </div>
+        )}
         <div className="flex items-center space-x-4">
           {user ? (
             <>
-              <Link to={`/profile/${user.username}`} className="text-gray-300 hover:text-white transition-colors">Profile</Link>
+              <Link to={`/?mine=true`} className="text-gray-300 hover:text-white transition-colors">Profile</Link>
               <button onClick={handleLogout} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
                 Logout
               </button>
@@ -41,9 +48,11 @@ const Navbar = () => {
           )}
         </div>
       </div>
-       <div className="md:hidden mt-4">
-          <InstantSearchBar />
-        </div>
+       {shouldShowSearch && (
+         <div className="md:hidden mt-4">
+           <InstantSearchBar />
+         </div>
+       )}
     </nav>
   );
 };

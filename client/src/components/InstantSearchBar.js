@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import * as api from '../api';
 import { Search, Film } from 'lucide-react';
 
@@ -7,6 +7,8 @@ const InstantSearchBar = () => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Debounce function to limit API calls
   const debounce = (func, delay) => {
@@ -44,6 +46,23 @@ const InstantSearchBar = () => {
     setQuery('');
   }
 
+  // Close the dropdown when the route or query string changes (e.g., user navigated or pressed Enter to search)
+  useEffect(() => {
+    if (isOpen) {
+      setIsOpen(false);
+      // keep the query in the input when navigating to the search page, but hide the dropdown
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname, location.search]);
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && query.trim().length > 0) {
+      // Navigate to the search results page with the full grid
+      navigate(`/search?q=${encodeURIComponent(query.trim())}`);
+      setIsOpen(false);
+    }
+  }
+
   return (
     <div className="relative w-full max-w-xs">
       <div className="relative">
@@ -52,6 +71,7 @@ const InstantSearchBar = () => {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={handleKeyDown}
           placeholder="Search movies..."
           className="w-full bg-card p-2 pl-10 rounded-lg border-2 border-transparent focus:border-primary focus:outline-none transition-colors"
         />
