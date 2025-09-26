@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 
-const MovieCard = ({ movie }) => {
+const MovieCard = ({ movie, showRating }) => {
   const IMG_BASE_URL = 'https://image.tmdb.org/t/p/w500';
 
   return (
@@ -17,6 +17,9 @@ const MovieCard = ({ movie }) => {
            {/* Title color changes on group hover */}
           <h3 className="font-bold text-lg truncate group-hover:text-green-400 transition-colors">{movie.title}</h3>
           <p className="text-gray-400">{movie.release_date?.substring(0, 4)}</p>
+          {showRating && typeof movie.vote_average !== 'undefined' && (
+            <p className="text-sm text-yellow-400 mt-1">Rating: {movie.vote_average.toFixed(1)}</p>
+          )}
         </div>
       </div>
     </Link>

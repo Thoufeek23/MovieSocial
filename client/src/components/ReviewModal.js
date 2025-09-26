@@ -1,13 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as api from '../api';
 import toast from 'react-hot-toast';
 import StarRating from './StarRating';
 import { X } from 'lucide-react';
 
-const ReviewModal = ({ isOpen, setIsOpen, movie, onReviewPosted }) => {
+const ReviewModal = ({ isOpen, setIsOpen, movie, existingReview, onReviewPosted }) => {
   const [reviewText, setReviewText] = useState('');
   const [rating, setRating] = useState(0);
+
+  useEffect(() => {
+    if (existingReview) {
+      setReviewText(existingReview.text);
+      setRating(existingReview.rating);
+    } else {
+      setReviewText('');
+      setRating(0);
+    }
+  }, [existingReview, isOpen]);
+
+  // Whether we're editing an existing review or creating a new one
+  const isEditing = !!existingReview;
 
   const handleReviewSubmit = async (e) => {
     e.preventDefault();
@@ -17,26 +30,34 @@ const ReviewModal = ({ isOpen, setIsOpen, movie, onReviewPosted }) => {
     }
 
     const reviewData = {
-      movieId: movie.id,
       text: reviewText,
       rating: rating,
-      movieTitle: movie.title,
-      moviePoster: movie.poster_path
+      ...(!existingReview && {
+        movieId: movie.id,
+        movieTitle: movie.title,
+        moviePoster: movie.poster_path
+      })
     };
+    
+  const toastId = toast.loading(isEditing ? 'Updating your review...' : 'Posting your review...');
 
-    const toastId = toast.loading('Posting your review...');
     try {
-      await api.postReview(reviewData);
-      toast.success('Review posted successfully!', { id: toastId });
-      onReviewPosted(); // Refresh reviews on the detail page
+      if (isEditing) {
+        await api.updateReview(existingReview._id, reviewData);
+      } else {
+        await api.postReview(reviewData);
+      }
+      toast.success(isEditing ? 'Review updated!' : 'Review posted!', { id: toastId });
+      if (typeof onReviewPosted === 'function') onReviewPosted();
       setIsOpen(false);
-      setReviewText('');
-      setRating(0);
     } catch (err) {
-      toast.error('Failed to post review.', { id: toastId });
+      toast.error(isEditing ? 'Failed to update.' : 'Failed to post.', { id: toastId });
       console.error(err);
     }
   };
+
+  const movieTitle = movie?.title || existingReview?.movieTitle || 'this movie';
+  const title = existingReview ? `Edit your review for ${movieTitle}` : `Your review for ${movieTitle}`;
 
   return (
     <AnimatePresence>
@@ -58,7 +79,7 @@ const ReviewModal = ({ isOpen, setIsOpen, movie, onReviewPosted }) => {
             <button onClick={() => setIsOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors">
               <X size={24} />
             </button>
-            <h3 className="text-2xl font-bold mb-4">Your review for {movie.title}</h3>
+            <h3 className="text-2xl font-bold mb-4">{title}</h3>
             <form onSubmit={handleReviewSubmit}>
                 <StarRating rating={rating} setRating={setRating} />
                 <textarea 
@@ -69,7 +90,7 @@ const ReviewModal = ({ isOpen, setIsOpen, movie, onReviewPosted }) => {
                     placeholder="What did you think?">
                 </textarea>
                 <button type="submit" className="mt-4 w-full bg-primary hover:bg-green-700 text-primary-foreground font-bold py-3 rounded-lg transition-colors">
-                  Post Review
+                  {isEditing ? 'Update Review' : 'Post Review'}
                 </button>
             </form>
           </motion.div>

@@ -24,8 +24,13 @@ export const getPopularMovies = () => API.get('/movies/popular');
 export const fetchFeed = () => API.get('/reviews/feed');
 export const postReview = (reviewData) => API.post('/reviews', reviewData);
 export const getReviewsForMovie = (movieId) => API.get(`/reviews/movie/${movieId}`);
+export const updateReview = (id, reviewData) => API.put(`/reviews/${id}`, reviewData); // <-- Add this
+export const deleteReview = (id) => API.delete(`/reviews/${id}`); // <-- Add this
+export const fetchMyReviews = () => API.get('/reviews/mine');
 
 // User Actions
 export const getUserProfile = (username) => API.get(`/users/${username}`);
 export const addToWatchlist = (movieId) => API.post('/users/watchlist', { movieId });
 export const addToWatched = (movieId) => API.post('/users/watched', { movieId });
+export const removeFromWatchlist = (movieId) => API.delete('/users/watchlist', { data: { movieId } });
+export const removeFromWatched = (movieId) => API.delete('/users/watched', { data: { movieId } });
