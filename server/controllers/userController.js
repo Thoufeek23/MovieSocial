@@ -1,14 +1,134 @@
 const User = require('../models/User');
+const jwt = require('jsonwebtoken');
+const Discussion = require('../models/Discussion');
 
 // @desc    Get user profile
 // @route   GET /api/users/:username
 const getUserProfile = async (req, res) => {
     try {
-        const user = await User.findOne({ username: req.params.username }).select('-passwordHash');
+        const user = await User.findOne({ username: req.params.username })
+            .select('-passwordHash')
+            .populate('followers', 'username avatar')
+            .populate('following', 'username avatar');
         if (!user) {
             return res.status(404).json({ msg: 'User not found' });
         }
-        res.json(user);
+        // Add follower/following counts and whether the current user follows this profile
+        const profile = user.toObject();
+        profile.followersCount = (user.followers || []).length;
+        profile.followingCount = (user.following || []).length;
+    profile.isFollowedByCurrentUser = false;
+
+        // If protect middleware ran it will set req.user. If not, also accept a Bearer token in the Authorization header
+        let currentUserId = null;
+        if (req.user) {
+            currentUserId = req.user.id;
+        } else if (req.headers && req.headers.authorization) {
+            try {
+                const auth = req.headers.authorization;
+                if (auth.startsWith('Bearer ')) {
+                    const token = auth.split(' ')[1];
+                    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+                    currentUserId = decoded.user && decoded.user.id ? decoded.user.id : null;
+                }
+            } catch (e) {
+                // ignore token errors — leave currentUserId null
+            }
+        }
+
+        if (currentUserId) {
+            profile.isFollowedByCurrentUser = (user.followers || []).some(f => String(f._id) === String(currentUserId));
+        }
+
+        // Add discussion counts: started and participated
+        try {
+            const startedCount = await Discussion.countDocuments({ starter: user._id });
+            // participated = commented (exclude starter-only) — count distinct discussions where user has at least one comment
+            const participatedCountAgg = await Discussion.aggregate([
+                { $match: { 'comments.user': user._id } },
+                { $group: { _id: '$_id' } },
+                { $count: 'count' }
+            ]);
+            const participatedCount = (participatedCountAgg[0] && participatedCountAgg[0].count) || 0;
+
+            profile.discussionsStarted = startedCount;
+            profile.discussionsParticipated = participatedCount;
+        } catch (e) {
+            profile.discussionsStarted = 0;
+            profile.discussionsParticipated = 0;
+        }
+        res.json(profile);
+    } catch (error) {
+        res.status(500).json({ msg: 'Server Error' });
+    }
+};
+
+// @desc    Update current user's profile (bio, avatar)
+// @route   PATCH /api/users/me
+const updateProfile = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id);
+        if (!user) return res.status(404).json({ msg: 'User not found' });
+
+        const { bio, avatar } = req.body;
+        if (typeof bio !== 'undefined') user.bio = bio;
+        if (typeof avatar !== 'undefined') user.avatar = avatar;
+
+        await user.save();
+        res.json({ msg: 'Profile updated', user });
+    } catch (error) {
+        res.status(500).json({ msg: 'Server Error' });
+    }
+};
+
+// @desc    Follow a user
+// @route   POST /api/users/:username/follow
+const followUser = async (req, res) => {
+    try {
+        const target = await User.findOne({ username: req.params.username });
+        if (!target) return res.status(404).json({ msg: 'User not found' });
+        const me = await User.findById(req.user.id);
+        if (!me) return res.status(404).json({ msg: 'User not found' });
+
+        // Prevent following yourself
+        if (String(target._id) === String(me._id)) {
+            return res.status(400).json({ msg: "You can't follow yourself" });
+        }
+
+        // Add to following/followers if not already present
+        if (!((me.following || []).map(String).includes(String(target._id)))) {
+            me.following = me.following || [];
+            me.following.push(target._id);
+            await me.save();
+        }
+        if (!((target.followers || []).map(String).includes(String(me._id)))) {
+            target.followers = target.followers || [];
+            target.followers.push(me._id);
+            await target.save();
+        }
+
+        res.json({ msg: 'Followed user' });
+    } catch (error) {
+        res.status(500).json({ msg: 'Server Error' });
+    }
+};
+
+// @desc    Unfollow a user
+// @route   DELETE /api/users/:username/follow
+const unfollowUser = async (req, res) => {
+    try {
+        const target = await User.findOne({ username: req.params.username });
+        if (!target) return res.status(404).json({ msg: 'User not found' });
+        const me = await User.findById(req.user.id);
+        if (!me) return res.status(404).json({ msg: 'User not found' });
+
+        me.following = (me.following || []).filter(id => String(id) !== String(target._id));
+        target.followers = (target.followers || []).filter(id => String(id) !== String(me._id));
+
+        await me.save();
+        await target.save();
+
+        res.json({ msg: 'Unfollowed user' });
     } catch (error) {
         res.status(500).json({ msg: 'Server Error' });
     }
@@ -93,10 +213,29 @@ const removeFromWatched = async (req, res) => {
 };
 
 
+// @desc    Search users by username prefix
+// @route   GET /api/users/search?q=...
+const searchUsers = async (req, res) => {
+    try {
+        const q = (req.query.q || '').trim();
+        if (!q) return res.json([]);
+        // search by prefix, case-insensitive, limit to 12
+        const re = new RegExp('^' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+        const users = await User.find({ username: re }).select('username avatar').limit(12);
+        res.json(users);
+    } catch (error) {
+        res.status(500).json({ msg: 'Server Error' });
+    }
+};
+
 module.exports = {
     getUserProfile,
+    updateProfile,
+    followUser,
+    unfollowUser,
     addToWatchlist,
     addToWatched,
     removeFromWatchlist,
     removeFromWatched,
+    searchUsers,
 };

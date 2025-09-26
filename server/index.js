@@ -19,6 +19,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/reviews', require('./routes/reviews'));
 app.use('/api/movies', require('./routes/movies'));
+app.use('/api/discussions', require('./routes/discussions'));
 
 // Basic Route for testing
 app.get('/', (req, res) => {
