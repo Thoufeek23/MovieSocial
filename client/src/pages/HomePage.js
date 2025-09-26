@@ -5,10 +5,13 @@ import MovieCard from '../components/MovieCard';
 import MovieCarousel from '../components/MovieCarousel'; // New component
 import Skeleton from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css' // Import skeleton styles
+import BookmarkButton from '../components/BookmarkButton';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import ReviewModal from '../components/ReviewModal';
 import toast from 'react-hot-toast';
+import { fetchDiscussions } from '../api';
+import { Link } from 'react-router-dom';
 
 const HomePage = () => {
   const [reviews, setReviews] = useState([]);
@@ -16,6 +19,7 @@ const HomePage = () => {
   const [watchedMovies, setWatchedMovies] = useState([]);
   const [watchlistMovies, setWatchlistMovies] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [discussions, setDiscussions] = useState([]);
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
@@ -59,6 +63,24 @@ const HomePage = () => {
           setPopularMovies(popularRes.data.results);
           const feedRes = await api.fetchFeed();
           setReviews(feedRes.data);
+          // load discussions
+          try {
+            const discRes = await fetchDiscussions({ sortBy: 'comments' });
+            const discs = discRes.data || [];
+            // fetch posters for top discussions (limit)
+            const top = discs.slice(0, 12);
+            const withPosters = await Promise.all(top.map(async d => {
+              try {
+                const movieRes = await api.getMovieDetails(d.movieId);
+                return { ...d, poster_path: movieRes.data.poster_path };
+              } catch (err) {
+                return { ...d, poster_path: null };
+              }
+            }));
+            setDiscussions(withPosters.concat(discs.slice(12)));
+          } catch (e) {
+            console.error('Failed to load discussions', e);
+          }
         }
       } catch (error) {
         console.error("Failed to fetch page data", error);
@@ -191,8 +213,36 @@ const HomePage = () => {
           </div>
         )}
       </div>
+
+      <div>
+        <h2 className="text-3xl font-bold mb-4">Discussions</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {discussions.length === 0 ? (
+            <p className="text-gray-400">No discussions yet.</p>
+          ) : (
+            discussions.map(d => (
+              <div key={d._id} className="relative group">
+                <Link to={`/discussions/${d._id}`} className="p-4 bg-card rounded-lg hover:shadow-lg transition-shadow flex items-start gap-4">
+                  <img src={d.poster_path ? `https://image.tmdb.org/t/p/w185${d.poster_path}` : '/poster_placeholder.png'} alt="poster" className="w-20 h-28 object-cover rounded shadow-sm" />
+                  <div className="flex-1">
+                    <div className="font-semibold text-lg text-gray-100 line-clamp-2">{d.title}</div>
+                    <div className="text-sm text-gray-400 mt-1">{d.movieTitle}</div>
+                    <div className="mt-3 text-sm text-gray-400">{d.comments?.length || 0} comments • Started by {d.starter?.username}</div>
+                  </div>
+                </Link>
+                {/* Hover actions (bookmark only) */}
+                <div className="absolute right-3 top-3 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                  <BookmarkButton id={d._1 || d._id} />
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 };
+
+// Removed NewDiscussionForm: start-discussion UI relocated/removed from homepage
 
 export default HomePage;

@@ -5,10 +5,11 @@ import Navbar from './components/Navbar';
 import PrivateRoute from './components/PrivateRoute';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
-import SignupPage from './pages/SignupPage'; // <-- FIX: Added import
+import SignupPage from './pages/SignupPage';
 import MovieDetailPage from './pages/MovieDetailPage';
 import SearchPage from './pages/SearchPage';
-import ProfilePage from './pages/ProfilePage'; // <-- FIX: Added import
+import ProfilePage from './pages/ProfilePage';
+import DiscussionPage from './pages/DiscussionPage';
 
 function App() {
   return (
@@ -31,6 +32,7 @@ function App() {
           <Route path="/search" element={<SearchPage />} />
           <Route path="/movie/:id" element={<MovieDetailPage />} />
           <Route path="/profile/:username" element={<ProfilePage />} />
+          <Route path="/discussions/:id" element={<DiscussionPage />} />
           <Route 
             path="/" 
             element={

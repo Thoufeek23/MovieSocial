@@ -238,4 +238,58 @@ module.exports = {
     removeFromWatchlist,
     removeFromWatched,
     searchUsers,
+    // Delete account
+    deleteMyAccount,
 };
+
+// DELETE /api/users/me - delete current user's account and cascade cleanups
+async function deleteMyAccount(req, res) {
+    try {
+        const userId = req.user.id;
+        const user = await User.findById(userId);
+        if (!user) return res.status(404).json({ msg: 'User not found' });
+
+        // Remove user's reviews
+        try {
+            const Review = require('../models/Review');
+            await Review.deleteMany({ user: userId });
+        } catch (e) {
+            console.error('Failed to delete user reviews:', e);
+        }
+
+        // Remove discussions started by user
+        try {
+            const Discussion = require('../models/Discussion');
+            await Discussion.deleteMany({ starter: userId });
+        } catch (e) {
+            console.error('Failed to delete user discussions:', e);
+        }
+
+        // Remove user's comments from other discussions
+        try {
+            const Discussion = require('../models/Discussion');
+            await Discussion.updateMany(
+                { 'comments.user': userId },
+                { $pull: { comments: { user: userId } } }
+            );
+        } catch (e) {
+            console.error('Failed to remove user comments from discussions:', e);
+        }
+
+        // Remove user from other users' followers/following lists
+        try {
+            await User.updateMany({ followers: userId }, { $pull: { followers: userId } });
+            await User.updateMany({ following: userId }, { $pull: { following: userId } });
+        } catch (e) {
+            console.error('Failed to clean follower/following references:', e);
+        }
+
+        // Finally delete the user
+        await User.findByIdAndDelete(userId);
+
+        res.json({ msg: 'Account deleted' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ msg: 'Server Error' });
+    }
+}

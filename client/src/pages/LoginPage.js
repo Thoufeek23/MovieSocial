@@ -3,6 +3,7 @@ import React, { useState, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import * as api from '../api';
+import toast from 'react-hot-toast';
 
 const LoginPage = () => {
   const [formData, setFormData] = useState({ email: '', password: '' });
@@ -26,11 +27,14 @@ const LoginPage = () => {
     }
   };
 
+  
+
   return (
     <div className="max-w-md mx-auto mt-10">
       <h2 className="text-3xl font-bold mb-6 text-center">Login</h2>
       <form onSubmit={handleSubmit} className="bg-gray-800 p-8 rounded-lg shadow-lg">
         {error && <p className="bg-red-500 text-white p-3 rounded mb-4">{error}</p>}
+        
         <div className="mb-4">
           <label className="block text-gray-300 mb-2">Email</label>
           <input type="email" name="email" onChange={handleChange} className="w-full p-2 bg-gray-700 rounded text-white" required />

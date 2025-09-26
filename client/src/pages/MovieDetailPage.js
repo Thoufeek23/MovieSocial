@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import * as api from '../api';
 import toast from 'react-hot-toast';
 import { AuthContext } from '../context/AuthContext';
 import ReviewModal from '../components/ReviewModal';
 import ReviewCard from '../components/ReviewCard';
 import { PlusCircle, CheckCircle } from 'lucide-react';
+import BookmarkButton from '../components/BookmarkButton';
 import Skeleton from 'react-loading-skeleton';
 
 const MovieDetailPage = () => {
@@ -16,6 +17,12 @@ const MovieDetailPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [reviewToEdit, setReviewToEdit] = useState(null); // State for editing
+  const [showDiscussionForm, setShowDiscussionForm] = useState(false);
+  const [discussionTitle, setDiscussionTitle] = useState('');
+  const [discussionWhy, setDiscussionWhy] = useState('');
+  const [movieDiscussions, setMovieDiscussions] = useState([]);
+  const [creatingDiscussion, setCreatingDiscussion] = useState(false);
+  const navigate = useNavigate();
 
   const fetchMovieData = async () => {
     // No need to set loading true here if it's just a refresh
@@ -24,6 +31,13 @@ const MovieDetailPage = () => {
       const { data: reviewData } = await api.getReviewsForMovie(id);
       setMovie(movieData);
       setReviews(reviewData);
+      // fetch discussions for this movie
+      try {
+        const discRes = await api.fetchDiscussions({ movieId: id });
+        setMovieDiscussions(discRes.data || []);
+      } catch (e) {
+        console.error('Failed to load movie discussions', e);
+      }
     } catch (error) {
       console.error("Failed to fetch movie data", error);
     } finally {
@@ -139,6 +153,9 @@ const MovieDetailPage = () => {
                  <button onClick={handleAddToWatchlist} className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
                   <PlusCircle size={20} /> Add to Watchlist
                 </button>
+                <button onClick={() => setShowDiscussionForm(s => !s)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+                  Start Discussion
+                </button>
               </div>
             )}
           </div>
@@ -178,6 +195,84 @@ const MovieDetailPage = () => {
                     onDelete={handleDeleteReview}  // Pass delete handler
                   />
               )) : <p className="text-gray-400">No reviews yet. Be the first!</p>}
+          </div>
+        </div>
+        {/* Discussion form (modal) and list for this movie */}
+          <div className="mt-8">
+            <h2 className="text-3xl font-bold mb-4">Discussions</h2>
+            {/* Modal */}
+            {showDiscussionForm && user && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center">
+                <div className="absolute inset-0 bg-black/50" onClick={() => { if (!creatingDiscussion) { setShowDiscussionForm(false); setDiscussionTitle(''); setDiscussionWhy(''); } }} />
+                <div className="bg-background max-w-2xl w-full p-6 rounded-lg shadow-xl z-10">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-semibold">Start a discussion about {movie.title}</h3>
+                    <button onClick={() => { if (!creatingDiscussion) { setShowDiscussionForm(false); setDiscussionTitle(''); setDiscussionWhy(''); } }} className="text-gray-400 hover:text-white">Close</button>
+                  </div>
+                  <div className="space-y-3">
+                    <label className="block text-sm font-medium">Title</label>
+                    <input value={discussionTitle} onChange={(e) => setDiscussionTitle(e.target.value)} className="w-full p-3 rounded bg-card" placeholder="What's the topic?" />
+
+                    <label className="block text-sm font-medium">Why are you starting this discussion?</label>
+                    <textarea value={discussionWhy} onChange={(e) => setDiscussionWhy(e.target.value)} rows={6} className="w-full p-3 rounded bg-card" placeholder="Share why this topic matters, your thoughts, or what you want to discuss..." />
+
+
+                    <div className="flex justify-end gap-3">
+                      <button onClick={() => { setShowDiscussionForm(false); setDiscussionTitle(''); setDiscussionWhy(''); }} disabled={creatingDiscussion} className="px-4 py-2 rounded bg-gray-700">Cancel</button>
+                      <button onClick={async () => {
+                        if (!discussionTitle.trim()) return toast.error('Please enter a title');
+                        if (!discussionWhy.trim()) return toast.error('Please write why you started this discussion');
+                        setCreatingDiscussion(true);
+                        try {
+                          const { data } = await api.postDiscussion({ title: discussionTitle, movieId: movie.id, movieTitle: movie.title });
+                          // Immediately add initial comment as the starter's comment
+                          try {
+                            await api.postDiscussionComment(data._id, { text: discussionWhy });
+                          } catch (err) {
+                            console.error('Failed to post initial comment', err);
+                          }
+                          // Reset and close
+                          setDiscussionTitle(''); setDiscussionWhy(''); setShowDiscussionForm(false);
+                          // refresh movie discussions list
+                          try {
+                            const discRes = await api.fetchDiscussions({ movieId: id });
+                            setMovieDiscussions(discRes.data || []);
+                          } catch (e) {
+                            console.error('Failed to refresh discussions', e);
+                          }
+                          navigate(`/discussions/${data._id}`);
+                        } catch (err) {
+                          console.error(err);
+                          toast.error('Failed to create discussion');
+                        } finally {
+                          setCreatingDiscussion(false);
+                        }
+                      }} className="px-4 py-2 rounded bg-primary">{creatingDiscussion ? 'Creating...' : 'Create Discussion'}</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {movieDiscussions.length === 0 ? (
+              <p className="text-gray-400">No discussions yet. Start one!</p>
+            ) : (
+              movieDiscussions.map(d => (
+                <div key={d._id} className="relative group">
+                  <Link to={`/discussions/${d._id}`} className="p-4 bg-card rounded-lg hover:shadow transition-shadow flex items-start gap-4">
+                    <img src={`https://image.tmdb.org/t/p/w154${movie.poster_path}`} alt="poster" className="w-20 h-28 object-cover rounded shadow-sm" />
+                    <div className="flex-1">
+                      <div className="font-semibold text-lg text-gray-100 line-clamp-2">{d.title}</div>
+                      <div className="text-sm text-gray-400 mt-1">Started by {d.starter.username} • {d.comments.length} comments</div>
+                    </div>
+                  </Link>
+                  <div className="absolute right-3 top-3 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                    <BookmarkButton id={d._id} />
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

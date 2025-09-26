@@ -1,6 +1,6 @@
 // src/context/AuthContext.js
 import React, { createContext, useReducer, useEffect } from 'react';
-import { jwtDecode } from 'jwt-decode'; // <-- FIX: Changed import style
+import { jwtDecode } from 'jwt-decode';
 
 const initialState = {
   user: null,

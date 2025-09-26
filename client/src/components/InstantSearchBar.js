@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import * as api from '../api';
 import { Search, Film } from 'lucide-react';
@@ -9,15 +9,6 @@ const InstantSearchBar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-
-  // Debounce function to limit API calls
-  const debounce = (func, delay) => {
-    let timeout;
-    return (...args) => {
-      clearTimeout(timeout);
-      timeout = setTimeout(() => func(...args), delay);
-    };
-  };
 
   const fetchResults = async (searchQuery) => {
     if (searchQuery.length > 2) {
@@ -34,12 +25,14 @@ const InstantSearchBar = () => {
     }
   };
 
-  // eslint-disable-next-line
-  const debouncedFetchResults = useCallback(debounce(fetchResults, 300), []);
-
+  // Simple debounce using useEffect
   useEffect(() => {
-    debouncedFetchResults(query);
-  }, [query, debouncedFetchResults]);
+    const t = setTimeout(() => {
+      fetchResults(query);
+    }, 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
 
   const closeDropdown = () => {
     setIsOpen(false);
