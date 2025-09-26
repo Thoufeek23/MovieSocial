@@ -6,7 +6,10 @@ const UserSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   passwordHash: { type: String, required: true },
   bio: { type: String, default: '' },
-  avatar: { type: String, default: 'default_avatar_url' },
+  // Default avatar uses the public asset '/default_dp.png' (place the provided image in client/public/default_dp.png)
+  avatar: { type: String, default: '/default_dp.png' },
+  followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   watchlist: [{ type: String }], // Array of movie IDs from TMDb
   watched: [{ type: String }],   // Array of movie IDs from TMDb
 }, { timestamps: true });

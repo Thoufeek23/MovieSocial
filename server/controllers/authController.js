@@ -32,6 +32,7 @@ const registerUser = async (req, res) => {
             username,
             email,
             passwordHash: password,
+            avatar: '/default_dp.png',
         });
 
         if (user) {
@@ -56,6 +57,16 @@ const loginUser = async (req, res) => {
         const user = await User.findOne({ email });
 
         if (user && (await user.matchPassword(password))) {
+            // Ensure a default avatar is present for users signing in
+            if (!user.avatar) {
+                user.avatar = '/default_dp.png';
+                try {
+                    await user.save();
+                } catch (e) {
+                    console.error('Failed to save default avatar for user on login', e);
+                }
+            }
+
             res.json({
                 token: generateToken(user._id, user.username),
             });
