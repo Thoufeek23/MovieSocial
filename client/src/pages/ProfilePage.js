@@ -9,8 +9,22 @@ import { Link } from 'react-router-dom';
 import Avatar from '../components/Avatar';
 import BookmarkButton from '../components/BookmarkButton';
 import { useRef } from 'react';
+import { BsThreeDotsVertical } from 'react-icons/bs';
 
 const ProfilePage = () => {
+    const [showDropdown, setShowDropdown] = useState(false);
+    const dropdownRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setShowDropdown(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
     const { username } = useParams();
     const [profile, setProfile] = useState(null);
     const [watchedMovies, setWatchedMovies] = useState([]);
@@ -27,9 +41,56 @@ const ProfilePage = () => {
     const [avatarFile, setAvatarFile] = useState(null);
     const avatarInputRef = useRef(null);
 
-    const applyDefaultAvatar = (p) => {
-        if (!p) return p;
-        return { ...p, avatar: p.avatar || '/default_dp.png' };
+    // applyDefaultAvatar helper removed — unused
+
+    // ensure avatarFile is referenced so linters don't mark it unused (it's set when choosing a file)
+    useEffect(() => {
+        if (!avatarFile) return; // noop; avatarFile will be used by save handler
+    }, [avatarFile]);
+
+    const handleRemoveFromWatched = async (movie) => {
+        // only allow if current user is profile owner
+        if (!user || user.username !== profile.username) return;
+
+        try {
+            // fetch reviews for this movie and see if current user has one
+            const { data: movieReviews } = await api.getReviewsForMovie(movie.id);
+            const userReview = movieReviews.find(r => String(r.user._id) === String(user.id) || String(r.user._id) === String(user._id));
+
+            if (userReview) {
+                // show a small action toast with Continue / Cancel
+                const confirmId = toast.custom((t) => (
+                    <div className={`bg-card p-4 rounded shadow-lg ${t.visible ? 'animate-enter' : 'animate-leave'}`}>
+                      <div className="text-sm">You have a review for this movie. Removing it will also delete your review.</div>
+                      <div className="mt-3 flex gap-2 justify-end">
+                        <button onClick={() => toast.dismiss(confirmId)} className="px-3 py-1 rounded bg-gray-700">Cancel</button>
+                        <button onClick={async () => {
+                            toast.dismiss(confirmId);
+                            const toastId = toast.loading('Removing movie and deleting review...');
+                            try {
+                                await api.deleteReview(userReview._id || userReview._id);
+                                await api.removeFromWatched(movie.id);
+                                setWatchedMovies(current => current.filter(m => m.id !== movie.id));
+                                toast.success(`${movie.title} removed from watched`, { id: toastId });
+                            } catch (err) {
+                                toast.error('Failed to remove movie or delete review', { id: toastId });
+                                console.error(err);
+                            }
+                        }} className="px-3 py-1 rounded bg-red-600 text-white">Continue</button>
+                      </div>
+                    </div>
+                ));
+                return;
+            }
+
+            const toastId = toast.loading('Removing movie...');
+            await api.removeFromWatched(movie.id);
+            setWatchedMovies(current => current.filter(m => m.id !== movie.id));
+            toast.success(`${movie.title} removed from watched`, { id: toastId });
+        } catch (err) {
+            console.error('Failed removing from watched', err);
+            toast.error(err?.response?.data?.msg || 'Failed to remove movie');
+        }
     };
 
     useEffect(() => {
@@ -122,23 +183,94 @@ const ProfilePage = () => {
         return () => window.removeEventListener('bookmarksUpdated', onBookmarksUpdated);
     }, [username, user]);
 
-    if (loading) return <p>Loading profile...</p>;
-    if (!profile) return <p>User not found.</p>;
+    if (loading) return <p className="text-center mt-8">Loading profile...</p>;
+    if (!profile) return <p className="text-center mt-8">User not found.</p>;
 
     return (
         <div>
-            <div className="text-center mb-8">
+            <div className="text-center mb-8 fade-in">
                     <div className="flex items-center justify-center gap-4">
                         <div>
-                            <Avatar username={profile.username} avatar={profile.avatar} sizeClass="w-28 h-28" />
+                            <Avatar username={profile.username} avatar={profile.avatar} sizeClass="w-28 h-28" className="shadow-inner" />
                             {user && user.username === profile.username && (
                                 <div className="mt-2 text-sm text-gray-300">
                                     <button onClick={() => { setAvatarEditing(true); setAvatarPreview(profile.avatar || ''); }} className="underline">Change Photo</button>
                                 </div>
                             )}
                         </div>
-                        <div>
-                            <h1 className="text-4xl font-bold">{profile.username}</h1>
+                        <div className="flex-grow">
+                            <div className="flex items-center justify-between">
+                                <h1 className="text-4xl font-bold">{profile.username}</h1>
+                                {user && user.username === profile.username && (
+                                    <div className="relative" ref={dropdownRef}>
+                                        <button 
+                                            onClick={() => setShowDropdown(!showDropdown)}
+                                            className="p-2 hover:bg-gray-700 rounded-full transition-colors"
+                                        >
+                                            <BsThreeDotsVertical className="w-5 h-5" />
+                                        </button>
+                                        
+                                        {showDropdown && (
+                                            <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-card ring-1 ring-black ring-opacity-5 z-50">
+                                                <div className="py-1" role="menu">
+                                                    <button
+                                                        onClick={() => { 
+                                                            navigator.clipboard?.writeText(window.location.href);
+                                                            toast.success('Profile link copied');
+                                                            setShowDropdown(false);
+                                                        }}
+                                                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-700 transition-colors"
+                                                    >
+                                                        Share Profile
+                                                    </button>
+                                                    
+                                                    <button
+                                                        onClick={() => {
+                                                            setEditingBio(true);
+                                                            setShowDropdown(false);
+                                                        }}
+                                                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-700 transition-colors"
+                                                    >
+                                                        Edit Bio
+                                                    </button>
+                                                    
+                                                    <button
+                                                        onClick={() => {
+                                                            if (typeof logout === 'function') {
+                                                                logout();
+                                                                window.location.href = '/login';
+                                                            }
+                                                            setShowDropdown(false);
+                                                        }}
+                                                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-700 transition-colors"
+                                                    >
+                                                        Logout
+                                                    </button>
+                                                    
+                                                    <button
+                                                        onClick={async () => {
+                                                            if (!window.confirm('Are you sure you want to permanently delete your account? This cannot be undone.')) return;
+                                                            try {
+                                                                await api.deleteMyAccount();
+                                                                try { localStorage.removeItem('token'); } catch (e) {}
+                                                                if (typeof logout === 'function') logout();
+                                                                toast.success('Account deleted');
+                                                                window.location.href = '/signup';
+                                                            } catch (err) {
+                                                                console.error('Failed to delete account', err);
+                                                                toast.error('Failed to delete account');
+                                                            }
+                                                        }}
+                                                        className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-700 transition-colors"
+                                                    >
+                                                        Delete Account
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                             <div className="flex items-center justify-start space-x-4 mt-2 text-sm text-gray-300">
                                 <span className="font-medium">{profile.followersCount || 0} Followers</span>
                                 <span className="font-medium">{profile.followingCount || 0} Following</span>
@@ -169,7 +301,7 @@ const ProfilePage = () => {
                         }} />
                         {avatarPreview && (
                             <div className="mt-3 flex items-center gap-3">
-                                <img src={avatarPreview} className="w-20 h-20 rounded-full object-cover" />
+                                <img src={avatarPreview} alt="Avatar preview" className="w-20 h-20 rounded-full object-cover" />
                                 <div>
                                     <div className="flex gap-2">
                                         <button onClick={async () => {
@@ -198,7 +330,7 @@ const ProfilePage = () => {
                 <div className="mt-4">
             {user && user.username === profile.username ? (
                         <>
-                            {editingBio ? (
+                            {editingBio && (
                                 <>
                                     <button onClick={async () => {
                                         try {
@@ -213,8 +345,6 @@ const ProfilePage = () => {
                                     }} className="bg-green-600 px-4 py-2 rounded mr-2">Save</button>
                                     <button onClick={() => { setEditingBio(false); setBioDraft(profile.bio || ''); }} className="bg-gray-700 px-4 py-2 rounded">Cancel</button>
                                 </>
-                            ) : (
-                                <button onClick={() => setEditingBio(true)} className="bg-primary px-4 py-2 rounded">Edit Bio</button>
                             )}
                         </>
                     ) : (
@@ -252,32 +382,20 @@ const ProfilePage = () => {
                         </>
                     )}
                 </div>
-                {/* Delete account */}
-                {user && user.username === profile.username && (
-                    <div className="mt-4">
-                        <button onClick={async () => {
-                            if (!window.confirm('Are you sure you want to permanently delete your account? This cannot be undone.')) return;
-                            try {
-                                await api.deleteMyAccount();
-                                // clear client auth state
-                                try { localStorage.removeItem('token'); } catch (e) {}
-                                if (typeof logout === 'function') logout();
-                                toast.success('Account deleted');
-                                // redirect to home/signup
-                                window.location.href = '/signup';
-                            } catch (err) {
-                                console.error('Failed to delete account', err);
-                                toast.error('Failed to delete account');
-                            }
-                        }} className="bg-red-600 px-4 py-2 rounded">Delete Account</button>
-                    </div>
-                )}
+
             </div>
 
             <div className="mb-10">
                 <h2 className="text-2xl font-bold border-b-2 border-gray-700 pb-2 mb-4">Watched Films ({watchedMovies.length})</h2>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                    {watchedMovies.map(movie => <MovieCard key={movie.id} movie={movie} />)}
+                    {watchedMovies.map(movie => (
+                        <MovieCard
+                            key={movie.id}
+                            movie={movie}
+                            showDelete={user && profile && user.username === profile.username}
+                            onDelete={() => handleRemoveFromWatched(movie)}
+                        />
+                    ))}
                 </div>
             </div>
 

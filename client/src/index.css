@@ -28,3 +28,56 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* Component primitives for consistent UI */
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center font-semibold rounded-md px-4 py-2 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2;
+  }
+  .btn-primary {
+    @apply bg-primary text-primary-foreground hover:bg-green-500 shadow-md;
+  }
+  .btn-danger {
+    @apply bg-red-600 text-white hover:bg-red-700 shadow-sm;
+  }
+  .btn-ghost {
+    @apply bg-transparent text-gray-300 hover:text-white;
+  }
+
+  .card {
+    @apply bg-card rounded-lg shadow-lg overflow-hidden;
+  }
+  .card-hover {
+    @apply transform transition-transform duration-300 hover:-translate-y-1 hover:shadow-2xl;
+  }
+
+  .glass {
+    backdrop-filter: blur(6px);
+    background-color: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.04);
+  }
+
+  .fade-in {
+    animation: fadeIn 420ms cubic-bezier(.2,.9,.2,1) both;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Small utility for popping cards on hover */
+.pop-on-hover:hover {
+  transform: translateY(-6px) scale(1.02);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
