@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import * as api from '../api';
 import { Search, Film } from 'lucide-react';
@@ -39,6 +39,30 @@ const InstantSearchBar = () => {
     setQuery('');
   }
 
+  const wrapperRef = useRef(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+
+    const handleGlobalKey = (e) => {
+      if (e.key === 'Enter') {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('keydown', handleGlobalKey);
+
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('keydown', handleGlobalKey);
+    };
+  }, []);
+
   // Close the dropdown when the route or query string changes (e.g., user navigated or pressed Enter to search)
   useEffect(() => {
     if (isOpen) {
@@ -57,7 +81,7 @@ const InstantSearchBar = () => {
   }
 
   return (
-    <div className="relative w-full max-w-xs">
+    <div className="relative w-full max-w-xs" ref={wrapperRef}>
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
         <input
