@@ -14,16 +14,18 @@ const Navbar = () => {
 
 
   return (
-    <nav className="glass sticky top-0 z-50 p-3">
-      <div className="container mx-auto flex items-center justify-between max-w-6xl">
-        <div className="flex items-center gap-4">
-          <Link to="/" aria-label="Home" className="flex items-center gap-2 text-2xl font-bold text-white hover:text-primary transition-colors">
-            <Clapperboard size={28} />
-            <span className="hidden sm:inline">Movie Social</span>
+    <nav className="glass sticky top-0 z-50 px-3 py-2">
+      <div className="container mx-auto flex flex-col md:flex-row items-center justify-between max-w-6xl gap-2">
+        <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-start">
+          <Link to="/" aria-label="Home" className="flex items-center gap-2 text-xl md:text-2xl font-bold text-white hover:text-primary transition-colors">
+            <Clapperboard size={26} />
+            <span className="hidden md:inline">Movie Social</span>
           </Link>
           {shouldShowSearch && (
-            <div className="hidden md:block w-96">
-              <InstantSearchBar />
+            <div className="flex-1 md:flex-none ml-4 w-full md:w-96">
+              <div className="hidden md:block">
+                <InstantSearchBar />
+              </div>
             </div>
           )}
         </div>
@@ -43,7 +45,7 @@ const Navbar = () => {
         </div>
       </div>
       {shouldShowSearch && (
-        <div className="md:hidden mt-3 px-4">
+        <div className="md:hidden mt-3 px-4 w-full">
           <InstantSearchBar />
         </div>
       )}

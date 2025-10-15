@@ -223,7 +223,7 @@ const HomePage = () => {
             discussions.map(d => (
               <div key={d._id} className="relative group">
                 <Link to={`/discussions/${d._id}`} className="p-4 bg-card rounded-lg hover:shadow-lg transition-shadow flex items-start gap-4">
-                  <img src={d.poster_path ? `https://image.tmdb.org/t/p/w185${d.poster_path}` : '/poster_placeholder.png'} alt="poster" className="w-20 h-28 object-cover rounded shadow-sm" />
+                  <img src={d.poster_path ? `https://image.tmdb.org/t/p/w185${d.poster_path}` : '/default_dp.png'} alt="poster" className="w-20 h-28 object-cover rounded shadow-sm" />
                   <div className="flex-1">
                     <div className="font-semibold text-lg text-gray-100 line-clamp-2">{d.title}</div>
                     <div className="text-sm text-gray-400 mt-1">{d.movieTitle}</div>

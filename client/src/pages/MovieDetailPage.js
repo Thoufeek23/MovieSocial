@@ -128,8 +128,16 @@ const MovieDetailPage = () => {
             <div className="flex items-center gap-4">
               <h1 className="text-4xl lg:text-5xl font-bold">{movie.title}</h1>
               {(movie.imdbRating !== null && typeof movie.imdbRating !== 'undefined' && Number(movie.imdbRating) > 0) && (
-                <span className="text-sm bg-gray-700 text-yellow-300 px-2 py-1 rounded-lg font-semibold">{movie.imdbRating} <span className="text-xs text-gray-300">{movie.imdbRatingSource}</span></span>
+                <span className="text-sm bg-gray-700 text-yellow-300 px-2 py-1 rounded-lg font-semibold">{movie.imdbRating} <span className="text-xs text-gray-300">{(movie.imdbRatingSource && (movie.imdbRatingSource.toLowerCase().includes('omdb') || movie.imdbRatingSource.toLowerCase().includes('imdb'))) ? 'IMDb' : movie.imdbRatingSource || 'IMDb'}</span></span>
               )}
+                {/* Movie Social rating: average of user reviews in our app */}
+                {reviews && reviews.length > 0 && (() => {
+                  const sum = reviews.reduce((s, r) => s + (Number(r.rating) || 0), 0);
+                  const avg = (sum / reviews.length).toFixed(1);
+                  return (
+                    <span className="text-sm bg-gray-700 text-green-300 px-2 py-1 rounded-lg font-semibold">★ {avg} <span className="text-xs text-gray-300">Movie Social • {reviews.length}</span></span>
+                  );
+                })()}
             </div>
             <p className="text-xl text-gray-400 mt-1">{movie.release_date?.substring(0, 4)}</p>
             <p className="my-6 text-gray-300 leading-relaxed">{movie.overview}</p>

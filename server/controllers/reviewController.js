@@ -140,6 +140,32 @@ const deleteReview = async (req, res) => {
 };
 
 
+// @desc    Vote on a review (agree=1, partial=0.5, disagree=0)
+// @route   POST /api/reviews/:id/vote
+const voteReview = async (req, res) => {
+    try {
+        const { value } = req.body; // expected numeric: 1, 0.5, or 0
+        const allowed = [1, 0.5, 0];
+        if (!allowed.includes(value)) return res.status(400).json({ msg: 'Invalid vote value' });
+
+        const review = await Review.findById(req.params.id);
+        if (!review) return res.status(404).json({ msg: 'Review not found' });
+
+        const uid = req.user.id;
+        // remove any existing vote by this user
+        review.agreementVotes = (review.agreementVotes || []).filter(v => String(v.user) !== String(uid));
+        // push new vote
+        review.agreementVotes.push({ user: uid, value });
+        await review.save();
+        await review.populate('user', 'username avatar _id');
+
+        res.json(review);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ msg: 'Server Error' });
+    }
+};
+
 module.exports = {
     createReview,
     getMyReviews,
@@ -147,4 +173,5 @@ module.exports = {
     getMovieReviews,
     updateReview,
     deleteReview,
+    voteReview,
 };
