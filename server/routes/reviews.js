@@ -8,6 +8,7 @@ const {
     updateReview, 
     deleteReview 
 } = require('../controllers/reviewController');
+const { voteReview } = require('../controllers/reviewController');
 const { protect } = require('../middleware/authMiddleware');
 
 router.route('/')
@@ -26,5 +27,9 @@ router.route('/movie/:movieId')
 router.route('/:id')
     .put(protect, updateReview)
     .delete(protect, deleteReview);
+
+// Vote on a review (agree/partially/disagree)
+router.route('/:id/vote')
+    .post(protect, voteReview);
 
 module.exports = router;

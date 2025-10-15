@@ -12,6 +12,7 @@ const UserSchema = new mongoose.Schema({
   following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   watchlist: [{ type: String }], // Array of movie IDs from TMDb
   watched: [{ type: String }],   // Array of movie IDs from TMDb
+  // ... no password reset OTP fields (feature removed)
 }, { timestamps: true });
 
 // Method to compare password for login
@@ -19,11 +20,11 @@ UserSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.passwordHash);
 };
 
-// Middleware to hash password before saving a new user
-UserSchema.pre('save', async function (next) {
-  if (!this.isModified('passwordHash')) {
-    next();
-  }
+// Middleware to hash password before saving when passwordHash is modified
+UserSchema.pre('save', async function () {
+  // If passwordHash wasn't modified, do nothing
+  if (!this.isModified('passwordHash')) return;
+
   const salt = await bcrypt.genSalt(10);
   this.passwordHash = await bcrypt.hash(this.passwordHash, salt);
 });

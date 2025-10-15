@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const API = axios.create({ baseURL: 'http://localhost:5001/api' });
+// In production the client should be built with REACT_APP_API_URL set to your API root
+const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://localhost:5001';
+const API = axios.create({ baseURL: `${apiRoot}/api` });
 
 // Add the JWT to the header of every request if it exists
 API.interceptors.request.use((req) => {
@@ -13,6 +15,7 @@ API.interceptors.request.use((req) => {
 // Authentication
 export const login = (formData) => API.post('/auth/login', formData);
 export const register = (formData) => API.post('/auth/register', formData);
+// forgotPassword/resetPassword removed
 
 // Movies (Proxy)
 export const searchMovies = (query) => API.get(`/movies/search?query=${query}`);
@@ -27,6 +30,9 @@ export const getReviewsForMovie = (movieId) => API.get(`/reviews/movie/${movieId
 export const updateReview = (id, reviewData) => API.put(`/reviews/${id}`, reviewData); // <-- Add this
 export const deleteReview = (id) => API.delete(`/reviews/${id}`); // <-- Add this
 export const fetchMyReviews = () => API.get('/reviews/mine');
+
+// Vote on a review: { value: 1 | 0.5 | 0 }
+export const voteReview = (id, value) => API.post(`/reviews/${id}/vote`, { value });
 
 // User Actions
 export const getUserProfile = (username) => API.get(`/users/${username}`);

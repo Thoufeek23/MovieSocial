@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const Discussion = require('../models/Discussion');
+const Review = require('../models/Review');
 
 // @desc    Get user profile
 // @route   GET /api/users/:username
@@ -56,6 +57,43 @@ const getUserProfile = async (req, res) => {
         } catch (e) {
             profile.discussionsStarted = 0;
             profile.discussionsParticipated = 0;
+        }
+        // Compute community agreement metrics based on other users' votes on this user's reviews
+        try {
+            const reviews = await Review.find({ user: user._id }, 'agreementVotes');
+            let totalVotes = 0;
+            let sumValues = 0;
+            let agreeCount = 0;
+            let partialCount = 0;
+            let disagreeCount = 0;
+
+            reviews.forEach(r => {
+                (r.agreementVotes || []).forEach(v => {
+                    totalVotes += 1;
+                    const val = Number(v.value) || 0;
+                    sumValues += val;
+                    if (val === 1) agreeCount += 1;
+                    else if (val === 0.5) partialCount += 1;
+                    else if (val === 0) disagreeCount += 1;
+                });
+            });
+
+            const average = totalVotes > 0 ? (sumValues / totalVotes) * 100 : null; // percent 0-100
+            const agreePercent = totalVotes > 0 ? Math.round((agreeCount / totalVotes) * 100) : 0;
+            const partialPercent = totalVotes > 0 ? Math.round((partialCount / totalVotes) * 100) : 0;
+            const disagreePercent = totalVotes > 0 ? Math.round((disagreeCount / totalVotes) * 100) : 0;
+
+            profile.communityAgreement = {
+                average: average === null ? null : Math.round(average),
+                breakdown: {
+                    agreePercent,
+                    partialPercent,
+                    disagreePercent,
+                },
+                totalVotes
+            };
+        } catch (e) {
+            profile.communityAgreement = { average: null, breakdown: { agreePercent: 0, partialPercent: 0, disagreePercent: 0 }, totalVotes: 0 };
         }
         res.json(profile);
     } catch (error) {

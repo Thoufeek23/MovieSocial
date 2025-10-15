@@ -112,7 +112,19 @@ const ProfilePage = () => {
                 // fetch discussions started by this user
                 try {
                     const discRes = await api.fetchDiscussionsByUser(username);
-                    setUserDiscussions(discRes.data);
+                    // For any discussion missing a poster_path, try to fetch movie details by movieId
+                    const withPosters = await Promise.all(discRes.data.map(async (d) => {
+                        if (d && !d.poster_path && d.movieId) {
+                            try {
+                                const m = await api.getMovieDetails(d.movieId);
+                                d.poster_path = m.data.poster_path;
+                            } catch (e) {
+                                // ignore fetch failures
+                            }
+                        }
+                        return d;
+                    }));
+                    setUserDiscussions(withPosters);
                 } catch (err) {
                     console.error('Failed to load user discussions', err);
                 }
@@ -189,96 +201,96 @@ const ProfilePage = () => {
     return (
         <div>
             <div className="text-center mb-8 fade-in">
-                    <div className="flex items-center justify-center gap-4">
-                        <div>
-                            <Avatar username={profile.username} avatar={profile.avatar} sizeClass="w-28 h-28" className="shadow-inner" />
-                            {user && user.username === profile.username && (
-                                <div className="mt-2 text-sm text-gray-300">
-                                    <button onClick={() => { setAvatarEditing(true); setAvatarPreview(profile.avatar || ''); }} className="underline">Change Photo</button>
+                    <div className="flex flex-col sm:flex-row items-center sm:items-start justify-center gap-4">
+                                <div className="flex-shrink-0 text-center sm:text-left">
+                                    <Avatar username={profile.username} avatar={profile.avatar} sizeClass="w-28 h-28" className="shadow-inner" />
+                                    {user && user.username === profile.username && (
+                                        <div className="mt-2 text-sm text-gray-300">
+                                            <button onClick={() => { setAvatarEditing(true); setAvatarPreview(profile.avatar || ''); }} className="underline">Change Photo</button>
+                                        </div>
+                                    )}
                                 </div>
-                            )}
-                        </div>
-                        <div className="flex-grow">
-                            <div className="flex items-center justify-between">
-                                <h1 className="text-4xl font-bold">{profile.username}</h1>
-                                {user && user.username === profile.username && (
-                                    <div className="relative" ref={dropdownRef}>
-                                        <button 
-                                            onClick={() => setShowDropdown(!showDropdown)}
-                                            className="p-2 hover:bg-gray-700 rounded-full transition-colors"
-                                        >
-                                            <BsThreeDotsVertical className="w-5 h-5" />
-                                        </button>
+                                <div className="flex-1 w-full">
+                                    <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-2">
+                                        <h1 className="text-3xl sm:text-4xl font-bold text-center sm:text-left">{profile.username}</h1>
+                                        {user && user.username === profile.username && (
+                                            <div className="relative" ref={dropdownRef}>
+                                                <button 
+                                                    onClick={() => setShowDropdown(!showDropdown)}
+                                                    className="p-2 hover:bg-gray-700 rounded-full transition-colors"
+                                                >
+                                                    <BsThreeDotsVertical className="w-5 h-5" />
+                                                </button>
                                         
-                                        {showDropdown && (
-                                            <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-card ring-1 ring-black ring-opacity-5 z-50">
-                                                <div className="py-1" role="menu">
-                                                    <button
-                                                        onClick={() => { 
-                                                            navigator.clipboard?.writeText(window.location.href);
-                                                            toast.success('Profile link copied');
-                                                            setShowDropdown(false);
-                                                        }}
-                                                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-700 transition-colors"
-                                                    >
-                                                        Share Profile
-                                                    </button>
+                                                {showDropdown && (
+                                                    <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-card ring-1 ring-black ring-opacity-5 z-50">
+                                                        <div className="py-1" role="menu">
+                                                            <button
+                                                                onClick={() => { 
+                                                                    navigator.clipboard?.writeText(window.location.href);
+                                                                    toast.success('Profile link copied');
+                                                                    setShowDropdown(false);
+                                                                }}
+                                                                className="w-full text-left px-4 py-2 text-sm hover:bg-gray-700 transition-colors"
+                                                            >
+                                                                Share Profile
+                                                            </button>
                                                     
-                                                    <button
-                                                        onClick={() => {
-                                                            setEditingBio(true);
-                                                            setShowDropdown(false);
-                                                        }}
-                                                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-700 transition-colors"
-                                                    >
-                                                        Edit Bio
-                                                    </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setEditingBio(true);
+                                                                    setShowDropdown(false);
+                                                                }}
+                                                                className="w-full text-left px-4 py-2 text-sm hover:bg-gray-700 transition-colors"
+                                                            >
+                                                                Edit Bio
+                                                            </button>
                                                     
-                                                    <button
-                                                        onClick={() => {
-                                                            if (typeof logout === 'function') {
-                                                                logout();
-                                                                window.location.href = '/login';
-                                                            }
-                                                            setShowDropdown(false);
-                                                        }}
-                                                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-700 transition-colors"
-                                                    >
-                                                        Logout
-                                                    </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (typeof logout === 'function') {
+                                                                        logout();
+                                                                        window.location.href = '/login';
+                                                                    }
+                                                                    setShowDropdown(false);
+                                                                }}
+                                                                className="w-full text-left px-4 py-2 text-sm hover:bg-gray-700 transition-colors"
+                                                            >
+                                                                Logout
+                                                            </button>
                                                     
-                                                    <button
-                                                        onClick={async () => {
-                                                            if (!window.confirm('Are you sure you want to permanently delete your account? This cannot be undone.')) return;
-                                                            try {
-                                                                await api.deleteMyAccount();
-                                                                try { localStorage.removeItem('token'); } catch (e) {}
-                                                                if (typeof logout === 'function') logout();
-                                                                toast.success('Account deleted');
-                                                                window.location.href = '/signup';
-                                                            } catch (err) {
-                                                                console.error('Failed to delete account', err);
-                                                                toast.error('Failed to delete account');
-                                                            }
-                                                        }}
-                                                        className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-700 transition-colors"
-                                                    >
-                                                        Delete Account
-                                                    </button>
-                                                </div>
+                                                            <button
+                                                                onClick={async () => {
+                                                                    if (!window.confirm('Are you sure you want to permanently delete your account? This cannot be undone.')) return;
+                                                                    try {
+                                                                        await api.deleteMyAccount();
+                                                                        try { localStorage.removeItem('token'); } catch (e) {}
+                                                                        if (typeof logout === 'function') logout();
+                                                                        toast.success('Account deleted');
+                                                                        window.location.href = '/signup';
+                                                                    } catch (err) {
+                                                                        console.error('Failed to delete account', err);
+                                                                        toast.error('Failed to delete account');
+                                                                    }
+                                                                }}
+                                                                className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-700 transition-colors"
+                                                            >
+                                                                Delete Account
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>
-                                )}
+                                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 mt-2 text-sm text-gray-300">
+                                        <span className="font-medium">{profile.followersCount || 0} Followers</span>
+                                        <span className="font-medium">{profile.followingCount || 0} Following</span>
+                                        <span className="font-medium">{profile.discussionsStarted || 0} Discussions Started</span>
+                                        <span className="font-medium">{profile.discussionsParticipated || 0} Participated</span>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="flex items-center justify-start space-x-4 mt-2 text-sm text-gray-300">
-                                <span className="font-medium">{profile.followersCount || 0} Followers</span>
-                                <span className="font-medium">{profile.followingCount || 0} Following</span>
-                                <span className="font-medium">{profile.discussionsStarted || 0} Discussions Started</span>
-                                <span className="font-medium">{profile.discussionsParticipated || 0} Participated</span>
-                            </div>
-                        </div>
-                    </div>
 
                 
 
@@ -408,7 +420,12 @@ const ProfilePage = () => {
                             userDiscussions.map(d => (
                                 <div key={d._id} className="relative group bg-card p-4 rounded-lg">
                                     <div className="flex items-start gap-4">
-                                        <img src={d.poster_path ? `https://image.tmdb.org/t/p/w154${d.poster_path}` : '/poster_placeholder.png'} alt="poster" className="w-20 h-28 rounded shadow-sm object-cover" />
+                                        <img
+                                            src={d.poster_path ? `https://image.tmdb.org/t/p/w154${d.poster_path}` : '/default_dp.png'}
+                                            alt="poster"
+                                            className="w-20 h-28 rounded shadow-sm object-cover"
+                                            onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/default_dp.png'; }}
+                                        />
                                         <div className="flex-1">
                                             <Link to={`/discussions/${d._id}`} className="font-semibold text-lg line-clamp-2">{d.title}</Link>
                                             <div className="text-sm text-gray-400">Movie: {d.movieTitle} • {d.comments?.length || 0} comments</div>
@@ -446,7 +463,12 @@ const ProfilePage = () => {
                             bookmarkedDiscussions.map(d => (
                                 <div key={d._id} className="relative group">
                                     <Link to={`/discussions/${d._id}`} className="p-4 bg-card rounded-lg hover:shadow-lg transition-shadow flex items-start gap-4">
-                                        <img src={d.poster_path ? `https://image.tmdb.org/t/p/w185${d.poster_path}` : '/poster_placeholder.png'} alt="poster" className="w-20 h-28 object-cover rounded shadow-sm" />
+                                        <img
+                                            src={d.poster_path ? `https://image.tmdb.org/t/p/w185${d.poster_path}` : '/default_dp.png'}
+                                            alt="poster"
+                                            className="w-20 h-28 object-cover rounded shadow-sm"
+                                            onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/default_dp.png'; }}
+                                        />
                                         <div className="flex-1">
                                             <div className="flex items-center gap-2">
                                                 <div className="font-semibold text-lg text-gray-100 line-clamp-2">{d.title}</div>

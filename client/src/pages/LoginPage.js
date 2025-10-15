@@ -11,6 +11,7 @@ const LoginPage = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showCurtains] = useState(false);
+  // forgot-password feature removed; simple login only
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
 
@@ -32,6 +33,8 @@ const LoginPage = () => {
         setIsLoading(false);
     }
 };
+
+  // forgot-password handlers removed
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -105,6 +108,7 @@ const LoginPage = () => {
             </button>
           </motion.div>
         </form>
+        {/* forgot-password UI removed */}
 
         <motion.p variants={itemVariants} className="text-center mt-8 text-sm text-gray-400">
           Don't have an account? <Link to="/signup" className="font-semibold text-primary hover:underline">Sign Up</Link>

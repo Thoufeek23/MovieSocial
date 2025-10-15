@@ -79,6 +79,11 @@ const loginUser = async (req, res) => {
     }
 };
 
+// Export handlers (will be assigned at bottom after additional functions are defined)
+
+
+// (Forgot password feature removed)
+
 module.exports = {
     registerUser,
     loginUser,
