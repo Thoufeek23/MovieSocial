@@ -19,6 +19,11 @@ process.on('unhandledRejection', (reason, promise) => {
 
 const app = express();
 
+// When running behind a proxy (Render, Heroku, etc.) enable trust proxy so
+// express-rate-limit and other middleware can correctly read X-Forwarded-* headers.
+// Use `1` to trust the first proxy in front of the app (recommended for single-proxy hosts).
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(helmet());
 app.use(express.json());
@@ -34,16 +39,51 @@ app.use('/api/', apiLimiter);
 const allowedOrigin = process.env.CORS_ORIGIN || '*';
 app.use(cors({ origin: allowedOrigin }));
 
-// Database Connection
-mongoose.connect(process.env.MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-.then(() => console.log('MongoDB Connected'))
-.catch(err => {
-  console.error('MongoDB connection error:', err);
+// Database Connection with retry/backoff
+const mongoUri = process.env.MONGO_URI;
+if (!mongoUri) {
+  console.error('FATAL: MONGO_URI is not set in environment. Set MONGO_URI to your Atlas/DB connection string.');
   process.exit(1);
-});
+}
+
+const connectWithRetry = async (maxAttempts = 5, initialDelay = 2000) => {
+  const opts = {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    // reduce how long the driver waits for server selection on each attempt
+    serverSelectionTimeoutMS: 10000,
+  };
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await mongoose.connect(mongoUri, opts);
+      console.log('MongoDB Connected');
+      // attach runtime error logging
+      mongoose.connection.on('error', err => console.error('Mongoose runtime error:', err));
+      return;
+    } catch (err) {
+      console.error(`MongoDB connection attempt ${attempt} failed:`, err && err.message ? err.message : err);
+
+      // Common recovery hint for Atlas/Render users
+      if (err && /whitelist|access|IP|not authorized/i.test(String(err))) {
+        console.error('It looks like a network/whitelist or auth issue. Verify your Atlas IP Access List includes your host (or 0.0.0.0/0 temporarily for testing) and that the user/password in MONGO_URI are correct.');
+      }
+
+      if (attempt === maxAttempts) {
+        console.error('Exceeded maximum MongoDB connection attempts. Exiting process so host can restart the service.');
+        console.error('Full error:', err);
+        process.exit(1);
+      }
+
+      const wait = initialDelay * Math.pow(2, attempt - 1);
+      console.log(`Retrying MongoDB connection in ${wait}ms... (attempt ${attempt + 1}/${maxAttempts})`);
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise(resolve => setTimeout(resolve, wait));
+    }
+  }
+};
+
+connectWithRetry();
 
 // API Routes
 app.use('/api/auth', require('./routes/auth'));
