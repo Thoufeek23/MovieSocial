@@ -5,6 +5,17 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
+// Add global error handlers to aid debugging in hosted environments
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception - shutting down', err && err.stack ? err.stack : err);
+  // Graceful shutdown could be implemented here. For now, exit so the host can restart the process.
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason && reason.stack ? reason.stack : reason);
+  // Exit for a clean restart by the process manager
+  process.exit(1);
+});
 
 const app = express();
 
