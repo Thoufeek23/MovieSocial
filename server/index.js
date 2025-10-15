@@ -50,12 +50,18 @@ app.get('/', (req, res) => {
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
 // Serve client static assets if present (for single-host deployments)
+const fs = require('fs');
 const clientBuildPath = path.join(__dirname, '..', 'client', 'build');
-if (process.env.NODE_ENV === 'production') {
+if (process.env.NODE_ENV === 'production' && fs.existsSync(clientBuildPath)) {
   app.use(express.static(clientBuildPath));
-  app.get('*', (req, res) => {
+  // Use '/*' to avoid path-to-regexp parsing issues with bare '*'
+  app.get('/*', (req, res) => {
     res.sendFile(path.join(clientBuildPath, 'index.html'));
   });
+} else {
+  // In many hosting setups (like Render when deploying server only) the client/build
+  // folder won't exist. Avoid crashing the app; log a helpful message and skip static serving.
+  console.warn('Client build not found or NODE_ENV not production; skipping static file serving from', clientBuildPath);
 }
 
 const PORT = process.env.PORT || 5001;
