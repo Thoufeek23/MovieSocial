@@ -59,6 +59,15 @@ const apiLimiter = rateLimit({
   max: 120, // limit each IP to 120 requests per windowMs
   // skip preflight OPTIONS requests so they don't count toward the limit
   skip: (req) => req.method === 'OPTIONS',
+  // When the limiter blocks a request, run this handler so we get a clear log in hosted envs
+  handler: (req, res /*, next */) => {
+    try {
+      console.warn(`[rate-limit] blocked ${req.ip} ${req.method} ${req.originalUrl} - headers: ${JSON.stringify(req.headers)}`);
+    } catch (e) {
+      console.warn('[rate-limit] blocked request (failed to stringify headers)');
+    }
+    res.status(429).json({ message: 'Too many requests' });
+  },
 });
 app.use('/api/', apiLimiter);
 
@@ -120,8 +129,14 @@ app.get('/', (req, res) => {
   res.send('API is running...');
 });
 
-// Health endpoint
-app.get('/health', (req, res) => res.json({ status: 'ok' }));
+// Health endpoint - include DB connection state for better diagnostics in hosted logs
+app.get('/health', (req, res) => {
+  const states = ['disconnected', 'connected', 'connecting', 'disconnecting', 'unauthorized'];
+  const connectionState = mongoose && mongoose.connection && typeof mongoose.connection.readyState === 'number'
+    ? states[mongoose.connection.readyState] || mongoose.connection.readyState
+    : 'unknown';
+  res.json({ status: 'ok', db: { state: connectionState, readyState: mongoose.connection.readyState } });
+});
 
 // Serve client static assets if present (for single-host deployments)
 const fs = require('fs');
