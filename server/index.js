@@ -35,9 +35,23 @@ const allowedOrigin = process.env.CORS_ORIGIN || '*';
 app.use(cors({ origin: allowedOrigin }));
 
 // Explicit preflight handler for our API routes so browsers receive the
-// Access-Control-Allow-* headers immediately. This also keeps OPTIONS
-// from hitting the rate limiter or other middleware that might return 4xx/5xx.
-app.options('/api/*', cors({ origin: allowedOrigin }), (req, res) => res.sendStatus(204));
+// Access-Control-Allow-* headers immediately. Avoid express route wildcards
+// that can trip path-to-regexp on some platforms; instead use a lightweight
+// middleware mounted at '/api' which checks for OPTIONS and replies.
+app.use('/api', (req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    // Let CORS middleware set the Access-Control-Allow-* headers, then return 204.
+    // Note: cors() will write headers and call next(); we call it then end the response.
+    cors({ origin: allowedOrigin })(req, res, () => {
+      res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+      // Mirror requested headers or ensure authorization and content-type are allowed
+      res.header('Access-Control-Allow-Headers', 'Authorization,Content-Type');
+      res.sendStatus(204);
+    });
+    return;
+  }
+  next();
+});
 
 // Rate limiter - reasonable defaults for public APIs
 const apiLimiter = rateLimit({
