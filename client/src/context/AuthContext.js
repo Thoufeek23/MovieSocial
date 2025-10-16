@@ -47,6 +47,21 @@ function AuthProvider(props) {
     setJustLoggedIn(true); // Set the flag to trigger the animation
   };
 
+  // Allow updating the cached current user object (e.g., to refresh following list)
+  const setUser = (user) => {
+    // Update the reducer state
+    dispatch({ type: 'LOGIN', payload: user });
+    // Try to preserve token if present — we can't re-issue a token here, but we still keep the in-memory state
+    try {
+      const token = localStorage.getItem('token');
+      if (token) {
+        // Re-encode token not done here; leave token as-is. This keeps backward compatibility.
+      }
+    } catch (e) {
+      // ignore
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem('token');
     dispatch({ type: 'LOGOUT' });
@@ -55,7 +70,7 @@ function AuthProvider(props) {
 
   return (
     <AuthContext.Provider
-      value={{ user: state.user, login, logout, isJustLoggedIn, setJustLoggedIn }}
+      value={{ user: state.user, login, logout, setUser, isJustLoggedIn, setJustLoggedIn }}
       {...props}
     />
   );
