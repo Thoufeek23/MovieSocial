@@ -18,6 +18,9 @@ export const register = (formData) => API.post('/auth/register', formData);
 export const forgotPassword = (payload) => API.post('/auth/forgot-password', payload);
 export const verifyResetOtp = (payload) => API.post('/auth/verify-otp', payload);
 export const resetPassword = (payload) => API.post('/auth/reset-password', payload);
+export const sendSignupOtp = (payload) => API.post('/auth/signup-otp', payload);
+export const verifySignupOtp = (payload) => API.post('/auth/verify-signup-otp', payload);
+export const completeSignup = (payload) => API.post('/auth/complete-signup', payload);
 
 // Movies (Proxy)
 export const searchMovies = (query) => API.get(`/movies/search?query=${query}`);
