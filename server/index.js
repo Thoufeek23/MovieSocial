@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const jwt = require('jsonwebtoken');
 const path = require('path');
 // Add global error handlers to aid debugging in hosted environments
 process.on('uncaughtException', (err) => {
@@ -53,13 +54,44 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// Rate limiter - reasonable defaults for public APIs
+// Rate limiter - improved behavior:
+// - Use per-user key when authenticated (prevents one IP from blocking other users behind same NAT)
+// - Skip limiting for local dev (::1 / 127.0.0.1) to avoid dev friction
+// - Keep a global fallback by IP for unauthenticated requests
+const isDev = process.env.NODE_ENV !== 'production';
+
+const defaultWindowMs = 15 * 60 * 1000; // 15 minutes
+const defaultMax = isDev ? 1000 : 120;
+
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 120, // limit each IP to 120 requests per windowMs
-  // skip preflight OPTIONS requests so they don't count toward the limit
-  skip: (req) => req.method === 'OPTIONS',
-  // When the limiter blocks a request, run this handler so we get a clear log in hosted envs
+  windowMs: defaultWindowMs,
+  max: defaultMax,
+  keyGenerator: (req) => {
+    // If Authorization Bearer token present, use decoded user id as key
+    try {
+      const auth = req.headers.authorization;
+      if (auth && auth.startsWith('Bearer ')) {
+        const token = auth.split(' ')[1];
+        const payload = jwt.decode(token);
+        if (payload && payload.user && payload.user.id) return String(payload.user.id);
+      }
+    } catch (e) {
+      // ignore and fallback to IP
+    }
+    // fallback to IP address
+    return req.ip;
+  },
+  skip: (req) => {
+    // skip preflight
+    if (req.method === 'OPTIONS') return true;
+    // skip for local dev addresses to avoid blocking local dev flows
+    if (isDev) {
+      const ip = req.ip || (req.connection && req.connection.remoteAddress) || '';
+      if (ip === '::1' || ip === '127.0.0.1') return true;
+    }
+    return false;
+  },
+  skipFailedRequests: true, // don't count failed responses (optional)
   handler: (req, res /*, next */) => {
     try {
       console.warn(`[rate-limit] blocked ${req.ip} ${req.method} ${req.originalUrl} - headers: ${JSON.stringify(req.headers)}`);
@@ -69,7 +101,30 @@ const apiLimiter = rateLimit({
     res.status(429).json({ message: 'Too many requests' });
   },
 });
+
+// Apply global limiter
 app.use('/api/', apiLimiter);
+
+// Add higher-rate per-route limiters for known high-traffic endpoints
+const reviewsLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: isDev ? 1000 : 60,
+  keyGenerator: apiLimiter.keyGenerator,
+  skip: apiLimiter.skip,
+  handler: (req, res) => res.status(429).json({ message: 'Too many requests to reviews endpoint' }),
+});
+
+const moviesLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: isDev ? 1000 : 60,
+  keyGenerator: apiLimiter.keyGenerator,
+  skip: apiLimiter.skip,
+  handler: (req, res) => res.status(429).json({ message: 'Too many requests to movies endpoint' }),
+});
+
+// Mount per-route limiters
+app.use('/api/reviews', reviewsLimiter);
+app.use('/api/movies', moviesLimiter);
 
 // Database Connection with retry/backoff
 const mongoUri = process.env.MONGO_URI;
