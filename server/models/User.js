@@ -30,6 +30,15 @@ UserSchema.pre('save', async function () {
   // If passwordHash wasn't modified, do nothing
   if (!this.isModified('passwordHash')) return;
 
+  // If the passwordHash already looks like a bcrypt hash, skip re-hashing.
+  // Bcrypt hashes look like: $2a$10$................................................. (60 chars)
+  const maybeHash = this.passwordHash || '';
+  const bcryptRegex = /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/;
+  if (bcryptRegex.test(maybeHash)) {
+    // already hashed, skip
+    return;
+  }
+
   const salt = await bcrypt.genSalt(10);
   this.passwordHash = await bcrypt.hash(this.passwordHash, salt);
 });
