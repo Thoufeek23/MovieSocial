@@ -10,6 +10,7 @@ import Avatar from '../components/Avatar';
 import BookmarkButton from '../components/BookmarkButton';
 import { useRef } from 'react';
 import { BsThreeDotsVertical } from 'react-icons/bs';
+import UserListModal from '../components/UserListModal';
 
 const ProfilePage = () => {
     const [showDropdown, setShowDropdown] = useState(false);
@@ -40,6 +41,9 @@ const ProfilePage = () => {
     const [avatarPreview, setAvatarPreview] = useState('');
     const [avatarFile, setAvatarFile] = useState(null);
     const avatarInputRef = useRef(null);
+    const [userListOpen, setUserListOpen] = useState(false);
+    const [userListTitle, setUserListTitle] = useState('Users');
+    const [userList, setUserList] = useState([]);
 
     // applyDefaultAvatar helper removed — unused
 
@@ -284,8 +288,20 @@ const ProfilePage = () => {
                                         )}
                                     </div>
                                     <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 mt-2 text-sm text-gray-300">
-                                        <span className="font-medium">{profile.followersCount || 0} Followers</span>
-                                        <span className="font-medium">{profile.followingCount || 0} Following</span>
+                                        <button onClick={() => {
+                                            // open followers modal
+                                            setUserListTitle('Followers');
+                                            // profile.followers is populated by the server (username, avatar)
+                                            setUserList(profile.followers || []);
+                                            setUserListOpen(true);
+                                        }} className="font-medium underline">{profile.followersCount || 0} Followers</button>
+
+                                        <button onClick={() => {
+                                            setUserListTitle('Following');
+                                            setUserList(profile.following || []);
+                                            setUserListOpen(true);
+                                        }} className="font-medium underline">{profile.followingCount || 0} Following</button>
+
                                         <span className="font-medium">{profile.discussionsStarted || 0} Discussions Started</span>
                                         <span className="font-medium">{profile.discussionsParticipated || 0} Participated</span>
                                     </div>
@@ -493,6 +509,7 @@ const ProfilePage = () => {
                     {watchlistMovies.map(movie => <MovieCard key={movie.id} movie={movie} />)}
                 </div>
             </div>
+            <UserListModal isOpen={userListOpen} onClose={() => setUserListOpen(false)} title={userListTitle} users={userList} />
         </div>
     );
 };

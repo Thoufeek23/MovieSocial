@@ -32,6 +32,8 @@ const registerUser = async (req, res) => {
             return res.status(400).json({ msg: 'Username is already taken' });
         }
 
+        if (!validatePassword(password)) return res.status(400).json({ msg: 'Password does not meet complexity requirements' });
+
         const user = await User.create({
             username,
             email,
@@ -93,8 +95,8 @@ const forgotPassword = async (req, res) => {
     if (!email) return res.status(400).json({ msg: 'Email is required' });
 
     try {
-        const user = await User.findOne({ email });
-        if (!user) return res.status(200).json({ msg: 'If that email exists we sent an OTP' });
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ msg: 'User does not exist' });
 
         // Generate 6-digit numeric OTP
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -170,8 +172,11 @@ const resetPassword = async (req, res) => {
         const hashed = crypto.createHash('sha256').update(resetToken).digest('hex');
         if (hashed !== user.passwordResetToken) return res.status(400).json({ msg: 'Invalid reset token' });
 
-        // Set new password
-        user.passwordHash = newPassword;
+    // Validate new password
+    if (!validatePassword(newPassword)) return res.status(400).json({ msg: 'Password does not meet complexity requirements' });
+
+    // Set new password
+    user.passwordHash = newPassword;
         user.passwordResetToken = undefined;
         user.passwordResetTokenExpires = undefined;
         await user.save();
@@ -201,6 +206,9 @@ const sendSignupOtp = async (req, res) => {
         if (existsEmail) return res.status(400).json({ msg: 'Email already registered' });
         const existsUsername = await User.findOne({ username });
         if (existsUsername) return res.status(400).json({ msg: 'Username already taken' });
+
+        // Validate password complexity
+        if (!validatePassword(password)) return res.status(400).json({ msg: 'Password does not meet complexity requirements' });
 
         // Remove any previous intent for this email
         await SignupIntent.deleteMany({ email });
@@ -327,4 +335,11 @@ module.exports = {
     sendSignupOtp,
     verifySignupOtp,
     completeSignup,
+};
+
+// Password policy validator
+const validatePassword = (password) => {
+    // min 8 chars, at least one uppercase, one lowercase, one digit, one special char
+    const re = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+    return re.test(password);
 };
