@@ -15,6 +15,16 @@ const LoginPage = () => {
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
 
+  // Forgot password flow state
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotStep, setForgotStep] = useState(1); // 1: enter email, 2: enter otp, 3: set new password
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [otp, setOtp] = useState('');
+  const [resetToken, setResetToken] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [forgotError, setForgotError] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -108,7 +118,84 @@ const LoginPage = () => {
             </button>
           </motion.div>
         </form>
-        {/* forgot-password UI removed */}
+        <div className="mt-4 text-right">
+          <button onClick={() => { setShowForgot(true); setForgotStep(1); }} className="text-sm text-primary hover:underline">Forgot password?</button>
+        </div>
+
+        {showForgot && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+            <div className="bg-card p-6 rounded-lg w-full max-w-md">
+              <h3 className="text-lg font-semibold mb-4">Reset Password</h3>
+              {forgotError && <div className="bg-red-500/20 text-red-300 p-2 rounded mb-3">{forgotError}</div>}
+
+              {forgotStep === 1 && (
+                <div>
+                  <p className="text-sm text-gray-400 mb-3">Enter the email associated with your account and we'll send a one-time code.</p>
+                  <input type="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} placeholder="Email" className="w-full p-2 bg-transparent border rounded mb-3" />
+                  <div className="flex gap-3 justify-end">
+                    <button onClick={() => setShowForgot(false)} className="px-4 py-2 bg-gray-700 rounded">Cancel</button>
+                    <button onClick={async () => {
+                      setForgotError(''); setForgotLoading(true);
+                      try {
+                        await api.forgotPassword({ email: forgotEmail });
+                        setForgotStep(2);
+                      } catch (err) {
+                        setForgotError('Failed to send OTP. Try again.');
+                        console.error(err);
+                      } finally { setForgotLoading(false); }
+                    }} className="px-4 py-2 bg-primary rounded text-white" disabled={forgotLoading}>{forgotLoading ? 'Sending...' : 'Send OTP'}</button>
+                  </div>
+                </div>
+              )}
+
+              {forgotStep === 2 && (
+                <div>
+                  <p className="text-sm text-gray-400 mb-3">Enter the code sent to your email.</p>
+                  <input type="text" value={otp} onChange={(e) => setOtp(e.target.value)} placeholder="123456" className="w-full p-2 bg-transparent border rounded mb-3" />
+                  <div className="flex gap-3 justify-end">
+                    <button onClick={() => { setForgotStep(1); setOtp(''); }} className="px-4 py-2 bg-gray-700 rounded">Back</button>
+                    <button onClick={async () => {
+                      setForgotError(''); setForgotLoading(true);
+                      try {
+                        const { data } = await api.verifyResetOtp({ email: forgotEmail, otp });
+                        // server returns resetToken
+                        setResetToken(data.resetToken);
+                        setForgotStep(3);
+                      } catch (err) {
+                        setForgotError(err?.response?.data?.msg || 'Invalid code');
+                        console.error(err);
+                      } finally { setForgotLoading(false); }
+                    }} className="px-4 py-2 bg-primary rounded text-white" disabled={forgotLoading}>{forgotLoading ? 'Verifying...' : 'Verify'}</button>
+                  </div>
+                </div>
+              )}
+
+              {forgotStep === 3 && (
+                <div>
+                  <p className="text-sm text-gray-400 mb-3">Enter a new password for your account.</p>
+                  <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password" className="w-full p-2 bg-transparent border rounded mb-3" />
+                  <div className="flex gap-3 justify-end">
+                    <button onClick={() => { setForgotStep(2); setNewPassword(''); }} className="px-4 py-2 bg-gray-700 rounded">Back</button>
+                    <button onClick={async () => {
+                      setForgotError(''); setForgotLoading(true);
+                      try {
+                        await api.resetPassword({ email: forgotEmail, resetToken, newPassword });
+                        // success - close and show a small success message
+                        setShowForgot(false);
+                        setForgotStep(1);
+                        setForgotEmail(''); setOtp(''); setResetToken(''); setNewPassword('');
+                        setError('Password reset successful. You can now login.');
+                      } catch (err) {
+                        setForgotError(err?.response?.data?.msg || 'Failed to reset password');
+                        console.error(err);
+                      } finally { setForgotLoading(false); }
+                    }} className="px-4 py-2 bg-primary rounded text-white" disabled={forgotLoading}>{forgotLoading ? 'Resetting...' : 'Reset Password'}</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <motion.p variants={itemVariants} className="text-center mt-8 text-sm text-gray-400">
           Don't have an account? <Link to="/signup" className="font-semibold text-primary hover:underline">Sign Up</Link>

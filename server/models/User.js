@@ -12,7 +12,12 @@ const UserSchema = new mongoose.Schema({
   following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   watchlist: [{ type: String }], // Array of movie IDs from TMDb
   watched: [{ type: String }],   // Array of movie IDs from TMDb
-  // ... no password reset OTP fields (feature removed)
+  // Fields for password reset OTP
+  resetOtpHash: { type: String },
+  resetOtpExpires: { type: Date },
+  // Token-based reset used after OTP verification (hashed)
+  passwordResetToken: { type: String },
+  passwordResetTokenExpires: { type: Date },
 }, { timestamps: true });
 
 // Method to compare password for login

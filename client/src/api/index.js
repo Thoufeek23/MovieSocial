@@ -15,7 +15,9 @@ API.interceptors.request.use((req) => {
 // Authentication
 export const login = (formData) => API.post('/auth/login', formData);
 export const register = (formData) => API.post('/auth/register', formData);
-// forgotPassword/resetPassword removed
+export const forgotPassword = (payload) => API.post('/auth/forgot-password', payload);
+export const verifyResetOtp = (payload) => API.post('/auth/verify-otp', payload);
+export const resetPassword = (payload) => API.post('/auth/reset-password', payload);
 
 // Movies (Proxy)
 export const searchMovies = (query) => API.get(`/movies/search?query=${query}`);
