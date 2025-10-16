@@ -9,7 +9,9 @@ import Curtain from '../components/Curtain';
 const LoginPage = () => {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [showCurtains] = useState(false);
   // forgot-password feature removed; simple login only
   const { login } = useContext(AuthContext);
@@ -24,9 +26,14 @@ const LoginPage = () => {
   const [newPassword, setNewPassword] = useState('');
   const [forgotError, setForgotError] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotShowPassword, setForgotShowPassword] = useState(false);
+  const [forgotPasswordChecks, setForgotPasswordChecks] = useState({ length: false, upper: false, lower: false, number: false, special: false });
+  const canForgotReset = Object.values(forgotPasswordChecks).every(Boolean);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+    // clear any global success when user starts interacting with the form
+    if (success) setSuccess('');
   };
 
   const handleSubmit = async (e) => {
@@ -70,6 +77,7 @@ const LoginPage = () => {
         <motion.p variants={itemVariants} className="text-gray-400 mb-10">Login to continue your movie journey.</motion.p>
 
         <form onSubmit={handleSubmit} className="space-y-8">
+          {success && <p className="bg-green-500/20 text-green-400 p-3 rounded-lg text-center font-medium">{success}</p>}
           {error && <p className="bg-red-500/20 text-red-400 p-3 rounded-lg text-center font-medium">{error}</p>}
           
           <motion.div variants={itemVariants} className="relative">
@@ -91,15 +99,24 @@ const LoginPage = () => {
           </motion.div>
 
           <motion.div variants={itemVariants} className="relative">
-            <input
-              id="password"
-              name="password"
-              type="password"
-              onChange={handleChange}
-              className="peer h-12 w-full border-b-2 border-gray-600 text-white bg-transparent placeholder-transparent focus:outline-none focus:border-primary transition-colors"
-              placeholder="Password"
-              required
-            />
+            <div className="relative">
+              <input
+                id="password"
+                name="password"
+                type={showPassword ? 'text' : 'password'}
+                onChange={handleChange}
+                className="peer h-12 w-full border-b-2 border-gray-600 text-white bg-transparent placeholder-transparent focus:outline-none focus:border-primary transition-colors pr-10"
+                placeholder="Password"
+                required
+              />
+              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-0 top-0 h-12 w-10 flex items-center justify-center text-gray-300">
+                {showPassword ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0 1 12 19c-5 0-9.27-3.11-11-7.5A17.28 17.28 0 0 1 6.3 4.1M3 3l18 18"/></svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.056-5.064 7-9.542 7-4.477 0-8.268-2.944-9.542-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                )}
+              </button>
+            </div>
             <label
               htmlFor="password"
               className="absolute left-0 -top-4 text-gray-400 text-sm transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-placeholder-shown:top-3 peer-focus:-top-4 peer-focus:text-primary peer-focus:text-sm"
@@ -119,7 +136,7 @@ const LoginPage = () => {
           </motion.div>
         </form>
         <div className="mt-4 text-right">
-          <button onClick={() => { setShowForgot(true); setForgotStep(1); }} className="text-sm text-primary hover:underline">Forgot password?</button>
+          <button onClick={() => { setShowForgot(true); setForgotStep(1); setSuccess(''); }} className="text-sm text-primary hover:underline">Forgot password?</button>
         </div>
 
         {showForgot && (
@@ -140,7 +157,8 @@ const LoginPage = () => {
                         await api.forgotPassword({ email: forgotEmail });
                         setForgotStep(2);
                       } catch (err) {
-                        setForgotError('Failed to send OTP. Try again.');
+                        const msg = err?.response?.data?.msg || 'Failed to send OTP. Try again.';
+                        setForgotError(msg);
                         console.error(err);
                       } finally { setForgotLoading(false); }
                     }} className="px-4 py-2 bg-primary rounded text-white" disabled={forgotLoading}>{forgotLoading ? 'Sending...' : 'Send OTP'}</button>
@@ -173,23 +191,65 @@ const LoginPage = () => {
               {forgotStep === 3 && (
                 <div>
                   <p className="text-sm text-gray-400 mb-3">Enter a new password for your account.</p>
-                  <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password" className="w-full p-2 bg-transparent border rounded mb-3" />
+                  <div className="relative mb-2">
+                    <input
+                      type={forgotShowPassword ? 'text' : 'password'}
+                      value={newPassword}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setNewPassword(v);
+                        const checks = {
+                          length: v.length >= 8,
+                          upper: /[A-Z]/.test(v),
+                          lower: /[a-z]/.test(v),
+                          number: /\d/.test(v),
+                          special: /[\W_]/.test(v),
+                        };
+                        setForgotPasswordChecks(checks);
+                      }}
+                      placeholder="New password"
+                      className="w-full p-2 bg-transparent border rounded"
+                    />
+                    <button type="button" onClick={() => setForgotShowPassword(!forgotShowPassword)} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300">
+                      {forgotShowPassword ? (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0 1 12 19c-5 0-9.27-3.11-11-7.5A17.28 17.28 0 0 1 6.3 4.1M3 3l18 18"/></svg>
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.056-5.064 7-9.542 7-4.477 0-8.268-2.944-9.542-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                      )}
+                    </button>
+                  </div>
+
+                  <div className="mb-3 text-sm text-gray-300">
+                    <ul className="space-y-1">
+                      <li className={forgotPasswordChecks.length ? 'text-green-400' : 'text-gray-500'}>Minimum 8 characters</li>
+                      <li className={forgotPasswordChecks.upper ? 'text-green-400' : 'text-gray-500'}>Uppercase letter (A-Z)</li>
+                      <li className={forgotPasswordChecks.lower ? 'text-green-400' : 'text-gray-500'}>Lowercase letter (a-z)</li>
+                      <li className={forgotPasswordChecks.number ? 'text-green-400' : 'text-gray-500'}>A number (0-9)</li>
+                      <li className={forgotPasswordChecks.special ? 'text-green-400' : 'text-gray-500'}>A special character (e.g. !@#$%)</li>
+                    </ul>
+                  </div>
                   <div className="flex gap-3 justify-end">
                     <button onClick={() => { setForgotStep(2); setNewPassword(''); }} className="px-4 py-2 bg-gray-700 rounded">Back</button>
                     <button onClick={async () => {
-                      setForgotError(''); setForgotLoading(true);
+                      setForgotError('');
+                      if (!canForgotReset) {
+                        setForgotError('Password does not meet requirements.');
+                        return;
+                      }
+                      setForgotLoading(true);
                       try {
                         await api.resetPassword({ email: forgotEmail, resetToken, newPassword });
                         // success - close and show a small success message
                         setShowForgot(false);
                         setForgotStep(1);
                         setForgotEmail(''); setOtp(''); setResetToken(''); setNewPassword('');
-                        setError('Password reset successful. You can now login.');
+                        setForgotPasswordChecks({ length: false, upper: false, lower: false, number: false, special: false });
+                        setSuccess('Password reset successful. You can now login.');
                       } catch (err) {
                         setForgotError(err?.response?.data?.msg || 'Failed to reset password');
                         console.error(err);
                       } finally { setForgotLoading(false); }
-                    }} className="px-4 py-2 bg-primary rounded text-white" disabled={forgotLoading}>{forgotLoading ? 'Resetting...' : 'Reset Password'}</button>
+                    }} className="px-4 py-2 bg-primary rounded text-white" disabled={forgotLoading || !canForgotReset}>{forgotLoading ? 'Resetting...' : 'Reset Password'}</button>
                   </div>
                 </div>
               )}

@@ -14,11 +14,25 @@ const SignupPage = () => {
   const [otp, setOtp] = useState('');
   const [signupToken, setSignupToken] = useState('');
   const [showCurtains, setShowCurtains] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordChecks, setPasswordChecks] = useState({ length: false, upper: false, lower: false, number: false, special: false });
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
+
+    if (name === 'password') {
+      const checks = {
+        length: value.length >= 8,
+        upper: /[A-Z]/.test(value),
+        lower: /[a-z]/.test(value),
+        number: /\d/.test(value),
+        special: /[\W_]/.test(value),
+      };
+      setPasswordChecks(checks);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -42,8 +56,11 @@ const SignupPage = () => {
       return;
     }
 
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters long.');
+    // Password policy: min 8 chars, uppercase, lowercase, number, special
+    const pwd = formData.password;
+    const pwdPolicy = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+    if (!pwdPolicy.test(pwd)) {
+      setError('Password must be at least 8 characters and include uppercase, lowercase, number and special character.');
       return;
     }
 
@@ -150,8 +167,27 @@ const SignupPage = () => {
           </motion.div>
 
           <motion.div variants={itemVariants} className="relative">
-            <input id="password" name="password" type="password" onChange={handleChange} className="peer h-12 w-full border-b-2 border-gray-600 text-white bg-transparent placeholder-transparent focus:outline-none focus:border-primary transition-colors" placeholder="Password" required />
+            <div className="relative">
+              <input id="password" name="password" type={showPassword ? 'text' : 'password'} value={formData.password} onChange={handleChange} className="peer h-12 w-full border-b-2 border-gray-600 text-white bg-transparent placeholder-transparent focus:outline-none focus:border-primary transition-colors pr-10" placeholder="Password" required />
+              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-0 top-0 h-12 w-10 flex items-center justify-center text-gray-300">
+                {showPassword ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0 1 12 19c-5 0-9.27-3.11-11-7.5A17.28 17.28 0 0 1 6.3 4.1M3 3l18 18"/></svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.056-5.064 7-9.542 7-4.477 0-8.268-2.944-9.542-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                )}
+              </button>
+            </div>
             <label htmlFor="password" className="absolute left-0 -top-4 text-gray-400 text-sm transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-placeholder-shown:top-3 peer-focus:-top-4 peer-focus:text-primary peer-focus:text-sm">Password</label>
+
+            <div className="mt-2 text-sm text-gray-300">
+              <ul className="space-y-1">
+                <li className={passwordChecks.length ? 'text-green-400' : 'text-gray-500'}>Minimum 8 characters</li>
+                <li className={passwordChecks.upper ? 'text-green-400' : 'text-gray-500'}>Uppercase letter (A-Z)</li>
+                <li className={passwordChecks.lower ? 'text-green-400' : 'text-gray-500'}>Lowercase letter (a-z)</li>
+                <li className={passwordChecks.number ? 'text-green-400' : 'text-gray-500'}>A number (0-9)</li>
+                <li className={passwordChecks.special ? 'text-green-400' : 'text-gray-500'}>A special character (e.g. !@#$%)</li>
+              </ul>
+            </div>
           </motion.div>
 
           <motion.div variants={itemVariants} className="relative">
