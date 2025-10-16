@@ -28,16 +28,25 @@ app.set('trust proxy', 1);
 app.use(helmet());
 app.use(express.json());
 
+// CORS config - allow from configured origin in production
+// Place CORS before rate limiting so preflight requests get handled and
+// returned with proper headers instead of being counted toward the rate limit.
+const allowedOrigin = process.env.CORS_ORIGIN || '*';
+app.use(cors({ origin: allowedOrigin }));
+
+// Explicit preflight handler for our API routes so browsers receive the
+// Access-Control-Allow-* headers immediately. This also keeps OPTIONS
+// from hitting the rate limiter or other middleware that might return 4xx/5xx.
+app.options('/api/*', cors({ origin: allowedOrigin }), (req, res) => res.sendStatus(204));
+
 // Rate limiter - reasonable defaults for public APIs
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 120, // limit each IP to 120 requests per windowMs
+  // skip preflight OPTIONS requests so they don't count toward the limit
+  skip: (req) => req.method === 'OPTIONS',
 });
 app.use('/api/', apiLimiter);
-
-// CORS config - allow from configured origin in production
-const allowedOrigin = process.env.CORS_ORIGIN || '*';
-app.use(cors({ origin: allowedOrigin }));
 
 // Database Connection with retry/backoff
 const mongoUri = process.env.MONGO_URI;
