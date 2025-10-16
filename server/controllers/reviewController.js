@@ -152,10 +152,16 @@ const voteReview = async (req, res) => {
         if (!review) return res.status(404).json({ msg: 'Review not found' });
 
         const uid = req.user.id;
-        // remove any existing vote by this user
-        review.agreementVotes = (review.agreementVotes || []).filter(v => String(v.user) !== String(uid));
-        // push new vote
-        review.agreementVotes.push({ user: uid, value });
+        // Find any existing vote by this user
+        const existing = (review.agreementVotes || []).find(v => String(v.user) === String(uid));
+        if (existing && Number(existing.value) === Number(value)) {
+            // Toggle off: user clicked the same vote again -> remove it
+            review.agreementVotes = (review.agreementVotes || []).filter(v => String(v.user) !== String(uid));
+        } else {
+            // Remove any existing vote by this user then add the new one
+            review.agreementVotes = (review.agreementVotes || []).filter(v => String(v.user) !== String(uid));
+            review.agreementVotes.push({ user: uid, value });
+        }
         await review.save();
         await review.populate('user', 'username avatar _id');
 
