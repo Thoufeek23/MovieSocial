@@ -75,34 +75,7 @@ const DiscussionPage = () => {
     }
   };
 
-  // whether the current user started this discussion
-  const isStarter = !!user && !!discussion && String(user.id || user._id) === String(discussion.starter?._id || discussion.starter?._id);
-
-  const handleDeleteDiscussion = async () => {
-    if (!user) return toast.error('Not authorized');
-    if (!window.confirm('Delete this discussion? This cannot be undone.')) return;
-    try {
-      await api.deleteDiscussion(id);
-      toast.success('Discussion deleted');
-      window.location.href = '/discussions';
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to delete discussion');
-    }
-  };
-
-  const handleEditDiscussion = async () => {
-    const newTitle = window.prompt('Edit discussion title', discussion.title);
-    if (newTitle === null) return; // cancelled
-    try {
-      const { data } = await api.updateDiscussion(id, { title: newTitle });
-      setDiscussion(data);
-      toast.success('Discussion updated');
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to update discussion');
-    }
-  };
+  // discussion-level edit/delete handled elsewhere (not used here)
 
   const fetchSuggestions = async (q) => {
     if (!q) {
