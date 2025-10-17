@@ -113,11 +113,27 @@ const forgotPassword = async (req, res) => {
         const text = `Your password reset code is: ${otp}. It expires in 15 minutes.`;
         const html = `<p>Your password reset code is: <strong>${otp}</strong></p><p>It expires in 15 minutes.</p>`;
 
+        // Allow printing OTPs to server logs for debugging/testing when in dev
+        // or when explicitly enabled via SHOW_OTPS=true in env (useful for hosted test instances)
+        const isDev = process.env.NODE_ENV !== 'production';
+        const showOtps = process.env.SHOW_OTPS === 'true' || isDev;
+
+        let emailSent = false;
         try {
             await sendEmail({ to: user.email, subject, text, html });
+            emailSent = true;
         } catch (e) {
             console.error('Failed to send reset email', e);
+            emailSent = false;
             // still return success to avoid revealing whether sending failed
+        }
+
+        if (showOtps || !emailSent) {
+            try {
+                console.info(`[forgot-password] OTP for ${user.email}: ${otp} ${!emailSent ? '(email send failed)' : '(logged)'}`);
+            } catch (e) {
+                // ignore logging errors
+            }
         }
 
         return res.json({ msg: 'If that email exists we sent an OTP' });
@@ -238,9 +254,10 @@ const sendSignupOtp = async (req, res) => {
 
             // For local development (or when sending failed), log the OTP so devs can test without SMTP configured
             const isDev = process.env.NODE_ENV !== 'production';
-            if (!emailSent || isDev) {
+            const showOtps = process.env.SHOW_OTPS === 'true' || isDev;
+            if (!emailSent || showOtps) {
                 try {
-                    console.info(`[signup-otp] OTP for ${email}: ${otp} (dev/failed-send log)`);
+                    console.info(`[signup-otp] OTP for ${email}: ${otp} ${!emailSent ? '(email send failed)' : '(logged)'}`);
                 } catch (e) {
                     // ignore logging errors
                 }
