@@ -1,7 +1,7 @@
 import React, { useContext } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import { Home, Search, User, FileText, BookOpen, PlusCircle } from 'lucide-react';
+import { Home, Search, User, FileText, BookOpen } from 'lucide-react';
 
 const NavItem = ({ to, icon: Icon, label }) => {
   const location = useLocation();
@@ -21,16 +21,7 @@ const Sidebar = () => {
   return (
     <aside className="w-20 md:w-56 bg-background/0 sticky top-0 h-screen p-4">
       <div className="flex flex-col items-start gap-2">
-        <div className="mb-4 px-2">
-          <Link to="/" className="flex items-center gap-3">
-            <div className="bg-card rounded-full w-12 h-12 flex items-center justify-center" aria-hidden>
-              {/* Plain circle logo (no dash) */}
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
-                <circle cx="12" cy="12" r="2" fill="#6b7280" />
-              </svg>
-            </div>
-          </Link>
-        </div>
+        {/* logo removed per request */}
 
         <nav className="flex flex-col w-full gap-1">
           <NavItem to="/" icon={Home} label="Home" />
@@ -40,12 +31,7 @@ const Sidebar = () => {
           <NavItem to={profileLink} icon={User} label="Profile" />
         </nav>
 
-        <div className="mt-auto w-full">
-          <Link to="/search" className="flex items-center gap-3 px-4 py-3 rounded-md text-gray-300 hover:bg-gray-900">
-            <PlusCircle className="w-5 h-5" />
-            <span className="hidden md:inline-block font-medium">Post</span>
-          </Link>
-        </div>
+        {/* post button removed from sidebar per request */}
       </div>
     </aside>
   );
