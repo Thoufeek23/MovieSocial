@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import Navbar from './components/Navbar';
+import Sidebar from './components/Sidebar';
 import PrivateRoute from './components/PrivateRoute';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
@@ -9,6 +10,8 @@ import MovieDetailPage from './pages/MovieDetailPage';
 import SearchPage from './pages/SearchPage';
 import ProfilePage from './pages/ProfilePage';
 import DiscussionPage from './pages/DiscussionPage';
+import ReviewsPage from './pages/ReviewsPage';
+import DiscussionsListPage from './pages/DiscussionsListPage';
 import { AnimatePresence, motion } from 'framer-motion';
 import Curtain from './components/Curtain';
 import React, { useContext } from 'react';
@@ -33,15 +36,19 @@ const AppRoutes = () => {
   return (
     <>
       <Navbar />
-      <main className="container mx-auto p-4 md:p-6">
-        <AnimatePresence mode="wait">
+      <div className="flex">
+        <Sidebar />
+        <main className="flex-1 container mx-auto p-4 md:p-6">
+          <AnimatePresence mode="wait">
           <Routes>
             <Route path="/login" element={<PageWrapper><LoginPage /></PageWrapper>} />
             <Route path="/signup" element={<PageWrapper><SignupPage /></PageWrapper>} />
             <Route path="/search" element={<PageWrapper><SearchPage /></PageWrapper>} />
             <Route path="/movie/:id" element={<PageWrapper><MovieDetailPage /></PageWrapper>} />
             <Route path="/profile/:username" element={<PageWrapper><ProfilePage /></PageWrapper>} />
-            <Route path="/discussions/:id" element={<PageWrapper><DiscussionPage /></PageWrapper>} />
+              <Route path="/discussions/:id" element={<PageWrapper><DiscussionPage /></PageWrapper>} />
+              <Route path="/discussions" element={<PageWrapper><DiscussionsListPage /></PageWrapper>} />
+              <Route path="/reviews" element={<PageWrapper><ReviewsPage /></PageWrapper>} />
             <Route
               path="/"
               element={
@@ -53,8 +60,9 @@ const AppRoutes = () => {
               }
             />
           </Routes>
-        </AnimatePresence>
-      </main>
+          </AnimatePresence>
+        </main>
+      </div>
     </>
   );
 }
