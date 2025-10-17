@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const sgMail = require('@sendgrid/mail');
 
 // Simple email sender. Expects SMTP configuration in env vars. If SMTP not configured,
 // falls back to logging the message to the console (useful for local dev).
@@ -7,6 +8,26 @@ const sendEmail = async ({ to, subject, text, html }) => {
   const smtpPort = process.env.SMTP_PORT;
   const smtpUser = process.env.SMTP_USER;
   const smtpPass = process.env.SMTP_PASS;
+
+  // If SENDGRID_API_KEY is present, prefer SendGrid HTTP API (avoids SMTP network issues on some hosts)
+  const sendgridKey = process.env.SENDGRID_API_KEY;
+  if (sendgridKey) {
+    try {
+      sgMail.setApiKey(sendgridKey);
+      const msg = {
+        to,
+        from: process.env.SMTP_FROM || `no-reply@${process.env.SMTP_HOST || 'localhost'}`,
+        subject,
+        text,
+        html,
+      };
+      await sgMail.send(msg);
+      return;
+    } catch (sgErr) {
+      console.error('[email] SendGrid send failed', sgErr && sgErr.message ? sgErr.message : sgErr);
+      // fall through to SMTP fallback if configured
+    }
+  }
 
   if (!smtpHost || !smtpPort) {
     console.warn('SMTP not configured; falling back to console logging for email');
