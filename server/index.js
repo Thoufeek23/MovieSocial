@@ -20,10 +20,11 @@ process.on('unhandledRejection', (reason, promise) => {
 
 const app = express();
 
-// When running behind a proxy (Render, Heroku, etc.) enable trust proxy so
+// When running behind proxies (Cloudflare, Render, etc.) enable trust proxy so
 // express-rate-limit and other middleware can correctly read X-Forwarded-* headers.
-// Use `1` to trust the first proxy in front of the app (recommended for single-proxy hosts).
-app.set('trust proxy', 1);
+// Trust the full proxy chain so req.ip is populated from the client-facing header.
+// Set to `true` to trust all proxies (acceptable for many hosted setups behind a CDN).
+app.set('trust proxy', true);
 
 // Middleware
 app.use(helmet());
@@ -60,8 +61,9 @@ app.use('/api', (req, res, next) => {
 // - Keep a global fallback by IP for unauthenticated requests
 const isDev = process.env.NODE_ENV !== 'production';
 
-const defaultWindowMs = 15 * 60 * 1000; // 15 minutes
-const defaultMax = isDev ? 1000 : 120;
+// Rate limit window and max can be tuned from environment vars in production
+const defaultWindowMs = (process.env.RATE_LIMIT_WINDOW_MINUTES ? Number(process.env.RATE_LIMIT_WINDOW_MINUTES) : 15) * 60 * 1000; // minutes -> ms
+const defaultMax = process.env.RATE_LIMIT_MAX_REQUESTS ? Number(process.env.RATE_LIMIT_MAX_REQUESTS) : (isDev ? 1000 : 120);
 
 const apiLimiter = rateLimit({
   windowMs: defaultWindowMs,
@@ -76,9 +78,21 @@ const apiLimiter = rateLimit({
         if (payload && payload.user && payload.user.id) return String(payload.user.id);
       }
     } catch (e) {
-      // ignore and fallback to IP
+      // ignore and continue to other fallbacks
     }
-    // fallback to IP address
+
+    // If behind proxies, prefer the left-most value in X-Forwarded-For (original client IP)
+    try {
+      const xff = req.headers['x-forwarded-for'] || req.headers['X-Forwarded-For'];
+      if (xff && typeof xff === 'string') {
+        const first = xff.split(',')[0].trim();
+        if (first) return first;
+      }
+    } catch (e) {
+      // ignore and fallback to req.ip
+    }
+
+    // final fallback to Express-determined IP
     return req.ip;
   },
   skip: (req) => {
@@ -93,12 +107,37 @@ const apiLimiter = rateLimit({
   },
   skipFailedRequests: true, // don't count failed responses (optional)
   handler: (req, res /*, next */) => {
+    // Log more informative details for debugging: include JWT user id if present and client IP
+    let clientIp = req.ip;
     try {
-      console.warn(`[rate-limit] blocked ${req.ip} ${req.method} ${req.originalUrl} - headers: ${JSON.stringify(req.headers)}`);
+      const xff = req.headers['x-forwarded-for'] || req.headers['X-Forwarded-For'];
+      if (xff && typeof xff === 'string') clientIp = xff.split(',')[0].trim() || clientIp;
     } catch (e) {
-      console.warn('[rate-limit] blocked request (failed to stringify headers)');
+      // ignore
     }
-    res.status(429).json({ message: 'Too many requests' });
+
+    let userId = null;
+    try {
+      const auth = req.headers.authorization;
+      if (auth && auth.startsWith('Bearer ')) {
+        const token = auth.split(' ')[1];
+        const payload = jwt.decode(token);
+        if (payload && payload.user && payload.user.id) userId = payload.user.id;
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    try {
+      console.warn('[rate-limit] blocked', { clientIp, userId, method: req.method, url: req.originalUrl });
+    } catch (e) {
+      console.warn('[rate-limit] blocked request (failed to stringify details)');
+    }
+
+    // Inform clients when they can retry (use the configured window)
+    const retryAfter = Math.ceil(apiLimiter.windowMs / 1000);
+    res.set('Retry-After', String(retryAfter));
+    res.status(429).json({ message: 'Too many requests', retryAfter });
   },
 });
 
