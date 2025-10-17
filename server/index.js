@@ -179,7 +179,7 @@ app.use('/api/reviews', require('./routes/reviews'));
 app.use('/api/movies', require('./routes/movies'));
 app.use('/api/discussions', require('./routes/discussions'));
 // Debug endpoints for runtime checks (safe to remove after debugging)
-app.use('/api/debug', require('./routes/debug'));
+// debug routes removed
 
 // Basic Route for testing
 app.get('/', (req, res) => {
