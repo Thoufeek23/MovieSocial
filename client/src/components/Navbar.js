@@ -4,14 +4,17 @@ import { AuthContext } from '../context/AuthContext';
 import InstantSearchBar from './InstantSearchBar';
 import Avatar from './Avatar';
 import { Clapperboard } from 'lucide-react';
+// post-related UI moved to sidebar; no inline post controls in navbar
 
 const Navbar = () => {
   const { user } = useContext(AuthContext);
   const location = useLocation();
 
-  const hideSearchOn = ['/login', '/signup'];
-  const shouldShowSearch = !hideSearchOn.includes(location.pathname);
+  // Only show the top/global search on the Home screen
+  const shouldShowSearch = location.pathname === '/';
 
+
+  // post modal/flows removed from navbar
 
   return (
     <nav className="glass sticky top-0 z-50 px-3 py-2">
@@ -49,6 +52,7 @@ const Navbar = () => {
           <InstantSearchBar />
         </div>
       )}
+      {/* Post modal removed from navbar; Post now lives as a sidebar action linking to /search */}
     </nav>
   );
 };
