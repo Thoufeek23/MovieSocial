@@ -103,6 +103,86 @@ const addComment = async (req, res) => {
   }
 };
 
+// PUT /api/discussions/:id/comments/:commentId - edit a comment (protected, only comment author)
+const editComment = async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ msg: 'Comment text required' });
+    const discussion = await Discussion.findById(req.params.id);
+    if (!discussion) return res.status(404).json({ msg: 'Discussion not found' });
+
+  // find comment by id using index to be robust if comments are plain objects
+  const idx = discussion.comments.findIndex(c => String(c._id) === String(req.params.commentId));
+  if (idx === -1) return res.status(404).json({ msg: 'Comment not found' });
+
+  const comment = discussion.comments[idx];
+  if (String(comment.user) !== String(req.user.id)) return res.status(403).json({ msg: 'Not authorized' });
+
+  discussion.comments[idx].text = text;
+  await discussion.save();
+    await discussion.populate([
+      { path: 'starter', select: 'username avatar' },
+      { path: 'comments.user', select: 'username avatar' }
+    ]);
+    res.json(discussion);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: 'Server Error' });
+  }
+};
+
+// DELETE /api/discussions/:id/comments/:commentId - delete a comment (protected, only comment author or discussion starter)
+const deleteComment = async (req, res) => {
+  try {
+    const discussion = await Discussion.findById(req.params.id);
+    if (!discussion) return res.status(404).json({ msg: 'Discussion not found' });
+
+    // find comment by index and remove it
+    const idx = discussion.comments.findIndex(c => String(c._id) === String(req.params.commentId));
+    if (idx === -1) return res.status(404).json({ msg: 'Comment not found' });
+
+    const comment = discussion.comments[idx];
+    // allow deletion by comment author or discussion starter
+    if (String(comment.user) !== String(req.user.id) && String(discussion.starter) !== String(req.user.id)) {
+      return res.status(403).json({ msg: 'Not authorized' });
+    }
+
+    // remove by filtering out the comment id
+    discussion.comments = discussion.comments.filter(c => String(c._id) !== String(req.params.commentId));
+    await discussion.save();
+    await discussion.populate([
+      { path: 'starter', select: 'username avatar' },
+      { path: 'comments.user', select: 'username avatar' }
+    ]);
+    res.json(discussion);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: 'Server Error' });
+  }
+};
+
+// PUT /api/discussions/:id - update discussion (only starter)
+const updateDiscussion = async (req, res) => {
+  try {
+    const { title, tag } = req.body;
+    const discussion = await Discussion.findById(req.params.id);
+    if (!discussion) return res.status(404).json({ msg: 'Discussion not found' });
+    if (String(discussion.starter) !== String(req.user.id)) return res.status(403).json({ msg: 'Not authorized' });
+
+    if (title) discussion.title = title;
+    if (tag) discussion.tag = tag;
+    await discussion.save();
+    await discussion.populate([
+      { path: 'starter', select: 'username avatar' },
+      { path: 'comments.user', select: 'username avatar' }
+    ]);
+    res.json(discussion);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: 'Server Error' });
+  }
+};
+
 // DELETE /api/discussions/:id - delete a discussion (protected, only starter)
 const deleteDiscussion = async (req, res) => {
   try {
@@ -123,6 +203,9 @@ module.exports = {
   createDiscussion,
   getDiscussion,
   addComment,
+  editComment,
+  deleteComment,
+  updateDiscussion,
   listDiscussionsByUser,
   deleteDiscussion,
 };

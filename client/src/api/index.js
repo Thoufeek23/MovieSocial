@@ -59,6 +59,9 @@ export const fetchDiscussions = (params = {}) => {
 export const postDiscussion = (discussionData) => API.post('/discussions', discussionData);
 export const getDiscussion = (id) => API.get(`/discussions/${id}`);
 export const postDiscussionComment = (id, commentData) => API.post(`/discussions/${id}/comments`, commentData);
+export const editDiscussionComment = (discussionId, commentId, commentData) => API.put(`/discussions/${discussionId}/comments/${commentId}`, commentData);
+export const deleteDiscussionComment = (discussionId, commentId) => API.delete(`/discussions/${discussionId}/comments/${commentId}`);
 export const fetchDiscussionsForMovie = (movieId) => fetchDiscussions({ movieId });
 export const deleteDiscussion = (id) => API.delete(`/discussions/${id}`);
+export const updateDiscussion = (id, data) => API.put(`/discussions/${id}`, data);
 export const fetchDiscussionsByUser = (username) => API.get(`/discussions/user/${username}`);

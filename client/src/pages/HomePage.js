@@ -207,7 +207,8 @@ const HomePage = () => {
               <ReviewCard 
                 key={review._id} 
                 review={review} 
-                {...(showMine ? { onEdit: handleEditReview, onDelete: handleDeleteReview } : {})}
+                onEdit={handleEditReview}
+                onDelete={handleDeleteReview}
               />
             ))}
           </div>

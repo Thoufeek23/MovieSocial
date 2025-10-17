@@ -4,6 +4,7 @@ import * as api from '../api';
 import { AuthContext } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import Avatar from '../components/Avatar';
+import { Edit, Trash2 } from 'lucide-react';
 
 const DiscussionPage = () => {
   const { id } = useParams();
@@ -17,6 +18,10 @@ const DiscussionPage = () => {
   const [mentionRange, setMentionRange] = useState(null); // { start, end }
   const debounceRef = useRef(null);
   const [selectedSuggestion, setSelectedSuggestion] = useState(-1);
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editingCommentText, setEditingCommentText] = useState('');
+  const [commentProcessing, setCommentProcessing] = useState(false);
+  const [pendingDeleteCommentId, setPendingDeleteCommentId] = useState(null);
 
   useEffect(() => {
     const load = async () => {
@@ -67,6 +72,35 @@ const DiscussionPage = () => {
     } catch (err) {
       console.error(err);
       toast.error('Failed to post comment');
+    }
+  };
+
+  // whether the current user started this discussion
+  const isStarter = !!user && !!discussion && String(user.id || user._id) === String(discussion.starter?._id || discussion.starter?._id);
+
+  const handleDeleteDiscussion = async () => {
+    if (!user) return toast.error('Not authorized');
+    if (!window.confirm('Delete this discussion? This cannot be undone.')) return;
+    try {
+      await api.deleteDiscussion(id);
+      toast.success('Discussion deleted');
+      window.location.href = '/discussions';
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to delete discussion');
+    }
+  };
+
+  const handleEditDiscussion = async () => {
+    const newTitle = window.prompt('Edit discussion title', discussion.title);
+    if (newTitle === null) return; // cancelled
+    try {
+      const { data } = await api.updateDiscussion(id, { title: newTitle });
+      setDiscussion(data);
+      toast.success('Discussion updated');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to update discussion');
     }
   };
 
@@ -235,9 +269,65 @@ const DiscussionPage = () => {
                           <Link to={`/profile/${c.user.username}`} className="font-semibold text-gray-100 hover:underline">{c.user.username}</Link>
                           <div className="text-xs text-gray-500">{timeAgo(c.createdAt)}</div>
                         </div>
-                        <div className="text-sm text-gray-400"> </div>
+                        <div className="text-sm text-gray-400 flex items-center gap-2">
+                          {(user && (String(user.id || user._id) === String(c.user._id) || String(user.id || user._id) === String(discussion.starter?._id))) && (
+                            <>
+                              {editingCommentId === c._id ? (
+                                <div className="flex items-center gap-2">
+                                  <button disabled={commentProcessing} onClick={async () => {
+                                    // submit edit
+                                    if (!editingCommentText.trim()) return toast.error('Comment cannot be empty');
+                                    try {
+                                      setCommentProcessing(true);
+                                      const res = await api.editDiscussionComment(id, c._id, { text: editingCommentText });
+                                      setDiscussion(res.data || res);
+                                      setEditingCommentId(null);
+                                      setEditingCommentText('');
+                                      toast.success('Comment updated');
+                                    } catch (err) {
+                                      console.error(err);
+                                      toast.error('Failed to update comment');
+                                    } finally {
+                                      setCommentProcessing(false);
+                                    }
+                                  }} className="text-sm bg-green-600 text-white px-2 py-1 rounded">Save</button>
+                                  <button disabled={commentProcessing} onClick={() => { setEditingCommentId(null); setEditingCommentText(''); }} className="text-sm bg-gray-700 text-white px-2 py-1 rounded">Cancel</button>
+                                </div>
+                              ) : pendingDeleteCommentId === c._id ? (
+                                <div className="flex items-center gap-2">
+                                  <button disabled={commentProcessing} onClick={async () => {
+                                    try {
+                                      setCommentProcessing(true);
+                                      const res = await api.deleteDiscussionComment(id, c._id);
+                                      setDiscussion(res.data || res);
+                                      setPendingDeleteCommentId(null);
+                                      toast.success('Comment deleted');
+                                    } catch (err) {
+                                      console.error(err);
+                                      toast.error('Failed to delete comment');
+                                    } finally {
+                                      setCommentProcessing(false);
+                                    }
+                                  }} className="text-sm bg-red-600 text-white px-2 py-1 rounded">Confirm</button>
+                                  <button disabled={commentProcessing} onClick={() => setPendingDeleteCommentId(null)} className="text-sm bg-gray-700 text-white px-2 py-1 rounded">Cancel</button>
+                                </div>
+                              ) : (
+                                <>
+                                  <button onClick={() => { setEditingCommentId(c._id); setEditingCommentText(c.text); }} className="text-gray-400 hover:text-white" title="Edit comment"><Edit size={14} /></button>
+                                  <button onClick={() => setPendingDeleteCommentId(c._id)} className="text-gray-400 hover:text-red-500" title="Delete comment"><Trash2 size={14} /></button>
+                                </>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </div>
-                      <div className="mt-2 text-gray-200 leading-relaxed">{renderCommentText(c.text)}</div>
+                      <div className="mt-2 text-gray-200 leading-relaxed">
+                        {editingCommentId === c._id ? (
+                          <textarea value={editingCommentText} onChange={(e) => setEditingCommentText(e.target.value)} className="w-full p-3 rounded bg-gray-800 text-white resize-none" rows={3} />
+                        ) : (
+                          renderCommentText(c.text)
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
