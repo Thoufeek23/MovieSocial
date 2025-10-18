@@ -20,11 +20,32 @@ process.on('unhandledRejection', (reason, promise) => {
 
 const app = express();
 
-// When running behind proxies (Cloudflare, Render, etc.) enable trust proxy so
-// express-rate-limit and other middleware can correctly read X-Forwarded-* headers.
-// Trust the full proxy chain so req.ip is populated from the client-facing header.
-// Set to `true` to trust all proxies (acceptable for many hosted setups behind a CDN).
-app.set('trust proxy', true);
+// Configure `trust proxy` carefully. Passing `true` trusts all proxies which
+// allows a client to spoof the IP via X-Forwarded-For and will make IP-based
+// rate limiting permissive. Instead prefer a specific value (for example
+// `1` when behind a single reverse proxy such as many PaaS providers).
+// Set the `TRUST_PROXY` env var to control this in production (e.g. "1").
+// Default behavior: in production default to 1 (common), otherwise false.
+const trustProxyEnv = process.env.TRUST_PROXY;
+if (typeof trustProxyEnv !== 'undefined') {
+  // allow numeric or string values (e.g. '1' -> 1)
+  const tp = /^\d+$/.test(trustProxyEnv) ? Number(trustProxyEnv) : trustProxyEnv;
+  app.set('trust proxy', tp);
+} else {
+  app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
+}
+
+// Log the effective trust proxy setting for debugging/ops
+try {
+  const effectiveTrust = app.get('trust proxy');
+  console.info('[startup] express trust proxy =', effectiveTrust);
+  // If trust proxy is true (trust all), warn operator because it weakens IP rate-limiting
+  if (effectiveTrust === true) {
+    console.warn('[startup] WARNING: trust proxy is set to `true` which trusts all proxies. This can allow clients to spoof IPs via X-Forwarded-For and may bypass IP-based rate limiting. Prefer setting TRUST_PROXY=1 (or a specific proxy count) in production. See https://expressjs.com/en/guide/behind-proxies.html');
+  }
+} catch (e) {
+  // ignore logging failure
+}
 
 // Middleware
 app.use(helmet());
@@ -174,8 +195,6 @@ if (!mongoUri) {
 
 const connectWithRetry = async (maxAttempts = 5, initialDelay = 2000) => {
   const opts = {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
     // reduce how long the driver waits for server selection on each attempt
     serverSelectionTimeoutMS: 10000,
   };
