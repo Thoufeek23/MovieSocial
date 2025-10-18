@@ -3,7 +3,6 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
 const jwt = require('jsonwebtoken');
 const path = require('path');
 // Add global error handlers to aid debugging in hosted environments
@@ -47,25 +46,10 @@ try {
   // ignore logging failure
 }
 
-// Log configured rate-limit parameters for visibility
-try {
-  console.info('[startup] rate-limit window (ms) =', defaultWindowMs);
-  console.info('[startup] rate-limit anon max =', anonDefaultMax, 'auth max =', authDefaultMax);
-  console.info('[startup] reviews route max =', reviewsRouteMax, 'movies route max =', moviesRouteMax);
-} catch (e) {
-  // ignore
-}
-
-try {
-  console.info('[startup] RATE_LIMIT_UNLIMITED =', isUnlimited);
-} catch (e) {}
-
-// Log any configured whitelist for rate limiting exemptions
-try {
-  const rawWL = process.env.RATE_LIMIT_WHITELIST || '';
-  const parsedWL = rawWL.split(',').map(s => s.trim()).filter(Boolean);
-  console.info('[startup] rate-limit whitelist =', parsedWL.length ? parsedWL : '(none)');
-} catch (e) {}
+// Rate limiting is intentionally disabled in this build. If you need rate
+// limiting, enable it via your platform (CDN/WAF) or re-add express-rate-limit
+// and configure RATE_LIMIT_* environment variables. Removed to avoid
+// conflicts with platform-level proxies and proxy headers (e.g. Render).
 
 // Middleware
 app.use(helmet());
@@ -96,193 +80,9 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// Rate limiter - improved behavior:
-// - Use per-user key when authenticated (prevents one IP from blocking other users behind same NAT)
-// - Skip limiting for local dev (::1 / 127.0.0.1) to avoid dev friction
-// - Keep a global fallback by IP for unauthenticated requests
-const isDev = process.env.NODE_ENV !== 'production';
-
-// Rate limit window and max can be tuned from environment vars in production
-const defaultWindowMs = (process.env.RATE_LIMIT_WINDOW_MINUTES ? Number(process.env.RATE_LIMIT_WINDOW_MINUTES) : 15) * 60 * 1000; // minutes -> ms
-
-// Allow separate limits for authenticated vs anonymous users and per-route overrides
-// If RATE_LIMIT_UNLIMITED=true is set, use a very large number to effectively disable rate limiting
-const isUnlimited = String(process.env.RATE_LIMIT_UNLIMITED || '').toLowerCase() === 'true';
-const VERY_LARGE_LIMIT = Number.MAX_SAFE_INTEGER || 9007199254740991;
-const anonDefaultMax = isUnlimited ? VERY_LARGE_LIMIT : (process.env.RATE_LIMIT_ANON_MAX ? Number(process.env.RATE_LIMIT_ANON_MAX) : (isDev ? 1000 : 120));
-const authDefaultMax = isUnlimited ? VERY_LARGE_LIMIT : (process.env.RATE_LIMIT_AUTH_MAX ? Number(process.env.RATE_LIMIT_AUTH_MAX) : (isDev ? 2000 : 600));
-
-// Per-route overrides (for busy endpoints like reviews/movies)
-const reviewsRouteMax = isUnlimited ? VERY_LARGE_LIMIT : (process.env.REVIEWS_RATE_LIMIT_MAX ? Number(process.env.REVIEWS_RATE_LIMIT_MAX) : (isDev ? 1000 : 60));
-const moviesRouteMax = isUnlimited ? VERY_LARGE_LIMIT : (process.env.MOVIES_RATE_LIMIT_MAX ? Number(process.env.MOVIES_RATE_LIMIT_MAX) : (isDev ? 1000 : 60));
-
-const apiLimiter = rateLimit({
-  windowMs: defaultWindowMs,
-  // max accepts a number or a function(req, res) -> number; return higher limits for authenticated users
-  max: (req, res) => {
-    try {
-      const auth = req.headers.authorization;
-      if (auth && auth.startsWith('Bearer ')) {
-        const token = auth.split(' ')[1];
-        const payload = jwt.decode(token);
-        if (payload && payload.user && payload.user.id) return authDefaultMax;
-      }
-    } catch (e) {
-      // ignore and fall back to anon
-    }
-    return anonDefaultMax;
-  },
-  keyGenerator: (req) => {
-    // If Authorization Bearer token present, use decoded user id as key
-    try {
-      const auth = req.headers.authorization;
-      if (auth && auth.startsWith('Bearer ')) {
-        const token = auth.split(' ')[1];
-        const payload = jwt.decode(token);
-        if (payload && payload.user && payload.user.id) return String(payload.user.id);
-      }
-    } catch (e) {
-      // ignore and continue to other fallbacks
-    }
-
-    // If behind proxies, prefer the left-most value in X-Forwarded-For (original client IP)
-    try {
-      const xff = req.headers['x-forwarded-for'] || req.headers['X-Forwarded-For'];
-      if (xff && typeof xff === 'string') {
-        const first = xff.split(',')[0].trim();
-        if (first) return first;
-      }
-    } catch (e) {
-      // ignore and fallback to req.ip
-    }
-
-    // final fallback to Express-determined IP
-    return req.ip;
-  },
-  skip: (req) => {
-    // skip preflight
-    if (req.method === 'OPTIONS') return true;
-    // Skip for whitelisted users or IPs (comma-separated list in env). Example: RATE_LIMIT_WHITELIST=68d7...,127.0.0.1
-    try {
-      const raw = process.env.RATE_LIMIT_WHITELIST || '';
-      if (raw) {
-        const tokens = raw.split(',').map(s => s.trim()).filter(Boolean);
-        if (tokens.length > 0) {
-          // Check user id from Bearer token
-          try {
-            const auth = req.headers.authorization;
-            if (auth && auth.startsWith('Bearer ')) {
-              const token = auth.split(' ')[1];
-              const payload = jwt.decode(token);
-              if (payload && payload.user && payload.user.id && tokens.includes(String(payload.user.id))) return true;
-            }
-          } catch (e) {
-            // ignore token parse errors
-          }
-
-          // Check client IP
-          try {
-            const xff = req.headers['x-forwarded-for'] || req.headers['X-Forwarded-For'];
-            const clientIp = (xff && typeof xff === 'string' ? xff.split(',')[0].trim() : (req.ip || ''));
-            if (clientIp && tokens.includes(clientIp)) return true;
-          } catch (e) {
-            // ignore
-          }
-        }
-      }
-    } catch (e) {
-      // ignore
-    }
-    // skip for local dev addresses to avoid blocking local dev flows
-    if (isDev) {
-      const ip = req.ip || (req.connection && req.connection.remoteAddress) || '';
-      if (ip === '::1' || ip === '127.0.0.1') return true;
-    }
-    return false;
-  },
-  skipFailedRequests: true, // don't count failed responses (optional)
-  handler: (req, res /*, next */) => {
-    // Log more informative details for debugging: include JWT user id if present and client IP
-    let clientIp = req.ip;
-    try {
-      const xff = req.headers['x-forwarded-for'] || req.headers['X-Forwarded-For'];
-      if (xff && typeof xff === 'string') clientIp = xff.split(',')[0].trim() || clientIp;
-    } catch (e) {
-      // ignore
-    }
-
-    let userId = null;
-    try {
-      const auth = req.headers.authorization;
-      if (auth && auth.startsWith('Bearer ')) {
-        const token = auth.split(' ')[1];
-        const payload = jwt.decode(token);
-        if (payload && payload.user && payload.user.id) userId = payload.user.id;
-      }
-    } catch (e) {
-      // ignore
-    }
-
-    try {
-      console.warn('[rate-limit] blocked', { clientIp, userId, method: req.method, url: req.originalUrl });
-    } catch (e) {
-      console.warn('[rate-limit] blocked request (failed to stringify details)');
-    }
-
-    // Inform clients when they can retry (use the configured window)
-    const retryAfter = Math.ceil(apiLimiter.windowMs / 1000);
-    res.set('Retry-After', String(retryAfter));
-    res.status(429).json({ message: 'Too many requests', retryAfter });
-  },
-});
-
-// Apply global limiter
-app.use('/api/', apiLimiter);
-
-// Add higher-rate per-route limiters for known high-traffic endpoints
-const reviewsLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  // prefer explicit per-route env override, otherwise use auth/anon defaults
-  max: (req, res) => {
-    // if a specific override present, use it
-    if (process.env.REVIEWS_RATE_LIMIT_MAX) return reviewsRouteMax;
-    try {
-      const auth = req.headers.authorization;
-      if (auth && auth.startsWith('Bearer ')) {
-        const token = auth.split(' ')[1];
-        const payload = jwt.decode(token);
-        if (payload && payload.user && payload.user.id) return Math.max(60, authDefaultMax / 10);
-      }
-    } catch (e) {}
-    return Math.max(60, anonDefaultMax / 10);
-  },
-  keyGenerator: apiLimiter.keyGenerator,
-  skip: apiLimiter.skip,
-  handler: (req, res) => res.status(429).json({ message: 'Too many requests to reviews endpoint' }),
-});
-
-const moviesLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: (req, res) => {
-    if (process.env.MOVIES_RATE_LIMIT_MAX) return moviesRouteMax;
-    try {
-      const auth = req.headers.authorization;
-      if (auth && auth.startsWith('Bearer ')) {
-        const token = auth.split(' ')[1];
-        const payload = jwt.decode(token);
-        if (payload && payload.user && payload.user.id) return Math.max(60, authDefaultMax / 10);
-      }
-    } catch (e) {}
-    return Math.max(60, anonDefaultMax / 10);
-  },
-  keyGenerator: apiLimiter.keyGenerator,
-  skip: apiLimiter.skip,
-  handler: (req, res) => res.status(429).json({ message: 'Too many requests to movies endpoint' }),
-});
-
-// Mount per-route limiters
-app.use('/api/reviews', reviewsLimiter);
-app.use('/api/movies', moviesLimiter);
+// Rate limiting removed: upstream platform (CDN/WAF) or host-level rate limits
+// are expected to handle request throttling. The express-rate-limit code
+// was removed to avoid conflicts with platform-specific proxy headers.
 
 // Database Connection with retry/backoff
 const mongoUri = process.env.MONGO_URI;
