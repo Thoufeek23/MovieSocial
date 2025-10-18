@@ -47,6 +47,15 @@ try {
   // ignore logging failure
 }
 
+// Log configured rate-limit parameters for visibility
+try {
+  console.info('[startup] rate-limit window (ms) =', defaultWindowMs);
+  console.info('[startup] rate-limit anon max =', anonDefaultMax, 'auth max =', authDefaultMax);
+  console.info('[startup] reviews route max =', reviewsRouteMax, 'movies route max =', moviesRouteMax);
+} catch (e) {
+  // ignore
+}
+
 // Middleware
 app.use(helmet());
 app.use(express.json());
@@ -84,11 +93,31 @@ const isDev = process.env.NODE_ENV !== 'production';
 
 // Rate limit window and max can be tuned from environment vars in production
 const defaultWindowMs = (process.env.RATE_LIMIT_WINDOW_MINUTES ? Number(process.env.RATE_LIMIT_WINDOW_MINUTES) : 15) * 60 * 1000; // minutes -> ms
-const defaultMax = process.env.RATE_LIMIT_MAX_REQUESTS ? Number(process.env.RATE_LIMIT_MAX_REQUESTS) : (isDev ? 1000 : 120);
+
+// Allow separate limits for authenticated vs anonymous users and per-route overrides
+const anonDefaultMax = process.env.RATE_LIMIT_ANON_MAX ? Number(process.env.RATE_LIMIT_ANON_MAX) : (isDev ? 1000 : 120);
+const authDefaultMax = process.env.RATE_LIMIT_AUTH_MAX ? Number(process.env.RATE_LIMIT_AUTH_MAX) : (isDev ? 2000 : 600);
+
+// Per-route overrides (for busy endpoints like reviews/movies)
+const reviewsRouteMax = process.env.REVIEWS_RATE_LIMIT_MAX ? Number(process.env.REVIEWS_RATE_LIMIT_MAX) : (isDev ? 1000 : 60);
+const moviesRouteMax = process.env.MOVIES_RATE_LIMIT_MAX ? Number(process.env.MOVIES_RATE_LIMIT_MAX) : (isDev ? 1000 : 60);
 
 const apiLimiter = rateLimit({
   windowMs: defaultWindowMs,
-  max: defaultMax,
+  // max accepts a number or a function(req, res) -> number; return higher limits for authenticated users
+  max: (req, res) => {
+    try {
+      const auth = req.headers.authorization;
+      if (auth && auth.startsWith('Bearer ')) {
+        const token = auth.split(' ')[1];
+        const payload = jwt.decode(token);
+        if (payload && payload.user && payload.user.id) return authDefaultMax;
+      }
+    } catch (e) {
+      // ignore and fall back to anon
+    }
+    return anonDefaultMax;
+  },
   keyGenerator: (req) => {
     // If Authorization Bearer token present, use decoded user id as key
     try {
@@ -168,7 +197,20 @@ app.use('/api/', apiLimiter);
 // Add higher-rate per-route limiters for known high-traffic endpoints
 const reviewsLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: isDev ? 1000 : 60,
+  // prefer explicit per-route env override, otherwise use auth/anon defaults
+  max: (req, res) => {
+    // if a specific override present, use it
+    if (process.env.REVIEWS_RATE_LIMIT_MAX) return reviewsRouteMax;
+    try {
+      const auth = req.headers.authorization;
+      if (auth && auth.startsWith('Bearer ')) {
+        const token = auth.split(' ')[1];
+        const payload = jwt.decode(token);
+        if (payload && payload.user && payload.user.id) return Math.max(60, authDefaultMax / 10);
+      }
+    } catch (e) {}
+    return Math.max(60, anonDefaultMax / 10);
+  },
   keyGenerator: apiLimiter.keyGenerator,
   skip: apiLimiter.skip,
   handler: (req, res) => res.status(429).json({ message: 'Too many requests to reviews endpoint' }),
@@ -176,7 +218,18 @@ const reviewsLimiter = rateLimit({
 
 const moviesLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: isDev ? 1000 : 60,
+  max: (req, res) => {
+    if (process.env.MOVIES_RATE_LIMIT_MAX) return moviesRouteMax;
+    try {
+      const auth = req.headers.authorization;
+      if (auth && auth.startsWith('Bearer ')) {
+        const token = auth.split(' ')[1];
+        const payload = jwt.decode(token);
+        if (payload && payload.user && payload.user.id) return Math.max(60, authDefaultMax / 10);
+      }
+    } catch (e) {}
+    return Math.max(60, anonDefaultMax / 10);
+  },
   keyGenerator: apiLimiter.keyGenerator,
   skip: apiLimiter.skip,
   handler: (req, res) => res.status(429).json({ message: 'Too many requests to movies endpoint' }),
