@@ -56,6 +56,17 @@ try {
   // ignore
 }
 
+try {
+  console.info('[startup] RATE_LIMIT_UNLIMITED =', isUnlimited);
+} catch (e) {}
+
+// Log any configured whitelist for rate limiting exemptions
+try {
+  const rawWL = process.env.RATE_LIMIT_WHITELIST || '';
+  const parsedWL = rawWL.split(',').map(s => s.trim()).filter(Boolean);
+  console.info('[startup] rate-limit whitelist =', parsedWL.length ? parsedWL : '(none)');
+} catch (e) {}
+
 // Middleware
 app.use(helmet());
 app.use(express.json());
@@ -95,12 +106,15 @@ const isDev = process.env.NODE_ENV !== 'production';
 const defaultWindowMs = (process.env.RATE_LIMIT_WINDOW_MINUTES ? Number(process.env.RATE_LIMIT_WINDOW_MINUTES) : 15) * 60 * 1000; // minutes -> ms
 
 // Allow separate limits for authenticated vs anonymous users and per-route overrides
-const anonDefaultMax = process.env.RATE_LIMIT_ANON_MAX ? Number(process.env.RATE_LIMIT_ANON_MAX) : (isDev ? 1000 : 120);
-const authDefaultMax = process.env.RATE_LIMIT_AUTH_MAX ? Number(process.env.RATE_LIMIT_AUTH_MAX) : (isDev ? 2000 : 600);
+// If RATE_LIMIT_UNLIMITED=true is set, use a very large number to effectively disable rate limiting
+const isUnlimited = String(process.env.RATE_LIMIT_UNLIMITED || '').toLowerCase() === 'true';
+const VERY_LARGE_LIMIT = Number.MAX_SAFE_INTEGER || 9007199254740991;
+const anonDefaultMax = isUnlimited ? VERY_LARGE_LIMIT : (process.env.RATE_LIMIT_ANON_MAX ? Number(process.env.RATE_LIMIT_ANON_MAX) : (isDev ? 1000 : 120));
+const authDefaultMax = isUnlimited ? VERY_LARGE_LIMIT : (process.env.RATE_LIMIT_AUTH_MAX ? Number(process.env.RATE_LIMIT_AUTH_MAX) : (isDev ? 2000 : 600));
 
 // Per-route overrides (for busy endpoints like reviews/movies)
-const reviewsRouteMax = process.env.REVIEWS_RATE_LIMIT_MAX ? Number(process.env.REVIEWS_RATE_LIMIT_MAX) : (isDev ? 1000 : 60);
-const moviesRouteMax = process.env.MOVIES_RATE_LIMIT_MAX ? Number(process.env.MOVIES_RATE_LIMIT_MAX) : (isDev ? 1000 : 60);
+const reviewsRouteMax = isUnlimited ? VERY_LARGE_LIMIT : (process.env.REVIEWS_RATE_LIMIT_MAX ? Number(process.env.REVIEWS_RATE_LIMIT_MAX) : (isDev ? 1000 : 60));
+const moviesRouteMax = isUnlimited ? VERY_LARGE_LIMIT : (process.env.MOVIES_RATE_LIMIT_MAX ? Number(process.env.MOVIES_RATE_LIMIT_MAX) : (isDev ? 1000 : 60));
 
 const apiLimiter = rateLimit({
   windowMs: defaultWindowMs,
@@ -148,6 +162,37 @@ const apiLimiter = rateLimit({
   skip: (req) => {
     // skip preflight
     if (req.method === 'OPTIONS') return true;
+    // Skip for whitelisted users or IPs (comma-separated list in env). Example: RATE_LIMIT_WHITELIST=68d7...,127.0.0.1
+    try {
+      const raw = process.env.RATE_LIMIT_WHITELIST || '';
+      if (raw) {
+        const tokens = raw.split(',').map(s => s.trim()).filter(Boolean);
+        if (tokens.length > 0) {
+          // Check user id from Bearer token
+          try {
+            const auth = req.headers.authorization;
+            if (auth && auth.startsWith('Bearer ')) {
+              const token = auth.split(' ')[1];
+              const payload = jwt.decode(token);
+              if (payload && payload.user && payload.user.id && tokens.includes(String(payload.user.id))) return true;
+            }
+          } catch (e) {
+            // ignore token parse errors
+          }
+
+          // Check client IP
+          try {
+            const xff = req.headers['x-forwarded-for'] || req.headers['X-Forwarded-For'];
+            const clientIp = (xff && typeof xff === 'string' ? xff.split(',')[0].trim() : (req.ip || ''));
+            if (clientIp && tokens.includes(clientIp)) return true;
+          } catch (e) {
+            // ignore
+          }
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
     // skip for local dev addresses to avoid blocking local dev flows
     if (isDev) {
       const ip = req.ip || (req.connection && req.connection.remoteAddress) || '';
