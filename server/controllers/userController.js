@@ -290,7 +290,25 @@ async function deleteMyAccount(req, res) {
         // Remove user's reviews
         try {
             const Review = require('../models/Review');
-            await Review.deleteMany({ user: userId });
+                // First, delete comments that are stored in a separate Comment model and reference reviews
+                try {
+                    const Comment = require('../models/Comment');
+                    await Comment.deleteMany({ user: userId });
+                } catch (e) {
+                    console.error('Failed to delete review comments authored by user:', e);
+                }
+
+                // Remove the user's likes and agreement votes from other reviews, then delete reviews authored by the user
+                try {
+                    // Remove likes where the user liked other users' reviews
+                    await Review.updateMany({ likes: userId }, { $pull: { likes: userId } });
+                    // Remove agreement votes by the user from any review
+                    await Review.updateMany({ 'agreementVotes.user': userId }, { $pull: { agreementVotes: { user: userId } } });
+                    // Finally delete reviews authored by the user
+                    await Review.deleteMany({ user: userId });
+                } catch (e) {
+                    console.error('Failed to clean up reviews/likes/votes for user:', e);
+                }
         } catch (e) {
             console.error('Failed to delete user reviews:', e);
         }

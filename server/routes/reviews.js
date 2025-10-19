@@ -5,6 +5,7 @@ const {
     getMyReviews,
     getFeedReviews, 
     getMovieReviews, 
+    getMovieStats,
     updateReview, 
     deleteReview 
 } = require('../controllers/reviewController');
@@ -22,6 +23,10 @@ router.route('/mine')
 
 router.route('/movie/:movieId')
     .get(getMovieReviews);
+
+// Movie stats (MovieSocial weighted rating + count)
+router.route('/movie/:movieId/stats')
+    .get(getMovieStats);
 
 // Add the new PUT and DELETE routes
 router.route('/:id')

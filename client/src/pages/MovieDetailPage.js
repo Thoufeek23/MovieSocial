@@ -25,9 +25,29 @@ const MovieDetailPage = () => {
   const fetchMovieData = useCallback(async () => {
     try {
       const { data: movieData } = await api.getMovieDetails(id);
-      const { data: reviewData } = await api.getReviewsForMovie(id);
+      // Fetch reviews and server-side computed stats in parallel. Use Promise.allSettled so a failure in stats doesn't block reviews.
+      const [reviewsRes, statsRes] = await Promise.allSettled([
+        api.getReviewsForMovie(id),
+        api.getMovieStats(id)
+      ]);
+
       setMovie(movieData);
-      setReviews(reviewData);
+
+      if (reviewsRes.status === 'fulfilled') {
+        setReviews(reviewsRes.value.data || []);
+      } else {
+        setReviews([]);
+      }
+
+      if (statsRes.status === 'fulfilled' && statsRes.value && statsRes.value.data) {
+        const { movieSocialRating, reviewCount } = statsRes.value.data;
+        // store server-side computed stats on the movie object so UI can access it
+        setMovie(m => ({ ...(m || movieData), movieSocialRating, movieSocialCount: reviewCount }));
+      } else {
+        // ensure previous stats cleared
+        setMovie(m => ({ ...(m || movieData), movieSocialRating: undefined, movieSocialCount: undefined }));
+      }
+
       const discRes = await api.fetchDiscussions({ movieId: id });
       setMovieDiscussions(discRes.data || []);
     } catch (error) {
@@ -131,12 +151,32 @@ const MovieDetailPage = () => {
                 <span className="text-sm bg-gray-700 text-yellow-300 px-2 py-1 rounded-lg font-semibold">{movie.imdbRating} <span className="text-xs text-gray-300">{(movie.imdbRatingSource && (movie.imdbRatingSource.toLowerCase().includes('omdb') || movie.imdbRatingSource.toLowerCase().includes('imdb'))) ? 'IMDb' : movie.imdbRatingSource || 'IMDb'}</span></span>
               )}
                 {/* Movie Social rating: average of user reviews in our app */}
-                {reviews && reviews.length > 0 && (() => {
-                  const sum = reviews.reduce((s, r) => s + (Number(r.rating) || 0), 0);
-                  const avg = (sum / reviews.length).toFixed(1);
-                  return (
-                    <span className="text-sm bg-gray-700 text-green-300 px-2 py-1 rounded-lg font-semibold">★ {avg} <span className="text-xs text-gray-300">Movie Social • {reviews.length}</span></span>
-                  );
+                {(() => {
+                  if (movie && typeof movie.movieSocialRating !== 'undefined' && movie.movieSocialRating !== null) {
+                    return (
+                      <span className="text-sm bg-gray-700 text-green-300 px-2 py-1 rounded-lg font-semibold">★ {movie.movieSocialRating} <span className="text-xs text-gray-300">Movie Social • {movie.movieSocialCount ?? reviews.length}</span></span>
+                    );
+                  }
+
+                  if (reviews && reviews.length > 0) {
+                    const adjustedSum = reviews.reduce((s, r) => {
+                      const rating = Number(r.rating) || 0;
+                      const votes = (r.agreementVotes || []);
+                      let agreementFraction = 1;
+                      if (votes.length > 0) {
+                        const voteSum = votes.reduce((vs, v) => vs + (Number(v.value) || 0), 0);
+                        agreementFraction = voteSum / votes.length;
+                      }
+                      const adjusted = rating * (0.75 + 0.25 * agreementFraction);
+                      return s + adjusted;
+                    }, 0);
+                    const weightedAvg = (adjustedSum / reviews.length);
+                    const displayAvg = weightedAvg.toFixed(1);
+                    return (
+                      <span className="text-sm bg-gray-700 text-green-300 px-2 py-1 rounded-lg font-semibold">★ {displayAvg} <span className="text-xs text-gray-300">Movie Social • {reviews.length}</span></span>
+                    );
+                  }
+                  return null;
                 })()}
             </div>
             <p className="text-xl text-gray-400 mt-1">{movie.release_date?.substring(0, 4)}</p>

@@ -95,6 +95,52 @@ const getMovieReviews = async (req, res) => {
     }
 };
 
+// @desc    Get movie social weighted rating and review count
+// @route   GET /api/reviews/movie/:movieId/stats
+const getMovieStats = async (req, res) => {
+    try {
+        const movieId = req.params.movieId;
+        // Aggregation pipeline:
+        // 1) Match reviews for the movieId
+        // 2) For each review, compute agreementFraction = avg(agreementVotes.value) if exists, otherwise 1
+        // 3) Compute adjustedRating = rating * (0.75 + 0.25 * agreementFraction)
+        // 4) Group to compute avgAdjustedRating and count
+        const agg = [
+            { $match: { movieId: String(movieId) } },
+            { $addFields: {
+                agreementFraction: {
+                    $cond: [
+                        { $gt: [{ $size: { $ifNull: ['$agreementVotes', []] } }, 0] },
+                        { $avg: '$agreementVotes.value' },
+                        1
+                    ]
+                }
+            }},
+            { $addFields: {
+                adjustedRating: { $multiply: [ '$rating', { $add: [ 0.75, { $multiply: [0.25, '$agreementFraction' ] } ] } ] }
+            }},
+            { $group: {
+                _id: null,
+                movieSocialAvg: { $avg: '$adjustedRating' },
+                reviewCount: { $sum: 1 }
+            }},
+            { $project: { _id: 0, movieSocialAvg: { $cond: [ { $ifNull: ['$movieSocialAvg', false] }, '$movieSocialAvg', null ] }, reviewCount: 1 } }
+        ];
+
+        const result = await Review.aggregate(agg);
+        if (!result || result.length === 0) {
+            return res.json({ movieSocialRating: null, reviewCount: 0 });
+        }
+        const r = result[0];
+        // Round to one decimal for client convenience
+        const movieSocialRating = r.movieSocialAvg === null ? null : Number((r.movieSocialAvg).toFixed(1));
+        res.json({ movieSocialRating, reviewCount: r.reviewCount });
+    } catch (error) {
+        console.error('getMovieStats error', error);
+        res.status(500).json({ msg: 'Server Error' });
+    }
+};
+
 // @desc    Update a review
 // @route   PUT /api/reviews/:id
 const updateReview = async (req, res) => {
@@ -177,6 +223,7 @@ module.exports = {
     getMyReviews,
     getFeedReviews,
     getMovieReviews,
+    getMovieStats,
     updateReview,
     deleteReview,
     voteReview,
