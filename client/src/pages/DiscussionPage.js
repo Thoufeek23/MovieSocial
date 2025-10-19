@@ -21,7 +21,32 @@ const DiscussionPage = () => {
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editingCommentText, setEditingCommentText] = useState('');
   const [commentProcessing, setCommentProcessing] = useState(false);
-  const [pendingDeleteCommentId, setPendingDeleteCommentId] = useState(null);
+  const [replyBoxes, setReplyBoxes] = useState({}); // { commentId: text }
+  const [confirmState, setConfirmState] = useState({ open: false, title: '', onConfirm: null, loading: false, preview: '' });
+
+  const showConfirm = (title, onConfirm, preview = '') => {
+    setConfirmState({ open: true, title, onConfirm, loading: false, preview });
+  };
+
+  const handleConfirm = async () => {
+    if (!confirmState.onConfirm) return setConfirmState({ open: false, title: '', onConfirm: null, loading: false });
+    try {
+      setConfirmState(s => ({ ...s, loading: true }));
+      await confirmState.onConfirm();
+    } catch (err) {
+      console.error('confirm action failed', err);
+    } finally {
+      setConfirmState({ open: false, title: '', onConfirm: null, loading: false, preview: '' });
+    }
+  };
+
+  // close confirm on Escape
+  useEffect(() => {
+    if (!confirmState.open) return;
+    const onKey = (e) => { if (e.key === 'Escape') setConfirmState({ open: false, title: '', onConfirm: null, loading: false, preview: '' }); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [confirmState.open]);
 
   useEffect(() => {
     const load = async () => {
@@ -202,6 +227,7 @@ const DiscussionPage = () => {
   if (!discussion) return <p>Loading discussion...</p>;
 
   return (
+    <>
     <div className="space-y-6">
       <div className="flex items-start gap-6">
         <div className="hidden md:block flex-shrink-0">
@@ -266,14 +292,14 @@ const DiscussionPage = () => {
                                   }} className="text-sm bg-green-600 text-white px-2 py-1 rounded">Save</button>
                                   <button disabled={commentProcessing} onClick={() => { setEditingCommentId(null); setEditingCommentText(''); }} className="text-sm bg-gray-700 text-white px-2 py-1 rounded">Cancel</button>
                                 </div>
-                              ) : pendingDeleteCommentId === c._id ? (
-                                <div className="flex items-center gap-2">
-                                  <button disabled={commentProcessing} onClick={async () => {
+                              ) : (
+                                <>
+                                  <button onClick={() => { setEditingCommentId(c._id); setEditingCommentText(c.text); }} className="text-gray-400 hover:text-white" title="Edit comment"><Edit size={14} /></button>
+                                  <button onClick={() => showConfirm('Delete this comment?', async () => {
+                                    setCommentProcessing(true);
                                     try {
-                                      setCommentProcessing(true);
                                       const res = await api.deleteDiscussionComment(id, c._id);
                                       setDiscussion(res.data || res);
-                                      setPendingDeleteCommentId(null);
                                       toast.success('Comment deleted');
                                     } catch (err) {
                                       console.error(err);
@@ -281,13 +307,7 @@ const DiscussionPage = () => {
                                     } finally {
                                       setCommentProcessing(false);
                                     }
-                                  }} className="text-sm bg-red-600 text-white px-2 py-1 rounded">Confirm</button>
-                                  <button disabled={commentProcessing} onClick={() => setPendingDeleteCommentId(null)} className="text-sm bg-gray-700 text-white px-2 py-1 rounded">Cancel</button>
-                                </div>
-                              ) : (
-                                <>
-                                  <button onClick={() => { setEditingCommentId(c._id); setEditingCommentText(c.text); }} className="text-gray-400 hover:text-white" title="Edit comment"><Edit size={14} /></button>
-                                  <button onClick={() => setPendingDeleteCommentId(c._id)} className="text-gray-400 hover:text-red-500" title="Delete comment"><Trash2 size={14} /></button>
+                                  })} className="text-gray-400 hover:text-red-500" title="Delete comment"><Trash2 size={14} /></button>
                                 </>
                               )}
                             </>
@@ -301,6 +321,76 @@ const DiscussionPage = () => {
                           renderCommentText(c.text)
                         )}
                       </div>
+
+                      {/* Replies list */}
+                      {c.replies && c.replies.length > 0 && (
+                        <div className="mt-3 ml-14 space-y-3">
+                          {c.replies.map(r => (
+                            <div key={r._id} className="flex gap-3 items-start">
+                              <div>
+                                <Avatar username={r.user.username} avatar={r.user.avatar} sizeClass="w-8 h-8" />
+                              </div>
+                              <div className="flex-1 bg-[#0f0f10] border border-gray-800 rounded-md p-3 text-sm text-gray-200">
+                                <div className="flex items-center justify-between">
+                                  <div className="font-semibold text-gray-100">{r.user.username} <span className="text-xs text-gray-500">• {timeAgo(r.createdAt)}</span></div>
+                                  <div className="text-sm text-gray-400">
+                                    {(user && (String(user.id || user._id) === String(r.user._id) || String(user.id || user._id) === String(discussion.starter?._id))) && (
+                                      <button onClick={() => showConfirm('Delete this reply?', async () => {
+                                        setCommentProcessing(true);
+                                        try {
+                                          const res = await api.deleteDiscussionReply(id, c._id, r._id);
+                                          setDiscussion(res.data || res);
+                                          toast.success('Reply deleted');
+                                        } catch (err) {
+                                          console.error(err);
+                                          toast.error('Failed to delete reply');
+                                        } finally {
+                                          setCommentProcessing(false);
+                                        }
+                                      })} className="text-gray-400 hover:text-red-500">Delete</button>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="mt-1">{renderCommentText(r.text)}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Reply action + inline reply box */}
+                      <div className="mt-3 ml-14 flex items-center gap-3">
+                        <button onClick={() => setReplyBoxes(prev => ({ ...prev, [c._id]: prev[c._id] ? '' : '' }))} className="text-sm text-gray-400 hover:text-gray-200">Reply</button>
+                        {replyBoxes[c._id] !== undefined && (
+                          <div className="flex-1">
+                            <input
+                              value={replyBoxes[c._id] || ''}
+                              onChange={(e) => setReplyBoxes(prev => ({ ...prev, [c._id]: e.target.value }))}
+                              className="w-full p-2 rounded bg-gray-900 text-gray-100"
+                              placeholder="Write a reply..."
+                            />
+                          </div>
+                        )}
+                        {replyBoxes[c._id] !== undefined && (
+                          <button onClick={async () => {
+                            const text = (replyBoxes[c._id] || '').trim();
+                            if (!user) return toast.error('Log in to reply');
+                            if (!text) return toast.error('Reply cannot be empty');
+                            try {
+                              setCommentProcessing(true);
+                              const res = await api.postDiscussionReply(id, c._id, { text });
+                              setDiscussion(res.data || res);
+                              setReplyBoxes(prev => ({ ...prev, [c._id]: undefined }));
+                              toast.success('Reply posted');
+                            } catch (err) {
+                              console.error(err);
+                              toast.error('Failed to post reply');
+                            } finally {
+                              setCommentProcessing(false);
+                            }
+                          }} className="bg-primary text-primary-foreground px-3 py-1 rounded">Send</button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -308,11 +398,39 @@ const DiscussionPage = () => {
             )}
           </div>
 
-          <div className="bg-card border border-gray-800 rounded-lg p-4">
-            <div className="relative">
-              <textarea ref={textareaRef} value={commentText} onKeyDown={handleKeyDown} onChange={handleTextareaChange} className="w-full p-4 rounded bg-background text-gray-100 resize-none shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-600" rows={5} placeholder="Share your thoughts... Use @ to mention someone" />
+          {/* Small sticky comment bar: fixed to bottom and does not move as content grows */}
+          <div className="h-20" />
+          <div className="fixed left-0 right-0 bottom-0 z-40 bg-background border-t border-gray-800">
+            <div className="max-w-6xl mx-auto px-4 py-3">
+              <div className="flex justify-center">
+                <div className="w-full max-w-3xl flex items-center gap-3">
+                  <textarea
+                    ref={textareaRef}
+                    value={commentText}
+                    onKeyDown={handleKeyDown}
+                    onChange={handleTextareaChange}
+                    className="flex-1 p-3 rounded bg-gray-900 text-gray-100 resize-none h-11 leading-tight placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                    rows={1}
+                    placeholder="Add a comment... Use @ to mention someone"
+                    aria-label="Add a comment"
+                  />
+
+                  <div className="flex items-center gap-2">
+                    <div className="text-sm text-gray-400 hidden sm:block">{commentText.length}/1000</div>
+                    <button onClick={handleComment} aria-label="Post comment" className="bg-primary hover:bg-green-700 text-primary-foreground p-3 rounded-full shadow-lg">
+                      {/* Paper plane / send icon */}
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+                        <path d="M22 2L11 13" />
+                        <path d="M22 2L15 22l-4-9-9-4 20-7z" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Suggestions dropdown placed above the fixed bar when needed */}
               {showSuggestions && suggestions.length > 0 && (
-                <div className="absolute left-3 w-80 md:w-96 top-full mt-2 bg-gray-900 border border-gray-700 rounded shadow-lg z-50 max-h-56 overflow-auto">
+                <div className="mt-2 max-w-3xl mx-auto bg-gray-900 border border-gray-700 rounded shadow-lg z-50 max-h-56 overflow-auto">
                   {suggestions.map((s, idx) => (
                     <div key={s.username} onMouseDown={(e) => { e.preventDefault(); applySuggestion(s.username); }} className={`p-3 cursor-pointer flex items-center gap-3 ${idx === selectedSuggestion ? 'bg-indigo-700' : 'hover:bg-gray-800'}`}>
                       <div className="w-9 h-9 rounded-full bg-gray-700 flex items-center justify-center text-sm overflow-hidden">
@@ -327,18 +445,25 @@ const DiscussionPage = () => {
                 </div>
               )}
             </div>
-            <div className="mt-3 flex items-center justify-between">
-              <div className="text-sm text-gray-400">Be respectful and follow the community guidelines.</div>
-              <div className="flex items-center gap-3">
-                <div className="text-sm text-gray-400">{commentText.length}/1000</div>
-                <button onClick={handleComment} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded shadow">Post Comment</button>
-              </div>
-            </div>
           </div>
         </div>
       </div>
     </div>
+    {confirmState.open && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+        <div className="absolute inset-0 bg-black/50" onClick={() => setConfirmState({ open: false, title: '', onConfirm: null, loading: false })} />
+        <div className="relative max-w-lg w-full bg-card border border-gray-800 rounded-lg p-6 z-60">
+          <div className="text-lg font-semibold mb-3">{confirmState.title}</div>
+          <div className="flex justify-end items-center gap-3">
+            <button onClick={() => setConfirmState({ open: false, title: '', onConfirm: null, loading: false })} className="px-3 py-2 rounded bg-gray-700 text-gray-200">Cancel</button>
+            <button onClick={handleConfirm} disabled={confirmState.loading} className="px-4 py-2 rounded bg-primary text-primary-foreground">{confirmState.loading ? 'Deleting...' : 'Delete'}</button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };
 
 export default DiscussionPage;
+

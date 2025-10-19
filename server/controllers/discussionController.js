@@ -26,8 +26,9 @@ const listDiscussions = async (req, res) => {
     const discussions = await Discussion.find(query)
       .sort({ createdAt: -1 })
       .limit(100)
-      .populate('starter', 'username avatar')
-      .populate('comments.user', 'username avatar');
+  .populate('starter', 'username avatar')
+  .populate('comments.user', 'username avatar')
+  .populate('comments.replies.user', 'username avatar');
     res.json(discussions);
   } catch (err) {
     console.error(err);
@@ -57,7 +58,8 @@ const getDiscussion = async (req, res) => {
   try {
     const discussion = await Discussion.findById(req.params.id)
       .populate('starter', 'username avatar')
-      .populate('comments.user', 'username avatar');
+      .populate('comments.user', 'username avatar')
+      .populate('comments.replies.user', 'username avatar');
     if (!discussion) return res.status(404).json({ msg: 'Discussion not found' });
     res.json(discussion);
   } catch (err) {
@@ -74,7 +76,8 @@ const listDiscussionsByUser = async (req, res) => {
     const discussions = await Discussion.find({ starter: user._id })
       .sort({ createdAt: -1 })
       .populate('starter', 'username avatar')
-      .populate('comments.user', 'username avatar');
+      .populate('comments.user', 'username avatar')
+      .populate('comments.replies.user', 'username avatar');
     res.json(discussions);
   } catch (err) {
     console.error(err);
@@ -94,7 +97,8 @@ const addComment = async (req, res) => {
     // Populate starter and comment users using the modern populate API
     await discussion.populate([
       { path: 'starter', select: 'username avatar' },
-      { path: 'comments.user', select: 'username avatar' }
+      { path: 'comments.user', select: 'username avatar' },
+      { path: 'comments.replies.user', select: 'username avatar' }
     ]);
     res.json(discussion);
   } catch (err) {
@@ -122,7 +126,8 @@ const editComment = async (req, res) => {
   await discussion.save();
     await discussion.populate([
       { path: 'starter', select: 'username avatar' },
-      { path: 'comments.user', select: 'username avatar' }
+      { path: 'comments.user', select: 'username avatar' },
+      { path: 'comments.replies.user', select: 'username avatar' }
     ]);
     res.json(discussion);
   } catch (err) {
@@ -153,6 +158,68 @@ const deleteComment = async (req, res) => {
     await discussion.populate([
       { path: 'starter', select: 'username avatar' },
       { path: 'comments.user', select: 'username avatar' }
+    ]);
+    res.json(discussion);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: 'Server Error' });
+  }
+};
+
+// POST /api/discussions/:id/comments/:commentId/replies - add a reply to a comment (protected)
+const addReply = async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ msg: 'Reply text required' });
+    const discussion = await Discussion.findById(req.params.id);
+    if (!discussion) return res.status(404).json({ msg: 'Discussion not found' });
+
+    const idx = discussion.comments.findIndex(c => String(c._id) === String(req.params.commentId));
+    if (idx === -1) return res.status(404).json({ msg: 'Comment not found' });
+
+    discussion.comments[idx].replies = discussion.comments[idx].replies || [];
+    discussion.comments[idx].replies.push({ user: req.user.id, text });
+    await discussion.save();
+
+    await discussion.populate([
+      { path: 'starter', select: 'username avatar' },
+      { path: 'comments.user', select: 'username avatar' },
+      { path: 'comments.replies.user', select: 'username avatar' }
+    ]);
+    res.json(discussion);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: 'Server Error' });
+  }
+};
+
+// DELETE /api/discussions/:id/comments/:commentId/replies/:replyId - delete a reply (protected, reply author or discussion starter)
+const deleteReply = async (req, res) => {
+  try {
+    const discussion = await Discussion.findById(req.params.id);
+    if (!discussion) return res.status(404).json({ msg: 'Discussion not found' });
+
+    const cidx = discussion.comments.findIndex(c => String(c._id) === String(req.params.commentId));
+    if (cidx === -1) return res.status(404).json({ msg: 'Comment not found' });
+
+    const replies = discussion.comments[cidx].replies || [];
+    const ridx = replies.findIndex(r => String(r._id) === String(req.params.replyId));
+    if (ridx === -1) return res.status(404).json({ msg: 'Reply not found' });
+
+    const reply = replies[ridx];
+    // allow deletion by reply author or discussion starter
+    if (String(reply.user) !== String(req.user.id) && String(discussion.starter) !== String(req.user.id)) {
+      return res.status(403).json({ msg: 'Not authorized' });
+    }
+
+    // remove the reply
+    discussion.comments[cidx].replies = replies.filter(r => String(r._id) !== String(req.params.replyId));
+    await discussion.save();
+
+    await discussion.populate([
+      { path: 'starter', select: 'username avatar' },
+      { path: 'comments.user', select: 'username avatar' },
+      { path: 'comments.replies.user', select: 'username avatar' }
     ]);
     res.json(discussion);
   } catch (err) {
@@ -203,6 +270,8 @@ module.exports = {
   createDiscussion,
   getDiscussion,
   addComment,
+  addReply,
+  deleteReply,
   editComment,
   deleteComment,
   updateDiscussion,

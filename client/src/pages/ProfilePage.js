@@ -379,7 +379,7 @@ const ProfilePage = () => {
                 <h2 className="text-2xl font-bold border-b-2 border-gray-700 pb-2 mb-4">Discussions Started ({userDiscussions.length})</h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         {userDiscussions.length === 0 ? (
-                            <EmptyState message="No discussions started." ctaText="Start a discussion" ctaLink="/" />
+                                    <EmptyState message="No discussions started." ctaText="Start a discussion" ctaLink="/search" />
                         ) : (
                             userDiscussions.map(d => (
                                 <div key={d._id} className="relative group bg-card p-4 rounded-lg">
@@ -422,7 +422,7 @@ const ProfilePage = () => {
                     <h2 className="text-2xl font-bold border-b-2 border-gray-700 pb-2 mb-4">Bookmarked Discussions ({bookmarkedDiscussions.length})</h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         {bookmarkedDiscussions.length === 0 ? (
-                            <EmptyState message="You have no bookmarked discussions." ctaText="Find discussions" ctaLink="/" />
+                            <EmptyState message="You have no bookmarked discussions." ctaText="Find discussions" ctaLink="/discussions" />
                         ) : (
                             bookmarkedDiscussions.map(d => (
                                 <div key={d._id} className="relative group">
