@@ -1,4 +1,5 @@
 const Review = require('../models/Review');
+const logger = require('../utils/logger');
 
 // @desc    Create a new review
 // @route   POST /api/reviews
@@ -47,7 +48,7 @@ const createReview = async (req, res) => {
             }
         } catch (e) {
             // non-fatal: if updating user fails, still return the saved review
-            console.error('Failed to update user watched list after review:', e.message || e);
+            logger.warn('Failed to update user watched list after review:', e.message || e);
         }
         res.status(201).json(savedReview);
     } catch (error) {
@@ -136,7 +137,7 @@ const getMovieStats = async (req, res) => {
         const movieSocialRating = r.movieSocialAvg === null ? null : Number((r.movieSocialAvg).toFixed(1));
         res.json({ movieSocialRating, reviewCount: r.reviewCount });
     } catch (error) {
-        console.error('getMovieStats error', error);
+        logger.error('getMovieStats error', error);
         res.status(500).json({ msg: 'Server Error' });
     }
 };
@@ -161,6 +162,7 @@ const updateReview = async (req, res) => {
         await review.populate('user', 'username avatar _id');
         res.json(review);
     } catch (error) {
+        logger.error(error);
         res.status(500).json({ msg: 'Server Error' });
     }
 };
@@ -213,7 +215,7 @@ const voteReview = async (req, res) => {
 
         res.json(review);
     } catch (error) {
-        console.error(error);
+        logger.error(error);
         res.status(500).json({ msg: 'Server Error' });
     }
 };

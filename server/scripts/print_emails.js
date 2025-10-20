@@ -3,10 +3,11 @@
 
 require('dotenv').config();
 const mongoose = require('mongoose');
+const logger = require('../utils/logger');
 
 const mongoUri = process.env.MONGO_URI;
 if (!mongoUri) {
-  console.error('MONGO_URI not set in environment or .env; set MONGO_URI before running this script.');
+  logger.error('MONGO_URI not set in environment or .env; set MONGO_URI before running this script.');
   process.exit(1);
 }
 
@@ -15,24 +16,24 @@ const User = require('../models/User');
 
 (async function run() {
   try {
-    await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 10000 });
-    console.log('Connected to MongoDB. Fetching users...');
+  await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 10000 });
+  logger.info('Connected to MongoDB. Fetching users...');
 
     const users = await User.find({}, 'email username').lean();
     if (!users || users.length === 0) {
-      console.log('No users found.');
+      logger.info('No users found.');
     } else {
-      console.log(`Found ${users.length} users:`);
+      logger.info(`Found ${users.length} users:`);
       for (const u of users) {
         // Print email and optional username for context
-        console.log(u.email + (u.username ? `    (${u.username})` : ''));
+        logger.info(u.email + (u.username ? `    (${u.username})` : ''));
       }
     }
 
     await mongoose.disconnect();
     process.exit(0);
   } catch (err) {
-    console.error('Error fetching users:', err && err.message ? err.message : err);
+    logger.error('Error fetching users:', err && err.message ? err.message : err);
     try { await mongoose.disconnect(); } catch (e) {}
     process.exit(1);
   }

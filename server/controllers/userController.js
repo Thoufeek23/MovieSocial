@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const logger = require('../utils/logger');
 const jwt = require('jsonwebtoken');
 const Discussion = require('../models/Discussion');
 const Review = require('../models/Review');
@@ -57,6 +58,7 @@ const getUserProfile = async (req, res) => {
         } catch (e) {
             profile.discussionsStarted = 0;
             profile.discussionsParticipated = 0;
+            logger.warn('Failed to compute discussion counts for profile', e);
         }
         // Compute community agreement metrics based on other users' votes on this user's reviews
         try {
@@ -94,9 +96,11 @@ const getUserProfile = async (req, res) => {
             };
         } catch (e) {
             profile.communityAgreement = { average: null, breakdown: { agreePercent: 0, partialPercent: 0, disagreePercent: 0 }, totalVotes: 0 };
+            logger.warn('Failed to compute community agreement metrics', e);
         }
         res.json(profile);
     } catch (error) {
+        logger.error(error);
         res.status(500).json({ msg: 'Server Error' });
     }
 };
@@ -115,6 +119,7 @@ const updateProfile = async (req, res) => {
         await user.save();
         res.json({ msg: 'Profile updated', user });
     } catch (error) {
+        logger.error(error);
         res.status(500).json({ msg: 'Server Error' });
     }
 };
@@ -147,6 +152,7 @@ const followUser = async (req, res) => {
 
         res.json({ msg: 'Followed user' });
     } catch (error) {
+        logger.error(error);
         res.status(500).json({ msg: 'Server Error' });
     }
 };
@@ -168,6 +174,7 @@ const unfollowUser = async (req, res) => {
 
         res.json({ msg: 'Unfollowed user' });
     } catch (error) {
+        logger.error(error);
         res.status(500).json({ msg: 'Server Error' });
     }
 };
@@ -192,6 +199,7 @@ const addToWatchlist = async (req, res) => {
         await user.save();
         res.json(user.watchlist);
     } catch (error) {
+        logger.error(error);
         res.status(500).json({ msg: 'Server Error' });
     }
 };
@@ -216,6 +224,7 @@ const addToWatched = async (req, res) => {
         await user.save();
         res.json(user.watched);
     } catch (error) {
+        logger.error(error);
         res.status(500).json({ msg: 'Server Error' });
     }
 };
@@ -231,6 +240,7 @@ const removeFromWatchlist = async (req, res) => {
         await user.save();
         res.json(user.watchlist);
     } catch (error) {
+        logger.error(error);
         res.status(500).json({ msg: 'Server Error' });
     }
 };
@@ -295,7 +305,7 @@ async function deleteMyAccount(req, res) {
                     const Comment = require('../models/Comment');
                     await Comment.deleteMany({ user: userId });
                 } catch (e) {
-                    console.error('Failed to delete review comments authored by user:', e);
+                    logger.error('Failed to delete review comments authored by user:', e);
                 }
 
                 // Remove the user's likes and agreement votes from other reviews, then delete reviews authored by the user
@@ -307,10 +317,10 @@ async function deleteMyAccount(req, res) {
                     // Finally delete reviews authored by the user
                     await Review.deleteMany({ user: userId });
                 } catch (e) {
-                    console.error('Failed to clean up reviews/likes/votes for user:', e);
+                    logger.error('Failed to clean up reviews/likes/votes for user:', e);
                 }
         } catch (e) {
-            console.error('Failed to delete user reviews:', e);
+            logger.error('Failed to delete user reviews:', e);
         }
 
         // Remove discussions started by user
@@ -318,7 +328,7 @@ async function deleteMyAccount(req, res) {
             const Discussion = require('../models/Discussion');
             await Discussion.deleteMany({ starter: userId });
         } catch (e) {
-            console.error('Failed to delete user discussions:', e);
+            logger.error('Failed to delete user discussions:', e);
         }
 
         // Remove user's comments from other discussions
@@ -329,7 +339,7 @@ async function deleteMyAccount(req, res) {
                 { $pull: { comments: { user: userId } } }
             );
         } catch (e) {
-            console.error('Failed to remove user comments from discussions:', e);
+            logger.error('Failed to remove user comments from discussions:', e);
         }
 
         // Remove user from other users' followers/following lists
@@ -337,7 +347,7 @@ async function deleteMyAccount(req, res) {
             await User.updateMany({ followers: userId }, { $pull: { followers: userId } });
             await User.updateMany({ following: userId }, { $pull: { following: userId } });
         } catch (e) {
-            console.error('Failed to clean follower/following references:', e);
+            logger.error('Failed to clean follower/following references:', e);
         }
 
         // Finally delete the user
@@ -345,7 +355,7 @@ async function deleteMyAccount(req, res) {
 
         res.json({ msg: 'Account deleted' });
     } catch (error) {
-        console.error(error);
+        logger.error(error);
         res.status(500).json({ msg: 'Server Error' });
     }
 }

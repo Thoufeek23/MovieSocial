@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const net = require('net');
 const nodemailer = require('nodemailer');
+const logger = require('../utils/logger');
 
 // GET /api/debug/smtp
 // Attempts a raw TCP connection to SMTP_HOST:SMTP_PORT and then nodemailer.verify()
@@ -44,7 +45,7 @@ router.get('/smtp', async (req, res) => {
 
   // If TCP failed, return early
   if (!result.tcp.ok) {
-    console.error('[debug/smtp] TCP test failed', result.tcp);
+    logger.error('[debug/smtp] TCP test failed', result.tcp);
     return res.status(502).json({ ok: false, tcp: result.tcp, msg: 'TCP connectivity failed' });
   }
 
@@ -62,11 +63,11 @@ router.get('/smtp', async (req, res) => {
 
   try {
     await transporter.verify();
-    console.info('[debug/smtp] nodemailer.verify succeeded');
+    logger.info('[debug/smtp] nodemailer.verify succeeded');
     result.verify = { ok: true, msg: 'verify succeeded' };
     return res.json({ ok: true, tcp: result.tcp, verify: result.verify });
   } catch (e) {
-    console.error('[debug/smtp] nodemailer.verify failed', e && e.message ? e.message : e);
+    logger.error('[debug/smtp] nodemailer.verify failed', e && e.message ? e.message : e);
     result.verify = { ok: false, msg: 'verify failed', error: e && e.message ? e.message : e };
     return res.status(502).json({ ok: false, tcp: result.tcp, verify: result.verify });
   }

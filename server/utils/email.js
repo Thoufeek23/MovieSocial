@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
 const sgMail = require('@sendgrid/mail');
+const logger = require('./logger');
 
 // Simple email sender. Expects SMTP configuration in env vars. If SMTP not configured,
 // falls back to logging the message to the console (useful for local dev).
@@ -22,21 +23,17 @@ const sendEmail = async ({ to, subject, text, html }) => {
         html,
       };
       await sgMail.send(msg);
+      logger.info('[email] Sent via SendGrid', { to, subject });
       return;
     } catch (sgErr) {
-      console.error('[email] SendGrid send failed', sgErr && sgErr.message ? sgErr.message : sgErr);
+      logger.error('[email] SendGrid send failed', sgErr && sgErr.message ? sgErr.message : sgErr);
       // fall through to SMTP fallback if configured
     }
   }
 
   if (!smtpHost || !smtpPort) {
-    console.warn('SMTP not configured; falling back to console logging for email');
-    console.log('--- Email ---');
-    console.log('To:', to);
-    console.log('Subject:', subject);
-    if (text) console.log('Text:', text);
-    if (html) console.log('HTML:', html);
-    console.log('--- End Email ---');
+    logger.warn('SMTP not configured; falling back to logged email output');
+    logger.debug('email.payload', { to, subject, text: text ? '[text]' : undefined, html: html ? '[html]' : undefined });
     return;
   }
 
@@ -58,7 +55,7 @@ const sendEmail = async ({ to, subject, text, html }) => {
   try {
     await transporter.verify();
   } catch (verifyErr) {
-    console.error('[email] SMTP verify failed', {
+    logger.error('[email] SMTP verify failed', {
       host: smtpHost,
       port: smtpPort,
       user: smtpUser ? smtpUser : '(none)',
@@ -76,8 +73,9 @@ const sendEmail = async ({ to, subject, text, html }) => {
       text,
       html,
     });
+    logger.info('[email] Sent via SMTP', { to, subject });
   } catch (sendErr) {
-    console.error('[email] sendMail failed', { to, subject, error: sendErr && sendErr.message ? sendErr.message : sendErr });
+    logger.error('[email] sendMail failed', { to, subject, error: sendErr && sendErr.message ? sendErr.message : sendErr });
     throw sendErr;
   }
 };

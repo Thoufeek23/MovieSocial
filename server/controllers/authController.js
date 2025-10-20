@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const { sendEmail } = require('../utils/email');
 const SignupIntent = require('../models/SignupIntent');
+const logger = require('../utils/logger');
 
 // Helper function to generate JWT
 const generateToken = (id, username) => {
@@ -49,7 +50,7 @@ const registerUser = async (req, res) => {
             res.status(400).json({ msg: 'Invalid user data' });
         }
     } catch (error) {
-        console.error(error);
+        logger.error(error);
         res.status(500).json({ msg: 'Server error' });
     }
 };
@@ -69,7 +70,7 @@ const loginUser = async (req, res) => {
                 try {
                     await user.save();
                 } catch (e) {
-                    console.error('Failed to save default avatar for user on login', e);
+                    logger.error('Failed to save default avatar for user on login', e);
                 }
             }
 
@@ -80,7 +81,7 @@ const loginUser = async (req, res) => {
             res.status(401).json({ msg: 'Invalid email or password' });
         }
     } catch (error) {
-        console.error(error);
+        logger.error(error);
         res.status(500).json({ msg: 'Server error' });
     }
 };
@@ -123,14 +124,14 @@ const forgotPassword = async (req, res) => {
             await sendEmail({ to: user.email, subject, text, html });
             emailSent = true;
         } catch (e) {
-            console.error('Failed to send reset email', e);
+            logger.error('Failed to send reset email', e);
             emailSent = false;
             // still return success to avoid revealing whether sending failed
         }
 
         if (showOtps || !emailSent) {
             try {
-                console.info(`[forgot-password] OTP for ${user.email}: ${otp} ${!emailSent ? '(email send failed)' : '(logged)'}`);
+                logger.info(`[forgot-password] OTP for ${user.email}: ${otp} ${!emailSent ? '(email send failed)' : '(logged)'}`);
             } catch (e) {
                 // ignore logging errors
             }
@@ -138,7 +139,7 @@ const forgotPassword = async (req, res) => {
 
         return res.json({ msg: 'If that email exists we sent an OTP' });
     } catch (err) {
-        console.error(err);
+        logger.error(err);
         return res.status(500).json({ msg: 'Server error' });
     }
 };
@@ -169,7 +170,7 @@ const verifyResetOtp = async (req, res) => {
 
         return res.json({ resetToken });
     } catch (err) {
-        console.error(err);
+        logger.error(err);
         return res.status(500).json({ msg: 'Server error' });
     }
 };
@@ -199,7 +200,7 @@ const resetPassword = async (req, res) => {
 
         return res.json({ msg: 'Password reset successful' });
     } catch (err) {
-        console.error(err);
+        logger.error(err);
         return res.status(500).json({ msg: 'Server error' });
     }
 };
@@ -244,20 +245,20 @@ const sendSignupOtp = async (req, res) => {
             const html = `<p>Your signup verification code is <strong>${otp}</strong>.</p><p>It expires in 15 minutes.</p>`;
 
             let emailSent = false;
-            try {
-                await sendEmail({ to: email, subject, text, html });
-                emailSent = true;
-            } catch (e) {
-                console.error('Failed to send signup otp', e);
-                emailSent = false;
-            }
+                    try {
+                        await sendEmail({ to: email, subject, text, html });
+                        emailSent = true;
+                    } catch (e) {
+                        logger.error('Failed to send signup otp', e);
+                        emailSent = false;
+                    }
 
             // For local development (or when sending failed), log the OTP so devs can test without SMTP configured
             const isDev = process.env.NODE_ENV !== 'production';
             const showOtps = process.env.SHOW_OTPS === 'true' || isDev;
             if (!emailSent || showOtps) {
                 try {
-                    console.info(`[signup-otp] OTP for ${email}: ${otp} ${!emailSent ? '(email send failed)' : '(logged)'}`);
+                    logger.info(`[signup-otp] OTP for ${email}: ${otp} ${!emailSent ? '(email send failed)' : '(logged)'}`);
                 } catch (e) {
                     // ignore logging errors
                 }
@@ -265,7 +266,7 @@ const sendSignupOtp = async (req, res) => {
 
             return res.json({ msg: 'OTP sent' });
     } catch (err) {
-        console.error(err);
+        logger.error(err);
         return res.status(500).json({ msg: 'Server error' });
     }
 };
@@ -295,7 +296,7 @@ const verifySignupOtp = async (req, res) => {
 
         return res.json({ signupToken: token });
     } catch (err) {
-        console.error(err);
+        logger.error(err);
         return res.status(500).json({ msg: 'Server error' });
     }
 };
@@ -338,7 +339,7 @@ const completeSignup = async (req, res) => {
 
         return res.status(201).json({ token: generateToken(user._id, user.username) });
     } catch (err) {
-        console.error(err);
+        logger.error(err);
         return res.status(500).json({ msg: 'Server error' });
     }
 };
