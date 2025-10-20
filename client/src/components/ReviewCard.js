@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { Edit, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import BADGE_MAP from '../data/badges';
+import * as api from '../api';
 
 // A simple component to display non-interactive stars (responsive sizes)
 const DisplayStars = ({ rating }) => {
@@ -22,6 +24,7 @@ const ReviewCard = ({ review, onEdit, onDelete }) => {
   const { user } = useContext(AuthContext);
   const [agreement, setAgreement] = useState({ average: null, totalVotes: 0 });
   const [myVote, setMyVote] = useState(null);
+  const [fetchedBadges, setFetchedBadges] = useState(null);
   // Compare IDs as strings to avoid type mismatches (ObjectId vs string)
   const isAuthor = !!user && (
     String(user.id) === String(review.user._id) ||
@@ -49,6 +52,25 @@ const ReviewCard = ({ review, onEdit, onDelete }) => {
       setMyVote(mine ? Number(mine.value) : null);
     }
   }, [review.agreementVotes, user]);
+
+  // If the review.user doesn't include badges (some endpoints might not populate them),
+  // fetch the user's profile to get badges so the UI is consistent across pages.
+  useEffect(() => {
+    let mounted = true;
+    const ensureBadges = async () => {
+      try {
+        if (!review?.user || (review.user.badges && review.user.badges.length > 0)) return;
+        const res = await api.getUserProfile(review.user.username);
+        if (!mounted) return;
+        setFetchedBadges(res.data.badges || []);
+      } catch (e) {
+        // ignore failures — badges are optional
+        console.debug('Could not fetch reviewer badges', e?.message || e);
+      }
+    };
+    ensureBadges();
+    return () => { mounted = false; };
+  }, [review.user]);
 
   const handleVote = async (value) => {
     if (!user) return; // only logged-in users may vote
@@ -94,8 +116,28 @@ const ReviewCard = ({ review, onEdit, onDelete }) => {
             </h3>
             <div className="flex items-center gap-2 text-sm text-gray-400 mb-2">
               {review.rating > 0 && <DisplayStars rating={review.rating} />}
-              <span className="mt-1">
+              <span className="mt-1 flex items-center gap-2">
                 Reviewed by <Link to={`/profile/${review.user.username}`} className="font-semibold hover:underline">{review.user.username}</Link>
+                {/* show the reviewer's primary badge (if any) */}
+                {((review.user?.badges && review.user.badges.length > 0) || (fetchedBadges && fetchedBadges.length > 0)) && (() => {
+                  const source = (review.user?.badges && review.user.badges.length > 0) ? review.user.badges : fetchedBadges;
+                  const b = source[0];
+                  const id = (b.id || b.name || '').toUpperCase();
+                  let bg = 'bg-gray-800 text-gray-100';
+                  if (id.includes('DIAMOND')) { bg = 'bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white'; }
+                  else if (id.includes('GOLD')) { bg = 'bg-yellow-500 text-black'; }
+                  else if (id.includes('SILVER')) { bg = 'bg-gray-400 text-black'; }
+                  else if (id.includes('BRONZE')) { bg = 'bg-amber-700 text-white'; }
+
+                  const label = (b.name || b.id || '').replace(/_/g, ' ');
+                  const badgeMeta = BADGE_MAP[b.id] || null;
+                  // compact chip
+                  return (
+                    <Link to={`/badges/${b.id}`} title={badgeMeta ? badgeMeta.title : label} className={`inline-block ${bg} px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap` }>
+                      {badgeMeta ? (badgeMeta.icon ? `${badgeMeta.icon} ${badgeMeta.short || badgeMeta.title}` : (label)) : label}
+                    </Link>
+                  );
+                })()}
               </span>
             </div>
           </div>

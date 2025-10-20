@@ -30,7 +30,7 @@ const createReview = async (req, res) => {
             rating,
         });
         const savedReview = await newReview.save();
-        await savedReview.populate('user', 'username avatar _id');
+    await savedReview.populate('user', 'username avatar _id badges');
 
         // Add this movie to the user's watched list and remove from watchlist if present
         try {
@@ -69,7 +69,7 @@ const createReview = async (req, res) => {
 const getMyReviews = async (req, res) => {
     try {
         const reviews = await Review.find({ user: req.user.id })
-            .populate('user', 'username avatar _id')
+            .populate('user', 'username avatar _id badges')
             .sort({ createdAt: -1 });
         res.json(reviews);
     } catch (error) {
@@ -82,7 +82,7 @@ const getMyReviews = async (req, res) => {
 const getFeedReviews = async (req, res) => {
     try {
         const reviews = await Review.find()
-            .populate('user', 'username avatar _id')
+            .populate('user', 'username avatar _id badges')
             .sort({ createdAt: -1 }) // Sort by most recent
             .limit(20); // Limit to the latest 20 reviews
         res.json(reviews);
@@ -96,7 +96,7 @@ const getFeedReviews = async (req, res) => {
 const getMovieReviews = async (req, res) => {
     try {
         const reviews = await Review.find({ movieId: req.params.movieId })
-            .populate('user', 'username avatar _id')
+            .populate('user', 'username avatar _id badges')
             .sort({ createdAt: -1 });
         res.json(reviews);
     } catch (error) {
@@ -167,7 +167,7 @@ const updateReview = async (req, res) => {
         review.rating = rating || review.rating;
         
         await review.save();
-        await review.populate('user', 'username avatar _id');
+    await review.populate('user', 'username avatar _id badges');
         res.json(review);
     } catch (error) {
         logger.error(error);
