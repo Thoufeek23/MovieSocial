@@ -3,7 +3,7 @@ const User = require('../models/User');
 
 // Badge definitions — add new badges here. id should be stable.
 const BADGES = {
-  FIRST_REVIEW: { id: 'first_review', name: 'First Review' },
+  FIRST_REVIEW: { id: 'first_review', name: 'New User' },
   REVIEW_STREAK_3: { id: 'streak_3', name: '3-day Streak' },
   REVIEW_STREAK_7: { id: 'streak_7', name: '7-day Streak' },
   TOP_REVIEWER_MONTH: { id: 'top_reviewer_month', name: 'Top Reviewer (Month)' },

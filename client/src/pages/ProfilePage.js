@@ -213,12 +213,12 @@ const ProfilePage = () => {
                             <div className="flex items-center gap-3">
                                 <h1 className="text-3xl sm:text-4xl font-bold text-center sm:text-left">{profile.username}</h1>
                                 {/* Inline badges next to username (compact) */}
-                                <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2">
                                     {(profile.badges || []).map(b => {
                                         // try to infer a style from badge id or name
                                         const id = (b.id || b.name || '').toUpperCase();
                                         let bg = 'bg-gray-800 text-gray-100';
-                                        let icon = null;
+                                        //let icon = null;
                                         if (id.includes('DIAMOND')) { bg = 'bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white'; }
                                         else if (id.includes('GOLD')) { bg = 'bg-yellow-500 text-black'; }
                                         else if (id.includes('SILVER')) { bg = 'bg-gray-400 text-black'; }
@@ -228,9 +228,9 @@ const ProfilePage = () => {
                                         const label = (b.name || b.id || '').replace(/_/g, ' ');
 
                                         return (
-                                            <div key={b.id} title={label} className={`${bg} px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap`}>
+                                            <Link key={b.id} to={`/badges/${b.id}`} title={label} className={`inline-block ${bg} px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap` }>
                                                 {label}
-                                            </div>
+                                            </Link>
                                         );
                                     })}
                                 </div>

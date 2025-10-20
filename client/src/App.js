@@ -13,6 +13,7 @@ import DiscussionPage from './pages/DiscussionPage';
 import ReviewsPage from './pages/ReviewsPage';
 import DiscussionsListPage from './pages/DiscussionsListPage';
 import Leaderboard from './pages/Leaderboard';
+import BadgeDetail from './pages/BadgeDetail';
 import { AnimatePresence, motion } from 'framer-motion';
 import Curtain from './components/Curtain';
 import React, { useContext } from 'react';
@@ -51,6 +52,7 @@ const AppRoutes = () => {
             <Route path="/movie/:id" element={<PageWrapper><MovieDetailPage /></PageWrapper>} />
             <Route path="/profile/:username" element={<PageWrapper><ProfilePage /></PageWrapper>} />
             <Route path="/leaderboard" element={<PageWrapper><Leaderboard /></PageWrapper>} />
+            <Route path="/badges/:badgeId" element={<PageWrapper><BadgeDetail /></PageWrapper>} />
               <Route path="/discussions/:id" element={<PageWrapper><DiscussionPage /></PageWrapper>} />
               <Route path="/discussions" element={<PageWrapper><DiscussionsListPage /></PageWrapper>} />
               <Route path="/reviews" element={<PageWrapper><ReviewsPage /></PageWrapper>} />
