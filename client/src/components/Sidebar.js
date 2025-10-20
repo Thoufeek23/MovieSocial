@@ -2,6 +2,7 @@ import React, { useContext } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { Home, Search, User, FileText, BookOpen } from 'lucide-react';
+import { Award } from 'lucide-react';
 
 const NavItem = ({ to, icon: Icon, label }) => {
   const location = useLocation();
@@ -28,6 +29,7 @@ const Sidebar = () => {
           <NavItem to="/search" icon={Search} label="Explore" />
           <NavItem to="/discussions" icon={BookOpen} label="Discussions" />
           <NavItem to="/reviews" icon={FileText} label="Reviews" />
+          <NavItem to="/leaderboard" icon={Award} label="Leaderboard" />
           <NavItem to={profileLink} icon={User} label="Profile" />
         </nav>
 
