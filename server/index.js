@@ -6,6 +6,7 @@ const helmet = require('helmet');
 const jwt = require('jsonwebtoken');
 const path = require('path');
 const logger = require('./utils/logger');
+const badges = require('./utils/badges');
 // Add global error handlers to aid debugging in hosted environments
 process.on('uncaughtException', (err) => {
   logger.error('Uncaught Exception - shutting down', err && err.stack ? err.stack : err);
@@ -129,12 +130,62 @@ const connectWithRetry = async (maxAttempts = 5, initialDelay = 2000) => {
 
 connectWithRetry();
 
+// Schedule monthly badge computation when the DB is connected and the feature is enabled.
+// Enable by setting ENABLE_MONTHLY_BADGES=true in environment (recommended for production only).
+mongoose.connection.on('connected', () => {
+  try {
+    if (process.env.ENABLE_MONTHLY_BADGES === 'true') {
+      logger.info('Monthly badge computation is enabled. Scheduling monthly job.');
+
+      // Compute time (ms) until next run: first day of next month at 00:05 UTC
+      const scheduleNextRun = () => {
+        const now = new Date();
+        // next month first day
+        const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 5, 0));
+        const wait = Math.max(0, nextMonth.getTime() - Date.now());
+        logger.info('Scheduling monthly badge compute in ms:', wait);
+
+        setTimeout(async () => {
+          try {
+            // Compute for previous month
+            const runDate = new Date();
+            runDate.setUTCDate(1);
+            runDate.setUTCHours(0,0,0,0);
+            runDate.setUTCMonth(runDate.getUTCMonth()); // keep month as current month
+            // previous month year/month
+            const prev = new Date(Date.UTC(runDate.getUTCFullYear(), runDate.getUTCMonth() - 1, 1));
+            const year = prev.getUTCFullYear();
+            const month = prev.getUTCMonth() + 1; // 1-12
+            logger.info('Running monthly badge compute for', year, month);
+            await badges.computeMonthlyBadges(year, month);
+            logger.info('Monthly badge compute finished for', year, month);
+          } catch (err) {
+            logger.error('Monthly badge compute failed', err);
+          } finally {
+            // schedule next run
+            scheduleNextRun();
+          }
+        }, wait);
+      };
+
+      // kick off schedule
+      scheduleNextRun();
+    } else {
+      logger.info('Monthly badge computation is disabled. Set ENABLE_MONTHLY_BADGES=true to enable.');
+    }
+  } catch (e) {
+    logger.error('Failed to schedule monthly badge compute', e);
+  }
+});
+
 // API Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/reviews', require('./routes/reviews'));
 app.use('/api/movies', require('./routes/movies'));
 app.use('/api/discussions', require('./routes/discussions'));
+// Stats and leaderboards
+app.use('/api/stats', require('./routes/stats'));
 // Debug endpoints for runtime checks (safe to remove after debugging)
 // debug routes removed
 

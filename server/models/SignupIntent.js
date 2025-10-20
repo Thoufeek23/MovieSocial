@@ -6,6 +6,9 @@ const SignupIntentSchema = new mongoose.Schema({
   passwordHash: { type: String, required: true },
   name: { type: String },
   age: { type: Number },
+  // Country and state provided during signup for region-based leaderboards
+  country: { type: String },
+  state: { type: String },
   otpHash: { type: String },
   otpExpires: { type: Date },
   signupToken: { type: String },

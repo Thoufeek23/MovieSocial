@@ -215,7 +215,22 @@ const resetPassword = async (req, res) => {
 // @route POST /api/auth/signup-otp
 const sendSignupOtp = async (req, res) => {
     const { username, email, password, name, age } = req.body;
+    // Accept country/state but normalize/validate them before storing
+    let { country, state } = req.body;
     if (!username || !email || !password) return res.status(400).json({ msg: 'username, email and password required' });
+
+    // small helpers
+    const normalizeCountry = (c) => {
+        if (!c || typeof c !== 'string') return '';
+        const trimmed = c.trim();
+        if (/^[A-Za-z]{2}$/.test(trimmed)) return trimmed.toUpperCase();
+        // if client sent a full name (unlikely) just return trimmed (server will accept but not uppercase)
+        return trimmed;
+    };
+    const titleCase = (s) => typeof s === 'string' && s.trim() ? s.trim().split(/\s+/).map(part => part[0]?.toUpperCase() + part.slice(1).toLowerCase()).join(' ') : '';
+
+    country = normalizeCountry(country || '');
+    state = titleCase(state || '');
 
     try {
         // Check if email or username already exist in users
@@ -226,6 +241,7 @@ const sendSignupOtp = async (req, res) => {
 
         // Validate password complexity
         if (!validatePassword(password)) return res.status(400).json({ msg: 'Password does not meet complexity requirements' });
+
 
         // Remove any previous intent for this email
         await SignupIntent.deleteMany({ email });
@@ -238,7 +254,7 @@ const sendSignupOtp = async (req, res) => {
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         const otpHash = await bcrypt.hash(otp, 10);
 
-            const intent = await SignupIntent.create({ username, email, passwordHash, name, age, otpHash, otpExpires: Date.now() + 15 * 60 * 1000 });
+    const intent = await SignupIntent.create({ username, email, passwordHash, name, age, country: country || '', state: state || '', otpHash, otpExpires: Date.now() + 15 * 60 * 1000 });
 
             const subject = 'Verify your email for MovieSocial';
             const text = `Your signup verification code is ${otp}. It expires in 15 minutes.`;
@@ -324,12 +340,29 @@ const completeSignup = async (req, res) => {
             finalPasswordHash = await bcrypt.hash(finalPasswordHash || '', salt);
         }
 
+        // Normalize state and country values before creating user
+        const normalize = (s) => typeof s === 'string' ? s.trim() : '';
+        const titleCase = (s) => typeof s === 'string' && s.trim() ? s.trim().split(/\s+/).map(part => part[0]?.toUpperCase() + part.slice(1).toLowerCase()).join(' ') : '';
+        const countryNormalize = (c) => {
+            if (!c || typeof c !== 'string') return '';
+            const t = c.trim();
+            if (/^[A-Za-z]{2}$/.test(t)) return t.toUpperCase();
+            return t;
+        };
+
+        const countryVal = countryNormalize(intent.country || '');
+        const stateVal = titleCase(intent.state || '');
+        const regionVal = stateVal || countryVal;
+
         const user = await User.create({
             username: intent.username,
             email: intent.email,
             passwordHash: finalPasswordHash,
             avatar: '/default_dp.png',
             bio: '',
+            country: countryVal || undefined,
+            state: stateVal || undefined,
+            region: regionVal || undefined,
         });
 
         // Cleanup intent

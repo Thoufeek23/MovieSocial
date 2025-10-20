@@ -1,5 +1,6 @@
 const Review = require('../models/Review');
 const logger = require('../utils/logger');
+const badges = require('../utils/badges');
 
 // @desc    Create a new review
 // @route   POST /api/reviews
@@ -50,6 +51,13 @@ const createReview = async (req, res) => {
             // non-fatal: if updating user fails, still return the saved review
             logger.warn('Failed to update user watched list after review:', e.message || e);
         }
+        // Award badges (best-effort, non-blocking)
+        try {
+            badges.handlePostReview(req.user.id).catch(err => logger.warn('badge handlePostReview failed', err));
+        } catch (e) {
+            logger.warn('Failed to trigger badge handling', e);
+        }
+
         res.status(201).json(savedReview);
     } catch (error) {
         res.status(500).json({ msg: 'Server Error' });
