@@ -8,10 +8,18 @@ const UserSchema = new mongoose.Schema({
   bio: { type: String, default: '' },
   // Default avatar uses the public asset '/default_dp.png' (place the provided image in client/public/default_dp.png)
   avatar: { type: String, default: '/default_dp.png' },
+  // Region/state for leaderboard grouping (optional)
+  country: { type: String },
+  state: { type: String },
+  // legacy combined region field (kept for compatibility)
+  region: { type: String },
   followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   watchlist: [{ type: String }], // Array of movie IDs from TMDb
   watched: [{ type: String }],   // Array of movie IDs from TMDb
+  // Badges awarded to the user (for gamification)
+  // Stored as objects so we can include metadata and awardedAt timestamps
+  badges: [{ id: { type: String }, name: { type: String }, awardedAt: { type: Date } }],
   // Fields for password reset OTP
   resetOtpHash: { type: String },
   resetOtpExpires: { type: Date },
