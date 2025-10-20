@@ -24,6 +24,7 @@ const Navbar = () => {
             <Clapperboard size={26} />
             <span className="hidden md:inline">Movie Social</span>
           </Link>
+          {/* Leaderboard moved to sidebar */}
           {shouldShowSearch && (
             <div className="flex-1 md:flex-none ml-4 w-full md:w-96">
               <div className="hidden md:block">

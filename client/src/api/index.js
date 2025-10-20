@@ -68,3 +68,6 @@ export const fetchDiscussionsForMovie = (movieId) => fetchDiscussions({ movieId 
 export const deleteDiscussion = (id) => API.delete(`/discussions/${id}`);
 export const updateDiscussion = (id, data) => API.put(`/discussions/${id}`, data);
 export const fetchDiscussionsByUser = (username) => API.get(`/discussions/user/${username}`);
+// Leaderboard
+export const getLeaderboardGlobal = () => API.get('/stats/top-reviewers');
+export const getLeaderboardRegion = (region) => API.get(`/stats/top-reviewers/region/${encodeURIComponent(region)}`);
