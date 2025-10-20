@@ -5,14 +5,15 @@ const cors = require('cors');
 const helmet = require('helmet');
 const jwt = require('jsonwebtoken');
 const path = require('path');
+const logger = require('./utils/logger');
 // Add global error handlers to aid debugging in hosted environments
 process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception - shutting down', err && err.stack ? err.stack : err);
+  logger.error('Uncaught Exception - shutting down', err && err.stack ? err.stack : err);
   // Graceful shutdown could be implemented here. For now, exit so the host can restart the process.
   process.exit(1);
 });
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason && reason.stack ? reason.stack : reason);
+  logger.error('Unhandled Rejection at:', promise, 'reason:', reason && reason.stack ? reason.stack : reason);
   // Exit for a clean restart by the process manager
   process.exit(1);
 });
@@ -37,10 +38,10 @@ if (typeof trustProxyEnv !== 'undefined') {
 // Log the effective trust proxy setting for debugging/ops
 try {
   const effectiveTrust = app.get('trust proxy');
-  console.info('[startup] express trust proxy =', effectiveTrust);
+  logger.info('[startup] express trust proxy =', effectiveTrust);
   // If trust proxy is true (trust all), warn operator because it weakens IP rate-limiting
   if (effectiveTrust === true) {
-    console.warn('[startup] WARNING: trust proxy is set to `true` which trusts all proxies. This can allow clients to spoof IPs via X-Forwarded-For and may bypass IP-based rate limiting. Prefer setting TRUST_PROXY=1 (or a specific proxy count) in production. See https://expressjs.com/en/guide/behind-proxies.html');
+    logger.warn('[startup] trust proxy is set to `true` which trusts all proxies. This can allow clients to spoof IPs via X-Forwarded-For and may bypass IP-based rate limiting. Prefer setting TRUST_PROXY=1 (or a specific proxy count) in production.');
   }
 } catch (e) {
   // ignore logging failure
@@ -100,12 +101,12 @@ const connectWithRetry = async (maxAttempts = 5, initialDelay = 2000) => {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       await mongoose.connect(mongoUri, opts);
-      console.log('MongoDB Connected');
+      logger.info('MongoDB Connected');
       // attach runtime error logging
-      mongoose.connection.on('error', err => console.error('Mongoose runtime error:', err));
+      mongoose.connection.on('error', err => logger.error('Mongoose runtime error:', err));
       return;
     } catch (err) {
-      console.error(`MongoDB connection attempt ${attempt} failed:`, err && err.message ? err.message : err);
+  logger.warn(`MongoDB connection attempt ${attempt} failed:`, err && err.message ? err.message : err);
 
       // Common recovery hint for Atlas/Render users
       if (err && /whitelist|access|IP|not authorized/i.test(String(err))) {
@@ -113,13 +114,13 @@ const connectWithRetry = async (maxAttempts = 5, initialDelay = 2000) => {
       }
 
       if (attempt === maxAttempts) {
-        console.error('Exceeded maximum MongoDB connection attempts. Exiting process so host can restart the service.');
-        console.error('Full error:', err);
+        logger.error('Exceeded maximum MongoDB connection attempts. Exiting process so host can restart the service.');
+        logger.error('Full error:', err);
         process.exit(1);
       }
 
       const wait = initialDelay * Math.pow(2, attempt - 1);
-      console.log(`Retrying MongoDB connection in ${wait}ms... (attempt ${attempt + 1}/${maxAttempts})`);
+      logger.info(`Retrying MongoDB connection in ${wait}ms... (attempt ${attempt + 1}/${maxAttempts})`);
       // eslint-disable-next-line no-await-in-loop
       await new Promise(resolve => setTimeout(resolve, wait));
     }
@@ -163,8 +164,8 @@ if (process.env.NODE_ENV === 'production' && fs.existsSync(clientBuildPath)) {
 } else {
   // In many hosting setups (like Render when deploying server only) the client/build
   // folder won't exist. Avoid crashing the app; log a helpful message and skip static serving.
-  console.warn('Client build not found or NODE_ENV not production; skipping static file serving from', clientBuildPath);
+  logger.warn('Client build not found or NODE_ENV not production; skipping static file serving from', clientBuildPath);
 }
 
 const PORT = process.env.PORT || 5001;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => logger.info(`Server running on port ${PORT}`));

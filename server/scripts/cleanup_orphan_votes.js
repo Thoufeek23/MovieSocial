@@ -5,21 +5,22 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Review = require('../models/Review');
+const logger = require('../utils/logger');
 
 (async function run() {
   const mongoUri = process.env.MONGO_URI;
   if (!mongoUri) {
-    console.error('MONGO_URI not set in environment or .env; set MONGO_URI before running this script.');
+    logger.error('MONGO_URI not set in environment or .env; set MONGO_URI before running this script.');
     process.exit(1);
   }
 
   try {
-    await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 10000 });
-    console.log('Connected to MongoDB.');
+  await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 10000 });
+  logger.info('Connected to MongoDB.');
 
     const users = await User.find({}, '_id').lean();
     const validIds = new Set(users.map(u => String(u._id)));
-    console.log(`Found ${validIds.size} valid users.`);
+  logger.info(`Found ${validIds.size} valid users.`);
 
     const reviews = await Review.find({}).lean();
     let totalVotesRemoved = 0;
@@ -41,16 +42,16 @@ const Review = require('../models/Review');
         reviewsUpdated += 1;
         totalVotesRemoved += removedVotes;
         totalLikesRemoved += removedLikes;
-        console.log(`Updated review ${r._id}: removed ${removedVotes} orphan votes, ${removedLikes} orphan likes`);
+        logger.info(`Updated review ${r._id}: removed ${removedVotes} orphan votes, ${removedLikes} orphan likes`);
       }
     }
 
-    console.log(`Done. Reviews updated: ${reviewsUpdated}. Total orphan votes removed: ${totalVotesRemoved}. Total orphan likes removed: ${totalLikesRemoved}.`);
+    logger.info(`Done. Reviews updated: ${reviewsUpdated}. Total orphan votes removed: ${totalVotesRemoved}. Total orphan likes removed: ${totalLikesRemoved}.`);
 
     await mongoose.disconnect();
     process.exit(0);
   } catch (err) {
-    console.error('Error during cleanup:', err && err.message ? err.message : err);
+    logger.error('Error during cleanup:', err && err.message ? err.message : err);
     try { await mongoose.disconnect(); } catch (e) {}
     process.exit(1);
   }

@@ -1,4 +1,5 @@
 const axios = require('axios');
+const logger = require('../utils/logger');
 
 const TMDB_API_BASE_URL = 'https://api.themoviedb.org/3';
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
@@ -16,6 +17,7 @@ const searchMovies = async (req, res) => {
         });
         // Optionally enrich with OMDb IMDb ratings per result if we have an OMDb API key
         const OMDB_API_KEY = process.env.OMDB_API_KEY;
+        const logger = require('../utils/logger');
         if (OMDB_ENABLED && OMDB_API_KEY && Array.isArray(data.results) && data.results.length > 0) {
             await Promise.all(data.results.map(async (m) => {
                 try {
@@ -41,14 +43,14 @@ const searchMovies = async (req, res) => {
                 } catch (e) {
                     // Log OMDb errors to help debugging (include status and body if present)
                     try {
-                        console.warn('OMDb item fetch failed', e.response?.status, e.response?.data || e.message);
+                        logger.warn('OMDb item fetch failed', e.response?.status, e.response?.data || e.message);
                         // If we get a 401 Unauthorized, disable OMDb enrichment for the lifetime of this process
                         if (e.response?.status === 401 || (e.response?.data && typeof e.response.data.Error === 'string' && e.response.data.Error.toLowerCase().includes('invalid api key'))) {
                             OMDB_ENABLED = false;
-                            console.warn('OMDb appears to be disabled due to invalid API key. Further OMDb calls will be skipped until server restart.');
+                            logger.warn('OMDb appears to be disabled due to invalid API key. Further OMDb calls will be skipped until server restart.');
                         }
                     } catch (logErr) {
-                        console.warn('OMDb item fetch failed (logging error)', e.message || e);
+                        logger.warn('OMDb item fetch failed (logging error)', e.message || e);
                     }
                     // ignore per-item failures and fallback
                     if (typeof m.vote_average !== 'undefined') {
@@ -113,13 +115,13 @@ const getMovieDetails = async (req, res) => {
             } catch (err) {
                 // If OMDb fails, we'll fall back to TMDb vote_average below
                 try {
-                    console.warn('OMDb fetch failed', err.response?.status, err.response?.data || err.message);
+                    logger.warn('OMDb fetch failed', err.response?.status, err.response?.data || err.message);
                     if (err.response?.status === 401 || (err.response?.data && typeof err.response.data.Error === 'string' && err.response.data.Error.toLowerCase().includes('invalid api key'))) {
                         OMDB_ENABLED = false;
-                        console.warn('OMDb appears to be disabled due to invalid API key. Further OMDb calls will be skipped until server restart.');
+                        logger.warn('OMDb appears to be disabled due to invalid API key. Further OMDb calls will be skipped until server restart.');
                     }
                 } catch (logErr) {
-                    console.warn('OMDb fetch failed (logging error)', err.message || err);
+                    logger.warn('OMDb fetch failed (logging error)', err.message || err);
                 }
             }
         }
@@ -172,13 +174,13 @@ const getPopularMovies = async (req, res) => {
                     }
                 } catch (e) {
                     try {
-                        console.warn('OMDb item fetch failed', e.response?.status, e.response?.data || e.message);
+                        logger.warn('OMDb item fetch failed', e.response?.status, e.response?.data || e.message);
                         if (e.response?.status === 401 || (e.response?.data && typeof e.response.data.Error === 'string' && e.response.data.Error.toLowerCase().includes('invalid api key'))) {
                             OMDB_ENABLED = false;
-                            console.warn('OMDb appears to be disabled due to invalid API key. Further OMDb calls will be skipped until server restart.');
+                            logger.warn('OMDb appears to be disabled due to invalid API key. Further OMDb calls will be skipped until server restart.');
                         }
                     } catch (logErr) {
-                        console.warn('OMDb item fetch failed (logging error)', e.message || e);
+                        logger.warn('OMDb item fetch failed (logging error)', e.message || e);
                     }
                     if (typeof m.vote_average !== 'undefined') {
                         m.imdbRating = m.vote_average;

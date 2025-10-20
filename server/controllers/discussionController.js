@@ -1,5 +1,6 @@
 const Discussion = require('../models/Discussion');
 const User = require('../models/User');
+const logger = require('../utils/logger');
 
 // GET /api/discussions - list recent discussions
 const listDiscussions = async (req, res) => {
@@ -31,7 +32,7 @@ const listDiscussions = async (req, res) => {
   .populate('comments.replies.user', 'username avatar');
     res.json(discussions);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ msg: 'Server Error' });
   }
 };
@@ -48,7 +49,7 @@ const createDiscussion = async (req, res) => {
     ]);
     res.status(201).json(discussion);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ msg: 'Server Error' });
   }
 };
@@ -63,7 +64,7 @@ const getDiscussion = async (req, res) => {
     if (!discussion) return res.status(404).json({ msg: 'Discussion not found' });
     res.json(discussion);
   } catch (err) {
-    console.error(err);
+      logger.error(err);
     res.status(500).json({ msg: 'Server Error' });
   }
 };
@@ -80,7 +81,7 @@ const listDiscussionsByUser = async (req, res) => {
       .populate('comments.replies.user', 'username avatar');
     res.json(discussions);
   } catch (err) {
-    console.error(err);
+      logger.error(err);
     res.status(500).json({ msg: 'Server Error' });
   }
 };
@@ -102,7 +103,7 @@ const addComment = async (req, res) => {
     ]);
     res.json(discussion);
   } catch (err) {
-    console.error(err);
+      logger.error(err);
     res.status(500).json({ msg: 'Server Error' });
   }
 };
@@ -131,7 +132,7 @@ const editComment = async (req, res) => {
     ]);
     res.json(discussion);
   } catch (err) {
-    console.error(err);
+      logger.error(err);
     res.status(500).json({ msg: 'Server Error' });
   }
 };
@@ -161,7 +162,7 @@ const deleteComment = async (req, res) => {
     ]);
     res.json(discussion);
   } catch (err) {
-    console.error(err);
+      logger.error(err);
     res.status(500).json({ msg: 'Server Error' });
   }
 };
@@ -188,7 +189,7 @@ const addReply = async (req, res) => {
     ]);
     res.json(discussion);
   } catch (err) {
-    console.error(err);
+      logger.error(err);
     res.status(500).json({ msg: 'Server Error' });
   }
 };
@@ -223,7 +224,7 @@ const deleteReply = async (req, res) => {
     ]);
     res.json(discussion);
   } catch (err) {
-    console.error(err);
+      logger.error(err);
     res.status(500).json({ msg: 'Server Error' });
   }
 };
@@ -245,7 +246,7 @@ const updateDiscussion = async (req, res) => {
     ]);
     res.json(discussion);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ msg: 'Server Error' });
   }
 };
@@ -260,7 +261,7 @@ const deleteDiscussion = async (req, res) => {
       await Discussion.findByIdAndDelete(discussion._id);
     res.json({ msg: 'Discussion deleted' });
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ msg: 'Server Error' });
   }
 };
