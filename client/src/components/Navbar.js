@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import InstantSearchBar from './InstantSearchBar';
 import Avatar from './Avatar';
-import { Clapperboard } from 'lucide-react';
+// Use only MS_logo.png as the navbar logo
 // post-related UI moved to sidebar; no inline post controls in navbar
 
 const Navbar = () => {
@@ -17,12 +17,11 @@ const Navbar = () => {
   // post modal/flows removed from navbar
 
   return (
-    <nav className="glass sticky top-0 z-50 px-3 py-2">
+  <nav className="glass sticky top-0 z-50 px-3 py-0">
       <div className="container mx-auto flex flex-col md:flex-row items-center justify-between max-w-6xl gap-2">
         <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-start">
-          <Link to="/" aria-label="Home" className="flex items-center gap-2 text-xl md:text-2xl font-bold text-white hover:text-primary transition-colors">
-            <Clapperboard size={26} />
-            <span className="hidden md:inline">Movie Social</span>
+          <Link to="/" aria-label="Home" className="flex items-center justify-center h-full">
+            <img src={process.env.PUBLIC_URL + '/MS_logo.png'} alt="Movie Social logo" className="w-32 h-32 max-h-16 md:w-40 md:h-40 md:max-h-20 object-contain mx-auto" />
           </Link>
           {/* Leaderboard moved to sidebar */}
           {shouldShowSearch && (
