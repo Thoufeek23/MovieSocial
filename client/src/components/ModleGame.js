@@ -1,24 +1,17 @@
 import React, { useEffect, useState, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
-import puzzles from '../data/modlePuzzles';
+import defaultPuzzles from '../data/modlePuzzles';
 import toast from 'react-hot-toast';
-
-// CONTRACT:
-// - Inputs: none (daily puzzle is read from constants / placeholders)
-// - Outputs: localStorage updates for lastPlayed, streak, and todays result; optionally server sync can be added where commented
-// - Error modes: localStorage unavailable
-
-// Use a puzzles list in `client/src/data/modlePuzzles.js`.
-// Determine puzzle for a given date in a deterministic way (days since epoch modulo list length),
-// and avoid repeating yesterday's puzzle by advancing the index if it would repeat.
+import { normalizeTitle, levenshtein } from '../utils/fuzzy';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const STORAGE_KEY_PREFIX = 'modle_v1_';
 
-function pickPuzzleForDate(dateStr) {
+function pickPuzzleForDate(dateStr, puzzles) {
   // dateStr expected as 'YYYY-MM-DD'
   const base = new Date(dateStr + 'T00:00:00Z');
   const daysSinceEpoch = Math.floor(base.getTime() / (24 * 60 * 60 * 1000));
-  const n = puzzles.length || 1;
+  const n = (puzzles && puzzles.length) ? puzzles.length : 1;
   let index = ((daysSinceEpoch % n) + n) % n;
 
   // compute yesterday's index and avoid repeating it
@@ -29,21 +22,26 @@ function pickPuzzleForDate(dateStr) {
     index = (index + 1) % n;
   }
 
-  const p = puzzles[index] || puzzles[0];
+  const p = (puzzles && puzzles[index]) ? puzzles[index] : (puzzles && puzzles[0]) || { answer: '', hints: [] };
   return { answer: (p.answer || '').toUpperCase(), hints: p.hints || [], index };
 }
 
-function getStorageKeyForUser(user) {
+function getStorageKeyForUser(user, language = 'English') {
   // if user present, namespace by username; otherwise global guest key
   const id = user?.username || 'guest';
-  return STORAGE_KEY_PREFIX + id;
+  // include language so each language has separate storage (streaks per language)
+  return `${STORAGE_KEY_PREFIX}${id}_${language}`;
 }
 
-const ModleGame = () => {
+const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
   const { user } = useContext(AuthContext);
   // determine today's date string in YYYY-MM-DD
   const todayStr = new Date().toISOString().slice(0, 10);
-  const [puzzle] = useState(() => ({ ...pickPuzzleForDate(todayStr), date: todayStr }));
+  const puzzles = propPuzzles && propPuzzles.length ? propPuzzles : defaultPuzzles;
+  const [puzzle] = useState(() => ({ ...pickPuzzleForDate(todayStr, puzzles), date: todayStr }));
+  // prepare normalized answer and fuzzy threshold for rendering and matching
+  const normAnswer = normalizeTitle(puzzle.answer || '');
+  const fuzzyThreshold = Math.max(2, Math.ceil((normAnswer.length || 0) * 0.2));
   const [guess, setGuess] = useState('');
   const [guesses, setGuesses] = useState([]);
   const [todayPlayed, setTodayPlayed] = useState(null); // null | { date, correct, guesses }
@@ -54,7 +52,7 @@ const ModleGame = () => {
 
   useEffect(() => {
     try {
-      const key = getStorageKeyForUser(user);
+  const key = getStorageKeyForUser(user, language);
       const raw = localStorage.getItem(key);
       const data = raw ? JSON.parse(raw) : { lastPlayed: null, streak: 0, history: {} };
       const today = puzzle.date;
@@ -69,11 +67,11 @@ const ModleGame = () => {
     } catch (err) {
       console.error('Failed to load Modle state', err);
     }
-  }, [puzzle, user]);
+  }, [puzzle, user, maxReveal, language]);
 
   const saveState = (newState) => {
     try {
-      const key = getStorageKeyForUser(user);
+      const key = getStorageKeyForUser(user, language);
       const raw = localStorage.getItem(key);
       const data = raw ? JSON.parse(raw) : { lastPlayed: null, streak: 0, history: {} };
       const merged = { ...data, ...newState };
@@ -95,20 +93,26 @@ const ModleGame = () => {
     // Enforce one guess per revealed hint until the player has seen maxReveal hints.
     // If revealedHints < maxReveal, player may only submit up to revealedHints guesses.
     if (!(revealedHints >= maxReveal || guesses.length < revealedHints)) {
-      toast('You have used your guesses for the current number of hints. Submit once to reveal the next hint.');
+      toast('Submit a guess to reveal the next hint.'); // Simplified message
       return;
     }
 
-  const newGuesses = [...guesses, normalized];
-  setGuesses(newGuesses);
+    const newGuesses = [...guesses, normalized];
+    setGuesses(newGuesses);
 
-  // Reveal another hint after each submitted guess, up to the configured cap (maxReveal)
-  setRevealedHints(prev => Math.min(maxReveal, prev + 1));
+    // Reveal another hint after each submitted guess, up to the configured cap (maxReveal)
+    setRevealedHints(prev => Math.min(maxReveal, prev + 1));
 
-    const isCorrect = normalized === puzzle.answer.toUpperCase();
+  // Fuzzy matching: allow small typos. Normalize and compute Levenshtein distance.
+  const normAnswer = normalizeTitle(puzzle.answer);
+  const guessNorm = normalized;
+  const dist = levenshtein(guessNorm, normAnswer);
+  // threshold rules: allow distance up to 2 or 20% of answer length (whichever is larger)
+  const threshold = Math.max(2, Math.ceil(normAnswer.length * 0.2));
+  const isCorrect = dist <= threshold;
     const today = puzzle.date;
 
-    const key = getStorageKeyForUser(user);
+  const key = getStorageKeyForUser(user, language);
     const raw = localStorage.getItem(key);
     const data = raw ? JSON.parse(raw) : { lastPlayed: null, streak: 0, history: {} };
 
@@ -125,14 +129,15 @@ const ModleGame = () => {
     const newHistory = { ...(data.history || {}) };
     newHistory[today] = { date: today, correct: isCorrect, guesses: newGuesses };
 
-  const newData = { lastPlayed: today, streak: newStreak, history: newHistory };
-  saveState(newData);
+    const newData = { lastPlayed: today, streak: newStreak, history: newHistory };
+    saveState(newData);
 
     setTodayPlayed(newHistory[today]);
     setStreak(newStreak);
 
     if (isCorrect) {
-      toast.success(`Correct! The movie was ${puzzle.answer}.`);
+      const note = dist > 0 ? ' (accepted with minor typo)' : '';
+      toast.success(`Correct! The movie was ${puzzle.answer}.${note}`);
       // TODO: optionally sync to server: send { username, date, correct, guesses }
     } else {
       toast.error('Not correct. Try again!');
@@ -144,15 +149,15 @@ const ModleGame = () => {
   const resetForTesting = () => {
     // helper for dev: clear today's play for this user
     try {
-      const key = getStorageKeyForUser(user);
-      const raw = localStorage.getItem(key);
-      const data = raw ? JSON.parse(raw) : { lastPlayed: null, streak: 0, history: {} };
-      if (data.history) delete data.history[puzzle.date];
-      if (data.lastPlayed === puzzle.date) data.lastPlayed = null;
+  const key = getStorageKeyForUser(user, language);
+  const raw = localStorage.getItem(key);
+  const data = raw ? JSON.parse(raw) : { lastPlayed: null, streak: 0, history: {} };
+  if (data.history) delete data.history[puzzle.date];
+  if (data.lastPlayed === puzzle.date) data.lastPlayed = null;
   saveState(data);
-  setTodayPlayed(null);
-  setGuesses([]);
-  setRevealedHints(1);
+      setTodayPlayed(null);
+      setGuesses([]);
+      setRevealedHints(1);
       toast('Reset today\'s result (dev)');
     } catch (err) { console.error(err); }
   };
@@ -172,44 +177,104 @@ const ModleGame = () => {
         </div>
       </div>
 
+      {/* --- Win Animation --- */}
+      {todayPlayed && todayPlayed.correct && (
+        <motion.div
+          initial={{ scale: 0.5, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: 'spring', stiffness: 260, damping: 20 }}
+          className="mb-4 p-3 bg-green-500/20 text-green-300 text-center rounded font-semibold"
+        >
+          🎉 Correct! The movie was {puzzle.answer}. 🎉
+        </motion.div>
+      )}
+
       <div className="mb-4">
-        <h3 className="font-semibold">Hints <span className="text-sm text-gray-400">({revealedHints}/{maxReveal})</span></h3>
-        <ul className="list-disc list-inside text-gray-300">
-          {(puzzle.hints || []).slice(0, revealedHints).map((h, i) => <li key={i}>{h}</li>)}
-        </ul>
-        {revealedHints < maxReveal && (
-          <div className="text-xs text-gray-500 mt-1">Submit a guess to reveal the next hint. After {maxReveal} hints, you may guess unlimited times.</div>
+        <h3 className="font-semibold mb-3">Hints <span className="text-sm text-gray-400">({revealedHints}/{maxReveal})</span></h3>
+        {/* --- Improved Hint Styling --- */}
+        <div className="flex flex-col gap-2">
+          <AnimatePresence>
+            {(puzzle.hints || []).slice(0, revealedHints).map((h, i) => (
+              <motion.div
+                key={i}
+                layout
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.1 * i, duration: 0.3, type: 'spring', stiffness: 100 }}
+                className="flex items-center gap-3 p-3 bg-background/20 rounded-lg"
+              >
+                <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 bg-primary/20 text-primary font-bold rounded-full text-sm">
+                  {i + 1}
+                </span>
+                <span className="text-gray-200">{h}</span>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+        {/* --- Reduced Hint Explanation Text --- */}
+        {revealedHints < maxReveal && !(todayPlayed && todayPlayed.correct) && (
+          <div className="text-xs text-gray-500 mt-2">Submit a guess to reveal the next hint.</div>
         )}
       </div>
 
       <form onSubmit={handleSubmitGuess} className="flex gap-2">
+        {/* --- Styled Input Textbox --- */}
         <input
           value={guess}
           onChange={e => setGuess(e.target.value)}
           placeholder="Enter movie title"
-          className="input input-bordered flex-1 text-black placeholder-gray-500 caret-black"
+          className="input input-bordered flex-1 px-3 py-2 rounded-md border border-gray-600 bg-gray-700 text-white placeholder-gray-400 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none" // Updated styles
           spellCheck={false}
           autoComplete="off"
+          disabled={todayPlayed && todayPlayed.correct} // Disable input if solved
         />
-        <button type="submit" className="btn btn-primary">Guess</button>
+        {/* --- Button Animation --- */}
+        <motion.button
+          type="submit"
+          className="btn btn-primary" // Uses existing button style from index.css
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          disabled={todayPlayed && todayPlayed.correct} // Disable button if solved
+        >
+          Guess
+        </motion.button>
       </form>
 
       <div className="mt-4">
         <h4 className="font-semibold mb-2">Previous guesses</h4>
         <div className="flex flex-col gap-2">
           {guesses.length === 0 && <div className="text-gray-400">No guesses yet.</div>}
-          {guesses.map((g, i) => (
-            <div key={i} className="p-2 bg-background/10 rounded flex items-center justify-between">
-              <div className="font-mono">{g}</div>
-              <div className="text-sm text-gray-400">{g === puzzle.answer ? 'Correct' : '—'}</div>
-            </div>
-          ))}
+          {/* --- Reversed Guess List Animation --- */}
+          <AnimatePresence>
+            {guesses.slice().reverse().map((g, i) => (
+              <motion.div
+                key={guesses.length - 1 - i} // Use stable original index as key
+                layout
+                initial={{ opacity: 0, y: -10 }} // Animate from top
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 5 }}
+                transition={{ duration: 0.3, type: 'spring', stiffness: 100 }}
+                className="p-2 bg-background/10 rounded flex items-center justify-between"
+              >
+                <div className="font-mono">{g}</div>
+                <div className="text-sm text-gray-400">
+                  {(() => {
+                    try {
+                      const d = levenshtein(g, normAnswer);
+                      return d <= fuzzyThreshold ? '✅ Correct' : '❌ Incorrect';
+                    } catch (e) { return '❌ Incorrect'; }
+                  })()}
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
       </div>
 
       <div className="mt-4 flex items-center gap-2">
         <button onClick={resetForTesting} className="btn btn-ghost text-sm">Reset today (dev)</button>
-        <div className="text-xs text-gray-500">Note: Answer/hints are placeholders in source. Replace with server-driven daily puzzles when available.</div>
+        {/* --- Shortened Note --- */}
+        <div className="text-xs text-gray-500">Note: Puzzles are placeholders in source.</div>
       </div>
     </div>
   );
