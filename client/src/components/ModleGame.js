@@ -48,6 +48,9 @@ const ModleGame = () => {
   const [guesses, setGuesses] = useState([]);
   const [todayPlayed, setTodayPlayed] = useState(null); // null | { date, correct, guesses }
   const [streak, setStreak] = useState(0);
+  // how many hints are currently revealed to the player; reveal up to 5 hints (or fewer if puzzle has fewer)
+  const maxReveal = Math.min(5, (puzzle.hints && puzzle.hints.length) || 5);
+  const [revealedHints, setRevealedHints] = useState(1);
 
   useEffect(() => {
     try {
@@ -58,6 +61,9 @@ const ModleGame = () => {
       if (data.lastPlayed === today && data.history && data.history[today]) {
         setTodayPlayed(data.history[today]);
         setGuesses(data.history[today].guesses || []);
+        // reveal hints proportional to previous guesses (at least 1)
+        const prevGuesses = (data.history[today].guesses || []).length;
+        setRevealedHints(Math.min(maxReveal, Math.max(1, prevGuesses + 1)));
       }
       setStreak(data.streak || 0);
     } catch (err) {
@@ -86,8 +92,18 @@ const ModleGame = () => {
       return;
     }
 
-    const newGuesses = [...guesses, normalized];
-    setGuesses(newGuesses);
+    // Enforce one guess per revealed hint until the player has seen maxReveal hints.
+    // If revealedHints < maxReveal, player may only submit up to revealedHints guesses.
+    if (!(revealedHints >= maxReveal || guesses.length < revealedHints)) {
+      toast('You have used your guesses for the current number of hints. Submit once to reveal the next hint.');
+      return;
+    }
+
+  const newGuesses = [...guesses, normalized];
+  setGuesses(newGuesses);
+
+  // Reveal another hint after each submitted guess, up to the configured cap (maxReveal)
+  setRevealedHints(prev => Math.min(maxReveal, prev + 1));
 
     const isCorrect = normalized === puzzle.answer.toUpperCase();
     const today = puzzle.date;
@@ -134,8 +150,9 @@ const ModleGame = () => {
       if (data.history) delete data.history[puzzle.date];
       if (data.lastPlayed === puzzle.date) data.lastPlayed = null;
   saveState(data);
-      setTodayPlayed(null);
-      setGuesses([]);
+  setTodayPlayed(null);
+  setGuesses([]);
+  setRevealedHints(1);
       toast('Reset today\'s result (dev)');
     } catch (err) { console.error(err); }
   };
@@ -156,10 +173,13 @@ const ModleGame = () => {
       </div>
 
       <div className="mb-4">
-        <h3 className="font-semibold">Hints</h3>
+        <h3 className="font-semibold">Hints <span className="text-sm text-gray-400">({revealedHints}/{maxReveal})</span></h3>
         <ul className="list-disc list-inside text-gray-300">
-          {puzzle.hints.map((h, i) => <li key={i}>{h}</li>)}
+          {(puzzle.hints || []).slice(0, revealedHints).map((h, i) => <li key={i}>{h}</li>)}
         </ul>
+        {revealedHints < maxReveal && (
+          <div className="text-xs text-gray-500 mt-1">Submit a guess to reveal the next hint. After {maxReveal} hints, you may guess unlimited times.</div>
+        )}
       </div>
 
       <form onSubmit={handleSubmitGuess} className="flex gap-2">
