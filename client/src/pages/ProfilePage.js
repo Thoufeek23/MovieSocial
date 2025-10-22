@@ -14,6 +14,7 @@ import FollowListModal from '../components/FollowListModal';
 import EditProfileModal from '../components/EditProfileModal';
 import ProfilePageSkeleton from '../components/ProfilePageSkeleton';
 import EmptyState from '../components/EmptyState';
+import ModleSummary from '../components/ModleSummary';
 
 const ProfilePage = () => {
     const [showDropdown, setShowDropdown] = useState(false);
@@ -334,6 +335,12 @@ const ProfilePage = () => {
 
                             <span className="font-medium">{profile.discussionsStarted || 0} Discussions Started</span>
                             <span className="font-medium">{profile.discussionsParticipated || 0} Participated</span>
+                            {/* Modle (daily movie puzzle) summary for owner */}
+                            {user && user.username === profile.username && (
+                                <div className="ml-4">
+                                    <ModleSummary username={profile.username} />
+                                </div>
+                            )}
                         </div>
                         {/* badges are now shown inline next to the username */}
                         {/* Bio and Follow button row: stacks on small screens, aligns bio left and button right on sm+ screens */}
