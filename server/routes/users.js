@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getUserProfile, addToWatchlist, addToWatched, removeFromWatchlist, removeFromWatched, updateProfile, followUser, unfollowUser, searchUsers } = require('../controllers/userController');
+const { getModleStatus, postModleResult } = require('../controllers/modleController');
 const { protect } = require('../middleware/authMiddleware');
 
 router.get('/search', searchUsers);
@@ -13,5 +14,9 @@ router.post('/watchlist', protect, addToWatchlist);
 router.post('/watched', protect, addToWatched);
 router.delete('/watchlist', protect, removeFromWatchlist);
 router.delete('/watched', protect, removeFromWatched);
+
+// Modle endpoints for persisting daily results and fetching status
+router.get('/modle/status', protect, getModleStatus);
+router.post('/modle/result', protect, postModleResult);
 
 module.exports = router;

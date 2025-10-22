@@ -4,6 +4,7 @@ import defaultPuzzles from '../data/modlePuzzles';
 import toast from 'react-hot-toast';
 import { normalizeTitle, levenshtein } from '../utils/fuzzy';
 import { motion, AnimatePresence } from 'framer-motion';
+import axios from 'axios';
 
 const STORAGE_KEY_PREFIX = 'modle_v1_';
 
@@ -67,6 +68,44 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
     } catch (err) {
       console.error('Failed to load Modle state', err);
     }
+    // If user is signed in, attempt to fetch server-side status and merge
+    (async () => {
+      try {
+        if (user && localStorage.getItem('token')) {
+          const token = localStorage.getItem('token');
+          const res = await axios.get(`/api/users/modle/status?language=${encodeURIComponent(language)}`, { headers: { Authorization: `Bearer ${token}` } });
+          if (res && res.data) {
+            const server = res.data;
+            // Use server data as source-of-truth; but keep local history entries not present on server
+            const key = getStorageKeyForUser(user, language);
+            const raw = localStorage.getItem(key);
+            const local = raw ? JSON.parse(raw) : { lastPlayed: null, streak: 0, history: {} };
+
+            // merge local-only dates into server history if server missing them (keep server priority)
+            const mergedHistory = { ...(server.history || {}) };
+            Object.keys(local.history || {}).forEach(d => {
+              if (!mergedHistory[d]) mergedHistory[d] = local.history[d];
+            });
+
+            const newData = { lastPlayed: server.lastPlayed, streak: server.streak || 0, history: mergedHistory };
+            localStorage.setItem(key, JSON.stringify(newData));
+
+            // if server has today's result, reflect it
+            const today = puzzle.date;
+            if (newData.lastPlayed === today && newData.history && newData.history[today]) {
+              setTodayPlayed(newData.history[today]);
+              setGuesses(newData.history[today].guesses || []);
+              const prevGuesses = (newData.history[today].guesses || []).length;
+              setRevealedHints(Math.min(maxReveal, Math.max(1, prevGuesses + 1)));
+            }
+            setStreak(newData.streak || 0);
+          }
+        }
+      } catch (e) {
+        // non-fatal: if server unavailable, rely on localStorage
+        // console.debug('Modle server sync skipped', e && e.message ? e.message : e);
+      }
+    })();
   }, [puzzle, user, maxReveal, language]);
 
   const saveState = (newState) => {
@@ -138,8 +177,30 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
     if (isCorrect) {
       const note = dist > 0 ? ' (accepted with minor typo)' : '';
       toast.success(`Correct! The movie was ${puzzle.answer}.${note}`);
-      // TODO: optionally sync to server: send { username, date, correct, guesses }
+      // Sync result to server if user is authenticated
+      (async () => {
+        try {
+          if (user && localStorage.getItem('token')) {
+            const token = localStorage.getItem('token');
+            await axios.post('/api/users/modle/result', { date: today, language, correct: true, guesses: newGuesses }, { headers: { Authorization: `Bearer ${token}` } });
+          }
+        } catch (e) {
+          // non-fatal: server sync failed, local state remains
+          // console.debug('Failed to sync Modle result to server', e && e.message ? e.message : e);
+        }
+      })();
     } else {
+      // For incorrect guesses, also optionally send to server to keep history (non-blocking)
+      (async () => {
+        try {
+          if (user && localStorage.getItem('token')) {
+            const token = localStorage.getItem('token');
+            await axios.post('/api/users/modle/result', { date: today, language, correct: false, guesses: newGuesses }, { headers: { Authorization: `Bearer ${token}` } });
+          }
+        } catch (e) {
+          // ignore
+        }
+      })();
       toast.error('Not correct. Try again!');
     }
 

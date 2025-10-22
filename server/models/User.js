@@ -20,6 +20,9 @@ const UserSchema = new mongoose.Schema({
   // Badges awarded to the user (for gamification)
   // Stored as objects so we can include metadata and awardedAt timestamps
   badges: [{ id: { type: String }, name: { type: String }, awardedAt: { type: Date } }],
+  // Modle (daily movie puzzle) history and streaks stored per language
+  // Structure: { <language>: { lastPlayed: 'YYYY-MM-DD', streak: Number, history: { 'YYYY-MM-DD': { date, correct, guesses } } } }
+  modle: { type: Object },
   // Fields for password reset OTP
   resetOtpHash: { type: String },
   resetOtpExpires: { type: Date },
