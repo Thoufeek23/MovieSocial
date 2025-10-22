@@ -15,6 +15,7 @@ import DiscussionsListPage from './pages/DiscussionsListPage';
 import Leaderboard from './pages/Leaderboard';
 import BadgeDetail from './pages/BadgeDetail';
 import ModlePage from './pages/ModlePage';
+import ModlePlayPage from './pages/ModlePlayPage';
 import { AnimatePresence, motion } from 'framer-motion';
 import Curtain from './components/Curtain';
 import React, { useContext } from 'react';
@@ -51,6 +52,7 @@ const AppRoutes = () => {
             <Route path="/signup" element={<PageWrapper><SignupPage /></PageWrapper>} />
             <Route path="/search" element={<PageWrapper><SearchPage /></PageWrapper>} />
             <Route path="/modle" element={<PageWrapper><ModlePage /></PageWrapper>} />
+            <Route path="/modle/play" element={<PageWrapper><ModlePlayPage /></PageWrapper>} />
             <Route path="/movie/:id" element={<PageWrapper><MovieDetailPage /></PageWrapper>} />
             <Route path="/profile/:username" element={<PageWrapper><ProfilePage /></PageWrapper>} />
             <Route path="/leaderboard" element={<PageWrapper><Leaderboard /></PageWrapper>} />
