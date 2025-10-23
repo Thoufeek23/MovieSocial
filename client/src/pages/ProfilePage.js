@@ -306,41 +306,49 @@ const ProfilePage = () => {
                                 </div>
                             )}
                         </div>
-                        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4 mt-2 text-sm text-gray-300">
-                            <button
-                                onClick={() => {
-                                    setUserListTitle('Followers');
-                                    setUserList(profile.followers || []);
-                                    setUserListOpen(true);
-                                }}
-                                className="inline-flex items-center gap-2 text-sm font-medium text-gray-300 hover:text-green-400 transition-colors"
-                                aria-label="Show followers"
-                            >
-                                <span className="font-semibold text-gray-100">{profile.followersCount || 0}</span>
-                                <span className="opacity-90">Followers</span>
-                            </button>
+                        <div className="flex flex-wrap items-start justify-center sm:justify-start gap-4 mt-2 text-sm text-gray-300">
+                            <div className="flex items-start">
+                                <div className="flex flex-col items-start">
+                                    <button
+                                        onClick={() => {
+                                            setUserListTitle('Followers');
+                                            setUserList(profile.followers || []);
+                                            setUserListOpen(true);
+                                        }}
+                                        className="inline-flex items-center gap-2 text-sm font-medium text-gray-300 hover:text-green-400 transition-colors"
+                                        aria-label="Show followers"
+                                    >
+                                        <span className="font-semibold text-gray-100">{profile.followersCount || 0}</span>
+                                        <span className="opacity-90">Followers</span>
+                                    </button>
 
-                            <button
-                                onClick={() => {
-                                    setUserListTitle('Following');
-                                    setUserList(profile.following || []);
-                                    setUserListOpen(true);
-                                }}
-                                className="inline-flex items-center gap-2 text-sm font-medium text-gray-300 hover:text-green-400 transition-colors"
-                                aria-label="Show following"
-                            >
-                                <span className="font-semibold text-gray-100">{profile.followingCount || 0}</span>
-                                <span className="opacity-90">Following</span>
-                            </button>
+                                    {/* Show Modle streak under followers for profile owner */}
+                                    {user && user.username === profile.username && (
+                                        <div className="mt-1">
+                                            <ModleSummary username={profile.username} />
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex flex-col items-start">
+                                    <button
+                                        onClick={() => {
+                                            setUserListTitle('Following');
+                                            setUserList(profile.following || []);
+                                            setUserListOpen(true);
+                                        }}
+                                        className="inline-flex items-center gap-2 text-sm font-medium text-gray-300 hover:text-green-400 transition-colors"
+                                        aria-label="Show following"
+                                    >
+                                        <span className="font-semibold text-gray-100">{profile.followingCount || 0}</span>
+                                        <span className="opacity-90">Following</span>
+                                    </button>
+                                </div>
+                            </div>
 
                             <span className="font-medium">{profile.discussionsStarted || 0} Discussions Started</span>
                             <span className="font-medium">{profile.discussionsParticipated || 0} Participated</span>
-                            {/* Modle (daily movie puzzle) summary for owner */}
-                            {user && user.username === profile.username && (
-                                <div className="ml-4">
-                                    <ModleSummary username={profile.username} />
-                                </div>
-                            )}
+                            {/* Modle summary moved to appear under Followers button */}
                         </div>
                         {/* badges are now shown inline next to the username */}
                         {/* Bio and Follow button row: stacks on small screens, aligns bio left and button right on sm+ screens */}

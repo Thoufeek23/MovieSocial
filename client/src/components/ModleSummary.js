@@ -8,8 +8,17 @@ const ModleSummary = ({ username }) => {
 
   useEffect(() => {
     try {
-      const key = STORAGE_KEY_PREFIX + (username || 'guest');
-      const raw = localStorage.getItem(key);
+      // prefer user-scoped key; language-specific keys are stored by ModleGame as '<prefix><username>_<language>'
+      const baseKey = STORAGE_KEY_PREFIX + (username || 'guest');
+      // if there is a language-suffixed key, prefer that (best-effort: check common languages)
+      const languages = ['English','Hindi','Tamil','Telugu','Kannada','Malayalam'];
+      let found = null;
+      for (const lang of languages) {
+        const k = `${baseKey}_${lang}`;
+        const r = localStorage.getItem(k);
+        if (r) { found = r; break; }
+      }
+      const raw = found || localStorage.getItem(baseKey);
       const data = raw ? JSON.parse(raw) : null;
       if (data) {
         setStreak(data.streak || 0);
@@ -21,10 +30,9 @@ const ModleSummary = ({ username }) => {
   }, [username]);
 
   return (
-    <div className="text-sm text-gray-300">
-      <div className="font-semibold text-gray-100">Modle</div>
-      <div className="text-xs">Streak: <span className="font-medium">{streak}</span></div>
-      <div className="text-xs">Last played: <span className="font-medium">{lastPlayed || 'Never'}</span></div>
+    <div className="inline-flex items-center gap-2 text-sm font-medium text-gray-300">
+      <span className="opacity-90">Modle Streak: </span>
+      <span className="font-semibold text-gray-100">{streak}🔥</span>
     </div>
   );
 };

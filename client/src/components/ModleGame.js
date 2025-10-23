@@ -224,12 +224,12 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
   };
 
   return (
-    <div className="bg-card p-4 rounded-md">
+    <div className="bg-card p-4 rounded-md max-w-2xl mx-auto">
       <div className="mb-4">
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm text-gray-400">Puzzle date: <span className="font-semibold text-gray-100">{puzzle.date}</span></div>
-            <div className="text-sm text-gray-400">Streak: <span className="font-semibold text-gray-100">{streak}</span></div>
+            <div className="text-sm text-gray-400">Streak: <span className="font-semibold text-gray-100">{streak} <span aria-hidden="true">🔥</span></span></div>
           </div>
           <div className="text-right text-sm text-gray-400">
             <div>Guesses: {guesses.length}</div>
