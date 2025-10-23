@@ -4,7 +4,6 @@ const STORAGE_KEY_PREFIX = 'modle_v1_';
 
 const ModleSummary = ({ username }) => {
   const [streak, setStreak] = useState(0);
-  const [lastPlayed, setLastPlayed] = useState(null);
 
   useEffect(() => {
     try {
@@ -22,7 +21,6 @@ const ModleSummary = ({ username }) => {
       const data = raw ? JSON.parse(raw) : null;
       if (data) {
         setStreak(data.streak || 0);
-        setLastPlayed(data.lastPlayed || null);
       }
     } catch (err) {
       // ignore
