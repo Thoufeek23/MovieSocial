@@ -8,6 +8,28 @@ import Avatar from './Avatar';
 
 const Navbar = () => {
   const { user } = useContext(AuthContext);
+  // derive modle streak for display in navbar (best-effort; prefer language-specific keys)
+  const getStreakForUser = () => {
+    try {
+      const prefix = 'modle_v1_' + (user?.username || 'guest');
+      const langs = ['English','Hindi','Tamil','Telugu','Kannada','Malayalam'];
+      for (const l of langs) {
+        const k = `${prefix}_${l}`;
+        const raw = localStorage.getItem(k);
+        if (raw) {
+          const d = JSON.parse(raw);
+          return d.streak || 0;
+        }
+      }
+      const base = localStorage.getItem(prefix);
+      if (base) {
+        const d = JSON.parse(base);
+        return d.streak || 0;
+      }
+    } catch (e) { /* ignore */ }
+    return 0;
+  };
+  const navbarStreak = getStreakForUser();
   const location = useLocation();
 
   // Only show the top/global search on the Home screen
@@ -36,7 +58,15 @@ const Navbar = () => {
         <div className="flex items-center space-x-3">
           {user ? (
             <>
-              <Avatar username={user.username} avatar={user.avatar} sizeClass="w-9 h-9" linkTo={`/profile/${user.username}`} className="border border-gray-600" />
+              <div className="flex items-center gap-2">
+                <Avatar username={user.username} avatar={user.avatar} sizeClass="w-9 h-9" linkTo={`/profile/${user.username}`} className="border border-gray-600" />
+                <div className="flex flex-col text-right">
+                  <Link to="/modle" title="Play Modle" aria-label="Open Modle" className="text-xs text-gray-200 font-semibold cursor-pointer">
+                    {navbarStreak} <span aria-hidden="true">🔥</span>
+                  </Link>
+                </div>
+                {/* badge removed per request */}
+              </div>
               {/* Logout moved to profile three-dots menu */}
             </>
           ) : (
