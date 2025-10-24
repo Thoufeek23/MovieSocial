@@ -7,7 +7,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 
 const STORAGE_KEY_PREFIX = 'modle_v1_';
-
 // Local date helpers (YYYY-MM-DD) using the user's local timezone
 function localYYYYMMDD(date = new Date()) {
   const y = date.getFullYear();
@@ -41,12 +40,6 @@ function pickPuzzleForDate(dateStr, puzzles) {
   return { answer: (p.answer || '').toUpperCase(), hints: p.hints || [], index };
 }
 
-function getStorageKeyForUser(user /* language intentionally ignored for per-user streaks */) {
-  // per-user key (streaks tracked across languages)
-  const id = user?.username || 'guest';
-  return `${STORAGE_KEY_PREFIX}${id}`;
-}
-
 function computeStreakFromHistory(history = {}, todayStr) {
   if (!history || typeof history !== 'object') return 0;
   let count = 0;
@@ -65,6 +58,13 @@ function computeStreakFromHistory(history = {}, todayStr) {
   }
   return count;
 }
+function getStorageKeyForUser(user /* language intentionally ignored for per-user streaks */) {
+  // per-user key (streaks tracked across languages)
+  const id = user?.username || 'guest';
+  return `${STORAGE_KEY_PREFIX}${id}`;
+}
+
+
 
 const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
   const { user } = useContext(AuthContext);
