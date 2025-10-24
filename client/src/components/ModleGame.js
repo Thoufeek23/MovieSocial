@@ -8,9 +8,23 @@ import axios from 'axios';
 
 const STORAGE_KEY_PREFIX = 'modle_v1_';
 
+// Local date helpers (YYYY-MM-DD) using the user's local timezone
+function localYYYYMMDD(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function parseLocalDate(dateStr) {
+  const parts = String(dateStr).split('-').map(n => parseInt(n, 10));
+  if (parts.length !== 3 || parts.some(isNaN)) return new Date(dateStr);
+  return new Date(parts[0], parts[1] - 1, parts[2]);
+}
+
 function pickPuzzleForDate(dateStr, puzzles) {
-  // dateStr expected as 'YYYY-MM-DD'
-  const base = new Date(dateStr + 'T00:00:00Z');
+  // dateStr expected as 'YYYY-MM-DD' (local date)
+  const base = parseLocalDate(dateStr);
   const daysSinceEpoch = Math.floor(base.getTime() / (24 * 60 * 60 * 1000));
   const n = (puzzles && puzzles.length) ? puzzles.length : 1;
   let index = ((daysSinceEpoch % n) + n) % n;
@@ -27,19 +41,39 @@ function pickPuzzleForDate(dateStr, puzzles) {
   return { answer: (p.answer || '').toUpperCase(), hints: p.hints || [], index };
 }
 
-function getStorageKeyForUser(user, language = 'English') {
-  // if user present, namespace by username; otherwise global guest key
+function getStorageKeyForUser(user /* language intentionally ignored for per-user streaks */) {
+  // per-user key (streaks tracked across languages)
   const id = user?.username || 'guest';
-  // include language so each language has separate storage (streaks per language)
-  return `${STORAGE_KEY_PREFIX}${id}_${language}`;
+  return `${STORAGE_KEY_PREFIX}${id}`;
+}
+
+function computeStreakFromHistory(history = {}, todayStr) {
+  if (!history || typeof history !== 'object') return 0;
+  let count = 0;
+  let d = todayStr;
+  // walk backwards day-by-day while there's a correct entry (use local dates)
+  while (true) {
+    const entry = history[d];
+    if (entry && entry.correct) {
+      count += 1;
+      const prev = parseLocalDate(d);
+      prev.setDate(prev.getDate() - 1);
+      d = localYYYYMMDD(prev);
+    } else {
+      break;
+    }
+  }
+  return count;
 }
 
 const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
   const { user } = useContext(AuthContext);
   // determine today's date string in YYYY-MM-DD
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localYYYYMMDD();
   const puzzles = propPuzzles && propPuzzles.length ? propPuzzles : defaultPuzzles;
-  const [puzzle] = useState(() => ({ ...pickPuzzleForDate(todayStr, puzzles), date: todayStr }));
+  // use today's date only in production
+  const effectiveDate = todayStr;
+  const [puzzle] = useState(() => ({ ...pickPuzzleForDate(effectiveDate, puzzles), date: effectiveDate }));
   // prepare normalized answer and fuzzy threshold for rendering and matching
   const normAnswer = normalizeTitle(puzzle.answer || '');
   const fuzzyThreshold = Math.max(2, Math.ceil((normAnswer.length || 0) * 0.2));
@@ -53,18 +87,18 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
 
   useEffect(() => {
     try {
-  const key = getStorageKeyForUser(user, language);
+  const key = getStorageKeyForUser(user);
       const raw = localStorage.getItem(key);
       const data = raw ? JSON.parse(raw) : { lastPlayed: null, streak: 0, history: {} };
-      const today = puzzle.date;
-      if (data.lastPlayed === today && data.history && data.history[today]) {
+      const today = effectiveDate;
+      if (data.history && data.history[today]) {
         setTodayPlayed(data.history[today]);
         setGuesses(data.history[today].guesses || []);
-        // reveal hints proportional to previous guesses (at least 1)
         const prevGuesses = (data.history[today].guesses || []).length;
         setRevealedHints(Math.min(maxReveal, Math.max(1, prevGuesses + 1)));
       }
-      setStreak(data.streak || 0);
+      const computed = computeStreakFromHistory(data.history || {}, effectiveDate);
+      setStreak(computed || 0);
     } catch (err) {
       console.error('Failed to load Modle state', err);
     }
@@ -77,22 +111,25 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
           if (res && res.data) {
             const server = res.data;
             // Use server data as source-of-truth; but keep local history entries not present on server
-            const key = getStorageKeyForUser(user, language);
+            const key = getStorageKeyForUser(user);
             const raw = localStorage.getItem(key);
             const local = raw ? JSON.parse(raw) : { lastPlayed: null, streak: 0, history: {} };
 
-            // merge local-only dates into server history if server missing them (keep server priority)
-            const mergedHistory = { ...(server.history || {}) };
-            Object.keys(local.history || {}).forEach(d => {
-              if (!mergedHistory[d]) mergedHistory[d] = local.history[d];
+            // Merge server history into local history (do NOT let server per-language streak overwrite per-user streak)
+            const mergedHistory = { ...(local.history || {}) };
+            Object.keys(server.history || {}).forEach(d => {
+              if (!mergedHistory[d]) mergedHistory[d] = server.history[d];
             });
 
-            const newData = { lastPlayed: server.lastPlayed, streak: server.streak || 0, history: mergedHistory };
+            // Compute per-user streak from merged history
+            const mergedLastPlayed = Object.keys(mergedHistory).length ? Object.keys(mergedHistory).sort().pop() : null;
+            const computedStreak = computeStreakFromHistory(mergedHistory, effectiveDate);
+            const newData = { lastPlayed: mergedLastPlayed, streak: computedStreak, history: mergedHistory };
             localStorage.setItem(key, JSON.stringify(newData));
 
-            // if server has today's result, reflect it
-            const today = puzzle.date;
-            if (newData.lastPlayed === today && newData.history && newData.history[today]) {
+            // reflect today's result if present
+            const today = effectiveDate;
+            if (newData.history && newData.history[today]) {
               setTodayPlayed(newData.history[today]);
               setGuesses(newData.history[today].guesses || []);
               const prevGuesses = (newData.history[today].guesses || []).length;
@@ -106,17 +143,29 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
         // console.debug('Modle server sync skipped', e && e.message ? e.message : e);
       }
     })();
-  }, [puzzle, user, maxReveal, language]);
+  }, [puzzle, user, maxReveal, language, effectiveDate]);
 
-  const saveState = (newState) => {
+    const saveState = (newState) => {
     try {
-      const key = getStorageKeyForUser(user, language);
+      const key = getStorageKeyForUser(user);
       const raw = localStorage.getItem(key);
       const data = raw ? JSON.parse(raw) : { lastPlayed: null, streak: 0, history: {} };
+      // merge histories properly so callers may pass only { history } and not clobber other fields
       const merged = { ...data, ...newState };
+      if (data.history || newState.history) {
+        merged.history = { ...(data.history || {}), ...(newState.history || {}) };
+      }
+      // Recompute streak from merged history if history updated
+      if (merged.history) {
+        merged.streak = computeStreakFromHistory(merged.history, effectiveDate);
+        // recompute lastPlayed
+        merged.lastPlayed = Object.keys(merged.history).length ? Object.keys(merged.history).sort().pop() : merged.lastPlayed;
+      }
       localStorage.setItem(key, JSON.stringify(merged));
+      return merged;
     } catch (err) {
       console.error('Failed to save Modle state', err);
+      return null;
     }
   };
 
@@ -149,30 +198,20 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
   // threshold rules: allow distance up to 2 or 20% of answer length (whichever is larger)
   const threshold = Math.max(2, Math.ceil(normAnswer.length * 0.2));
   const isCorrect = dist <= threshold;
-    const today = puzzle.date;
+    const today = effectiveDate;
 
-  const key = getStorageKeyForUser(user, language);
+  const key = getStorageKeyForUser(user);
     const raw = localStorage.getItem(key);
     const data = raw ? JSON.parse(raw) : { lastPlayed: null, streak: 0, history: {} };
-
-    let newStreak = data.streak || 0;
-    // if correct and lastPlayed was yesterday (simple day-diff by date string), increment, else reset to 1
-    if (isCorrect) {
-      const prevDate = data.lastPlayed;
-      // simplistic continuity check: if prevDate === yesterdayString then increment
-      const yesterday = new Date(new Date(today).getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      if (prevDate === yesterday) newStreak = (data.streak || 0) + 1;
-      else newStreak = 1;
-    }
 
     const newHistory = { ...(data.history || {}) };
     newHistory[today] = { date: today, correct: isCorrect, guesses: newGuesses };
 
-    const newData = { lastPlayed: today, streak: newStreak, history: newHistory };
-    saveState(newData);
+    const newData = { lastPlayed: today, history: newHistory };
+  const merged = saveState(newData) || newData;
 
     setTodayPlayed(newHistory[today]);
-    setStreak(newStreak);
+    setStreak(merged.streak || computeStreakFromHistory(newHistory, today));
 
     if (isCorrect) {
       const note = dist > 0 ? ' (accepted with minor typo)' : '';
@@ -180,10 +219,10 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
       // Sync result to server if user is authenticated
       (async () => {
         try {
-          if (user && localStorage.getItem('token')) {
-            const token = localStorage.getItem('token');
-            await axios.post('/api/users/modle/result', { date: today, language, correct: true, guesses: newGuesses }, { headers: { Authorization: `Bearer ${token}` } });
-          }
+            if (user && localStorage.getItem('token')) {
+              const token = localStorage.getItem('token');
+              await axios.post('/api/users/modle/result', { date: today, language, correct: true, guesses: newGuesses }, { headers: { Authorization: `Bearer ${token}` } });
+            }
         } catch (e) {
           // non-fatal: server sync failed, local state remains
           // console.debug('Failed to sync Modle result to server', e && e.message ? e.message : e);
@@ -207,21 +246,7 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
     setGuess('');
   };
 
-  const resetForTesting = () => {
-    // helper for dev: clear today's play for this user
-    try {
-  const key = getStorageKeyForUser(user, language);
-  const raw = localStorage.getItem(key);
-  const data = raw ? JSON.parse(raw) : { lastPlayed: null, streak: 0, history: {} };
-  if (data.history) delete data.history[puzzle.date];
-  if (data.lastPlayed === puzzle.date) data.lastPlayed = null;
-  saveState(data);
-      setTodayPlayed(null);
-      setGuesses([]);
-      setRevealedHints(1);
-      toast('Reset today\'s result (dev)');
-    } catch (err) { console.error(err); }
-  };
+  // reset helper removed (dev/testing-only)
 
   return (
     <div className="bg-card p-4 rounded-md max-w-2xl mx-auto">
@@ -333,8 +358,6 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
       </div>
 
       <div className="mt-4 flex items-center gap-2">
-        <button onClick={resetForTesting} className="btn btn-ghost text-sm">Reset today (dev)</button>
-        {/* --- Shortened Note --- */}
         <div className="text-xs text-gray-500">Note: Puzzles are placeholders in source.</div>
       </div>
     </div>

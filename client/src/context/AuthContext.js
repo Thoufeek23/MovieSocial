@@ -1,4 +1,5 @@
 import React, { createContext, useReducer, useState } from 'react';
+// jwt-decode exports a named function 'jwtDecode'
 import { jwtDecode } from 'jwt-decode';
 
 const initialState = {

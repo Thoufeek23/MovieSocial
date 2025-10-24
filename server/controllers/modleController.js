@@ -41,7 +41,20 @@ const postModleResult = async (req, res) => {
 
     // Determine new streak value
     const prevDate = user.modle[language].lastPlayed;
-    const yesterday = new Date(new Date(date).getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    // Parse incoming date (expected 'YYYY-MM-DD') as a local date (avoid timezone shifts)
+    let yesterday = null;
+    try {
+      const parts = String(date).split('-').map(n => parseInt(n, 10));
+      if (parts.length === 3 && parts.every(p => !Number.isNaN(p))) {
+        const parsed = new Date(parts[0], parts[1] - 1, parts[2]); // local date
+        const yd = new Date(parsed.getTime() - 24 * 60 * 60 * 1000);
+        yesterday = `${yd.getFullYear()}-${String(yd.getMonth() + 1).padStart(2, '0')}-${String(yd.getDate()).padStart(2, '0')}`;
+      }
+    } catch (e) {
+      // fallback to the old UTC-based calculation if parsing fails
+      yesterday = new Date(new Date(date).getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    }
+
     let newStreak = user.modle[language].streak || 0;
     if (correct) {
       if (prevDate === yesterday) newStreak = (user.modle[language].streak || 0) + 1;

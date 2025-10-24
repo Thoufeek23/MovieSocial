@@ -7,20 +7,26 @@ const ModleSummary = ({ username }) => {
 
   useEffect(() => {
     try {
-      // prefer user-scoped key; language-specific keys are stored by ModleGame as '<prefix><username>_<language>'
+      // read per-user key and compute streak from history
       const baseKey = STORAGE_KEY_PREFIX + (username || 'guest');
-      // if there is a language-suffixed key, prefer that (best-effort: check common languages)
-      const languages = ['English','Hindi','Tamil','Telugu','Kannada','Malayalam'];
-      let found = null;
-      for (const lang of languages) {
-        const k = `${baseKey}_${lang}`;
-        const r = localStorage.getItem(k);
-        if (r) { found = r; break; }
-      }
-      const raw = found || localStorage.getItem(baseKey);
+      const raw = localStorage.getItem(baseKey);
       const data = raw ? JSON.parse(raw) : null;
-      if (data) {
-        setStreak(data.streak || 0);
+      if (data && data.history) {
+        let count = 0;
+        // compute using local dates
+        const today = new Date();
+        let d = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        while (true) {
+          const entry = data.history[d];
+          if (entry && entry.correct) {
+            count += 1;
+            const parts = d.split('-').map(n => parseInt(n, 10));
+            const prev = new Date(parts[0], parts[1] - 1, parts[2]);
+            prev.setDate(prev.getDate() - 1);
+            d = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}-${String(prev.getDate()).padStart(2, '0')}`;
+          } else break;
+        }
+        setStreak(count);
       }
     } catch (err) {
       // ignore

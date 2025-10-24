@@ -26,73 +26,21 @@ const ModlePage = () => {
     // check if user already chose a language today
     try {
       const raw = localStorage.getItem(storageKey);
-      const today = new Date().toISOString().slice(0, 10);
+      // local date YYYY-MM-DD
+      const d = new Date();
+      const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       if (raw) {
         const obj = JSON.parse(raw);
         if (obj && obj.date === today && obj.lang && obj.lang !== chosen) {
-          const isDev = process.env.NODE_ENV === 'development';
-          if (!isDev) {
-            // In production do not allow switching — show an app-consistent toast
-            toast.error(`You already played in ${obj.lang} today. You cannot switch languages until tomorrow.`);
-            return;
-          }
-
-          // In development allow override but use a styled confirmation toast
-          const confirmId = toast.custom((t) => (
-            // --- Improved Toast Styling ---
-            <div 
-              className={`
-                bg-card border border-gray-700 rounded-lg shadow-xl p-4 max-w-sm w-full
-                transition-all duration-300 ease-in-out
-                ${t.visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
-              `}
-            >
-              <div className="flex items-start gap-3">
-                {/* Optional: Add an icon */}
-                <div className="flex-shrink-0 pt-0.5">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 3.001-1.742 3.001H4.42c-1.53 0-2.493-1.667-1.743-3.001l5.58-9.92zM10 13a1 1 0 110-2 1 1 0 010 2zm-1.75-5.75a.75.75 0 00-1.5 0v4a.75.75 0 001.5 0v-4z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                {/* Message */}
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-white">Already Played Today</p>
-                  <p className="mt-1 text-sm text-gray-400">
-                    You already played in <strong>{obj.lang}</strong>. Switch to <strong>{chosen}</strong> for testing?
-                  </p>
-                </div>
-              </div>
-              {/* Buttons */}
-              <div className="mt-4 flex gap-3 justify-end border-t border-gray-700 pt-3">
-                <button 
-                  onClick={() => toast.dismiss(confirmId)} 
-                  className="px-4 py-2 rounded-md bg-gray-700 text-sm font-medium text-gray-200 hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-card focus:ring-gray-500"
-                >
-                  Cancel
-                </button>
-                <button 
-                  onClick={() => {
-                    toast.dismiss(confirmId);
-                    try {
-                      localStorage.setItem(storageKey, JSON.stringify({ date: today, lang: chosen }));
-                    } catch (err) { /* ignore */ }
-                    navigate(`/modle/play?lang=${encodeURIComponent(chosen)}`);
-                  }} 
-                  className="px-4 py-2 rounded-md bg-primary text-sm font-medium text-primary-foreground hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-card focus:ring-primary" // Use theme colors
-                >
-                  Continue
-                </button>
-              </div>
-            </div>
-            // --- End Improved Styling ---
-          ));
+          // enforce in production: cannot switch languages until tomorrow
+          toast.error(`You already played in ${obj.lang} today. You cannot switch languages until tomorrow.`);
           return;
         }
       }
 
       // save choice for today and proceed to play page
-      localStorage.setItem(storageKey, JSON.stringify({ date: today, lang: chosen }));
-      navigate(`/modle/play?lang=${encodeURIComponent(chosen)}`);
+  localStorage.setItem(storageKey, JSON.stringify({ date: today, lang: chosen }));
+  navigate(`/modle/play?lang=${encodeURIComponent(chosen)}`);
     } catch (err) {
       console.error('Failed to save language selection', err);
       navigate(`/modle/play?lang=${encodeURIComponent(chosen)}`);

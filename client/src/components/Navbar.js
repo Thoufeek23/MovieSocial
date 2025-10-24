@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import InstantSearchBar from './InstantSearchBar';
@@ -8,28 +8,50 @@ import Avatar from './Avatar';
 
 const Navbar = () => {
   const { user } = useContext(AuthContext);
-  // derive modle streak for display in navbar (best-effort; prefer language-specific keys)
-  const getStreakForUser = () => {
+  // derive modle streak for display in navbar (per-user). Prefer server value when available.
+  const [navbarStreak, setNavbarStreak] = useState(() => {
     try {
       const prefix = 'modle_v1_' + (user?.username || 'guest');
-      const langs = ['English','Hindi','Tamil','Telugu','Kannada','Malayalam'];
-      for (const l of langs) {
-        const k = `${prefix}_${l}`;
-        const raw = localStorage.getItem(k);
-        if (raw) {
-          const d = JSON.parse(raw);
-          return d.streak || 0;
+      const raw = localStorage.getItem(prefix);
+      const data = raw ? JSON.parse(raw) : null;
+      if (!data || !data.history) return 0;
+      // compute streak by walking backwards from today (local timezone)
+      let count = 0;
+      const today = new Date();
+      let d = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      while (true) {
+        const entry = data.history[d];
+        if (entry && entry.correct) {
+          count += 1;
+          const parts = d.split('-').map(n => parseInt(n, 10));
+          const prev = new Date(parts[0], parts[1] - 1, parts[2]);
+          prev.setDate(prev.getDate() - 1);
+          d = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}-${String(prev.getDate()).padStart(2, '0')}`;
+        } else break;
+      }
+      return count;
+    } catch (e) { return 0; }
+  });
+
+  useEffect(() => {
+    let didCancel = false;
+    (async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        // fetch server per-language streak (prefer server as single source of truth)
+        const axios = (await import('axios')).default;
+        const res = await axios.get(`/api/users/modle/status?language=${encodeURIComponent('English')}`, { headers: { Authorization: `Bearer ${token}` } });
+        if (!didCancel && res && res.data) {
+          const s = parseInt(res.data.streak || 0, 10) || 0;
+          setNavbarStreak(s);
         }
+      } catch (e) {
+        // ignore and keep local value
       }
-      const base = localStorage.getItem(prefix);
-      if (base) {
-        const d = JSON.parse(base);
-        return d.streak || 0;
-      }
-    } catch (e) { /* ignore */ }
-    return 0;
-  };
-  const navbarStreak = getStreakForUser();
+    })();
+    return () => { didCancel = true; };
+  }, [user]);
   const location = useLocation();
 
   // Only show the top/global search on the Home screen
