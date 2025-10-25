@@ -8,30 +8,8 @@ import Avatar from './Avatar';
 
 const Navbar = () => {
   const { user } = useContext(AuthContext);
-  // derive modle streak for display in navbar (per-user). Prefer server value when available.
-  const [navbarStreak, setNavbarStreak] = useState(() => {
-    try {
-      const prefix = 'modle_v1_' + (user?.username || 'guest');
-      const raw = localStorage.getItem(prefix);
-      const data = raw ? JSON.parse(raw) : null;
-      if (!data || !data.history) return 0;
-      // compute streak by walking backwards from today (local timezone)
-      let count = 0;
-      const today = new Date();
-      let d = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-      while (true) {
-        const entry = data.history[d];
-        if (entry && entry.correct) {
-          count += 1;
-          const parts = d.split('-').map(n => parseInt(n, 10));
-          const prev = new Date(parts[0], parts[1] - 1, parts[2]);
-          prev.setDate(prev.getDate() - 1);
-          d = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}-${String(prev.getDate()).padStart(2, '0')}`;
-        } else break;
-      }
-      return count;
-    } catch (e) { return 0; }
-  });
+  // derive modle streak for display in navbar (per-user). Server is source-of-truth for authenticated users.
+  const [navbarStreak, setNavbarStreak] = useState(0);
 
   useEffect(() => {
     let didCancel = false;
@@ -39,15 +17,29 @@ const Navbar = () => {
       try {
         const token = localStorage.getItem('token');
         if (!token) return;
-        // fetch server per-language streak (prefer server as single source of truth)
-        const axios = (await import('axios')).default;
-        const res = await axios.get(`/api/users/modle/status?language=${encodeURIComponent('English')}`, { headers: { Authorization: `Bearer ${token}` } });
-        if (!didCancel && res && res.data) {
-          const s = parseInt(res.data.streak || 0, 10) || 0;
-          setNavbarStreak(s);
-        }
+  const axios = (await import('axios')).default;
+  // Prefer server-provided global streak if available, fallback to per-language aggregation
+  const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://localhost:5001';
+  const apiBase = `${apiRoot}/api`;
+  try {
+    const g = await axios.get(`${apiBase}/users/modle/status?language=global`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data).catch(() => null);
+    if (didCancel) return;
+    if (g && typeof g.streak === 'number') {
+      setNavbarStreak(g.streak || 0);
+      return;
+    }
+  } catch (e) {
+    // continue to per-language fallback
+  }
+  const languages = ['English', 'Hindi', 'Tamil', 'Telugu', 'Kannada', 'Malayalam'];
+  const promises = languages.map(lang => axios.get(`${apiBase}/users/modle/status?language=${encodeURIComponent(lang)}`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data).catch(() => null));
+        const results = await Promise.all(promises);
+        if (didCancel) return;
+        const streaks = results.map(r => (r && typeof r.streak === 'number') ? r.streak : 0);
+        const maxStreak = streaks.length ? Math.max(...streaks) : 0;
+        setNavbarStreak(maxStreak || 0);
       } catch (e) {
-        // ignore and keep local value
+        // ignore and keep default 0
       }
     })();
     return () => { didCancel = true; };
