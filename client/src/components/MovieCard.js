@@ -5,7 +5,7 @@ import * as api from '../api';
 const MovieCard = ({ movie, showRating, showDelete = false, onDelete }) => {
   const IMG_BASE_URL = 'https://image.tmdb.org/t/p/w500';
 
-  // Small inner component to show the average rating from our app's reviews
+  // Small inner component to show the Movie Social rating using the server-side stats endpoint
   const SocialRating = ({ movieId }) => {
     const [avg, setAvg] = useState(null);
     const [count, setCount] = useState(0);
@@ -14,17 +14,17 @@ const MovieCard = ({ movie, showRating, showDelete = false, onDelete }) => {
       let mounted = true;
       (async () => {
         try {
-          const res = await api.getReviewsForMovie(movieId);
-          const reviews = res.data || [];
+          // Use the stats endpoint which returns the weighted movieSocialRating and reviewCount
+          const res = await api.getMovieStats(movieId);
+          const data = res.data || {};
           if (!mounted) return;
-          if (reviews.length === 0) {
+          if (typeof data.movieSocialRating === 'undefined' || data.movieSocialRating === null) {
             setAvg(null);
-            setCount(0);
+            setCount(data.reviewCount || 0);
             return;
           }
-          const sum = reviews.reduce((s, r) => s + (Number(r.rating) || 0), 0);
-          setAvg((sum / reviews.length).toFixed(1));
-          setCount(reviews.length);
+          setAvg(Number(data.movieSocialRating).toFixed(1));
+          setCount(data.reviewCount || 0);
         } catch (err) {
           console.error('Failed to load social rating', err);
         }
