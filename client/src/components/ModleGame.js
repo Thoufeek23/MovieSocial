@@ -6,7 +6,11 @@ import { normalizeTitle, levenshtein } from '../utils/fuzzy';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 
-const STORAGE_KEY_PREFIX = 'modle_v1_';
+// API root (mirrors client/src/api/index.js behavior)
+const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://localhost:5001';
+const apiBase = `${apiRoot}/api`;
+
+// Note: localStorage usage for modle state removed. Server is the source-of-truth for authenticated users.
 // Local date helpers (YYYY-MM-DD) using the user's local timezone
 function localYYYYMMDD(date = new Date()) {
   const y = date.getFullYear();
@@ -58,11 +62,7 @@ function computeStreakFromHistory(history = {}, todayStr) {
   }
   return count;
 }
-function getStorageKeyForUser(user /* language intentionally ignored for per-user streaks */) {
-  // per-user key (streaks tracked across languages)
-  const id = user?.username || 'guest';
-  return `${STORAGE_KEY_PREFIX}${id}`;
-}
+// no localStorage key helpers — we no longer persist modle state in localStorage
 
 
 
@@ -86,88 +86,45 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
   const [revealedHints, setRevealedHints] = useState(1);
 
   useEffect(() => {
-    try {
-  const key = getStorageKeyForUser(user);
-      const raw = localStorage.getItem(key);
-      const data = raw ? JSON.parse(raw) : { lastPlayed: null, streak: 0, history: {} };
-      const today = effectiveDate;
-      if (data.history && data.history[today]) {
-        setTodayPlayed(data.history[today]);
-        setGuesses(data.history[today].guesses || []);
-        const prevGuesses = (data.history[today].guesses || []).length;
-        setRevealedHints(Math.min(maxReveal, Math.max(1, prevGuesses + 1)));
-      }
-      const computed = computeStreakFromHistory(data.history || {}, effectiveDate);
-      setStreak(computed || 0);
-    } catch (err) {
-      console.error('Failed to load Modle state', err);
-    }
-    // If user is signed in, attempt to fetch server-side status and merge
-    (async () => {
+    // If user is signed in, prefer server as the source-of-truth.
+    const load = async () => {
       try {
         if (user && localStorage.getItem('token')) {
           const token = localStorage.getItem('token');
-          const res = await axios.get(`/api/users/modle/status?language=${encodeURIComponent(language)}`, { headers: { Authorization: `Bearer ${token}` } });
+          const res = await axios.get(`${apiBase}/users/modle/status?language=${encodeURIComponent(language)}`, { headers: { Authorization: `Bearer ${token}` } });
           if (res && res.data) {
             const server = res.data;
-            // Use server data as source-of-truth; but keep local history entries not present on server
-            const key = getStorageKeyForUser(user);
-            const raw = localStorage.getItem(key);
-            const local = raw ? JSON.parse(raw) : { lastPlayed: null, streak: 0, history: {} };
-
-            // Merge server history into local history (do NOT let server per-language streak overwrite per-user streak)
-            const mergedHistory = { ...(local.history || {}) };
-            Object.keys(server.history || {}).forEach(d => {
-              if (!mergedHistory[d]) mergedHistory[d] = server.history[d];
-            });
-
-            // Compute per-user streak from merged history
-            const mergedLastPlayed = Object.keys(mergedHistory).length ? Object.keys(mergedHistory).sort().pop() : null;
-            const computedStreak = computeStreakFromHistory(mergedHistory, effectiveDate);
-            const newData = { lastPlayed: mergedLastPlayed, streak: computedStreak, history: mergedHistory };
-            localStorage.setItem(key, JSON.stringify(newData));
-
-            // reflect today's result if present
             const today = effectiveDate;
-            if (newData.history && newData.history[today]) {
-              setTodayPlayed(newData.history[today]);
-              setGuesses(newData.history[today].guesses || []);
-              const prevGuesses = (newData.history[today].guesses || []).length;
+            if (server.history && server.history[today]) {
+              setTodayPlayed(server.history[today]);
+              setGuesses(server.history[today].guesses || []);
+              const prevGuesses = (server.history[today].guesses || []).length;
               setRevealedHints(Math.min(maxReveal, Math.max(1, prevGuesses + 1)));
+            } else {
+              setTodayPlayed(null);
+              setGuesses([]);
+              setRevealedHints(1);
             }
-            setStreak(newData.streak || 0);
+            setStreak(server.streak || 0);
+            return;
           }
         }
       } catch (e) {
-        // non-fatal: if server unavailable, rely on localStorage
-        // console.debug('Modle server sync skipped', e && e.message ? e.message : e);
+        // server fetch failed; fall back to localStorage below
       }
-    })();
+
+      // No persistent localStorage fallback: for unauthenticated users or if server fetch fails
+      // we keep in-memory defaults so the UI remains functional but not persisted across reloads.
+      setTodayPlayed(null);
+      setGuesses([]);
+      setRevealedHints(1);
+      setStreak(0);
+    };
+
+    load();
   }, [puzzle, user, maxReveal, language, effectiveDate]);
 
-    const saveState = (newState) => {
-    try {
-      const key = getStorageKeyForUser(user);
-      const raw = localStorage.getItem(key);
-      const data = raw ? JSON.parse(raw) : { lastPlayed: null, streak: 0, history: {} };
-      // merge histories properly so callers may pass only { history } and not clobber other fields
-      const merged = { ...data, ...newState };
-      if (data.history || newState.history) {
-        merged.history = { ...(data.history || {}), ...(newState.history || {}) };
-      }
-      // Recompute streak from merged history if history updated
-      if (merged.history) {
-        merged.streak = computeStreakFromHistory(merged.history, effectiveDate);
-        // recompute lastPlayed
-        merged.lastPlayed = Object.keys(merged.history).length ? Object.keys(merged.history).sort().pop() : merged.lastPlayed;
-      }
-      localStorage.setItem(key, JSON.stringify(merged));
-      return merged;
-    } catch (err) {
-      console.error('Failed to save Modle state', err);
-      return null;
-    }
-  };
+  // No persistent saveState: persistence happens on the server for authenticated users.
 
   const handleSubmitGuess = (e) => {
     e.preventDefault();
@@ -191,41 +148,73 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
     // Reveal another hint after each submitted guess, up to the configured cap (maxReveal)
     setRevealedHints(prev => Math.min(maxReveal, prev + 1));
 
-  // Fuzzy matching: allow small typos. Normalize and compute Levenshtein distance.
-  const normAnswer = normalizeTitle(puzzle.answer);
-  const guessNorm = normalized;
-  const dist = levenshtein(guessNorm, normAnswer);
-  // threshold rules: allow distance up to 2 or 20% of answer length (whichever is larger)
-  const threshold = Math.max(2, Math.ceil(normAnswer.length * 0.2));
-  const isCorrect = dist <= threshold;
+    // Fuzzy matching: allow small typos. Normalize and compute Levenshtein distance.
+    const normAnswer = normalizeTitle(puzzle.answer);
+    const guessNorm = normalized;
+    const dist = levenshtein(guessNorm, normAnswer);
+    // threshold rules: allow distance up to 2 or 20% of answer length (whichever is larger)
+    const threshold = Math.max(2, Math.ceil(normAnswer.length * 0.2));
+    const isCorrect = dist <= threshold;
     const today = effectiveDate;
 
-  const key = getStorageKeyForUser(user);
-    const raw = localStorage.getItem(key);
-    const data = raw ? JSON.parse(raw) : { lastPlayed: null, streak: 0, history: {} };
+  // Build an in-memory history entry for the UI. For authenticated users we will persist
+  // immediately to the server and update the UI from the server response.
+  const newHistory = {};
+  newHistory[today] = { date: today, correct: isCorrect, guesses: newGuesses };
 
-    const newHistory = { ...(data.history || {}) };
-    newHistory[today] = { date: today, correct: isCorrect, guesses: newGuesses };
-
-    const newData = { lastPlayed: today, history: newHistory };
-  const merged = saveState(newData) || newData;
-
-    setTodayPlayed(newHistory[today]);
-    setStreak(merged.streak || computeStreakFromHistory(newHistory, today));
+  // Update UI immediately (in-memory)
+  setTodayPlayed(newHistory[today]);
+  setGuesses(newGuesses);
+  setStreak(computeStreakFromHistory(newHistory, today));
 
     if (isCorrect) {
       const note = dist > 0 ? ' (accepted with minor typo)' : '';
       toast.success(`Correct! The movie was ${puzzle.answer}.${note}`);
-      // Sync result to server if user is authenticated
+      // Sync result to server if user is authenticated. Update UI from server response (authoritative).
       (async () => {
         try {
-            if (user && localStorage.getItem('token')) {
-              const token = localStorage.getItem('token');
-              await axios.post('/api/users/modle/result', { date: today, language, correct: true, guesses: newGuesses }, { headers: { Authorization: `Bearer ${token}` } });
+          if (user && localStorage.getItem('token')) {
+            const token = localStorage.getItem('token');
+            const res = await axios.post(`${apiBase}/users/modle/result`, { date: today, language, correct: true, guesses: newGuesses }, { headers: { Authorization: `Bearer ${token}` } });
+            console.debug('POST /api/users/modle/result response:', res && res.data ? res.data : res);
+            if (res && res.data) {
+              const server = res.data;
+              // server may return either the legacy language object or a { language, global } shape
+              const langObj = server.language || server; // prefer server.language when present
+              const globalObj = server.global;
+              if (langObj && langObj.history && langObj.history[today]) {
+                setTodayPlayed(langObj.history[today]);
+                setGuesses(langObj.history[today].guesses || []);
+                setRevealedHints(Math.min(maxReveal, Math.max(1, (langObj.history[today].guesses || []).length + 1)));
+              }
+              // prefer global streak if provided by the server
+              if (globalObj && typeof globalObj.streak === 'number') setStreak(globalObj.streak || 0);
+              else setStreak((langObj && langObj.streak) || 0);
             }
+
+            // Extra safety: re-fetch authoritative server state after POST to avoid any visibility/race issues
+            try {
+              const check = await axios.get(`${apiBase}/users/modle/status?language=${encodeURIComponent(language)}`, { headers: { Authorization: `Bearer ${token}` } });
+              console.debug('GET after POST /api/users/modle/status:', check && check.data ? check.data : check);
+              if (check && check.data) {
+                const s = check.data;
+                const langObj = s.language || s;
+                const globalObj = s.global;
+                if (langObj && langObj.history && langObj.history[today]) {
+                  setTodayPlayed(langObj.history[today]);
+                  setGuesses(langObj.history[today].guesses || []);
+                  setRevealedHints(Math.min(maxReveal, Math.max(1, (langObj.history[today].guesses || []).length + 1)));
+                }
+                if (globalObj && typeof globalObj.streak === 'number') setStreak(globalObj.streak || 0);
+                else setStreak((langObj && langObj.streak) || 0);
+              }
+            } catch (err) {
+              console.debug('GET after POST failed:', err);
+            }
+          }
         } catch (e) {
           // non-fatal: server sync failed, local state remains
-          // console.debug('Failed to sync Modle result to server', e && e.message ? e.message : e);
+          console.debug('POST /api/users/modle/result error:', e);
         }
       })();
     } else {
@@ -234,10 +223,44 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
         try {
           if (user && localStorage.getItem('token')) {
             const token = localStorage.getItem('token');
-            await axios.post('/api/users/modle/result', { date: today, language, correct: false, guesses: newGuesses }, { headers: { Authorization: `Bearer ${token}` } });
+            const res = await axios.post(`${apiBase}/users/modle/result`, { date: today, language, correct: false, guesses: newGuesses }, { headers: { Authorization: `Bearer ${token}` } });
+            console.debug('POST /api/users/modle/result (incorrect) response:', res && res.data ? res.data : res);
+            if (res && res.data) {
+              const server = res.data;
+              const langObj = server.language || server;
+              const globalObj = server.global;
+              if (langObj && langObj.history && langObj.history[today]) {
+                setTodayPlayed(langObj.history[today]);
+                setGuesses(langObj.history[today].guesses || []);
+                setRevealedHints(Math.min(maxReveal, Math.max(1, (langObj.history[today].guesses || []).length + 1)));
+              }
+              if (globalObj && typeof globalObj.streak === 'number') setStreak(globalObj.streak || 0);
+              else setStreak((langObj && langObj.streak) || 0);
+            }
+
+            // Extra safety: re-fetch authoritative server state after POST
+            try {
+              const check = await axios.get(`${apiBase}/users/modle/status?language=${encodeURIComponent(language)}`, { headers: { Authorization: `Bearer ${token}` } });
+              console.debug('GET after POST (incorrect) /api/users/modle/status:', check && check.data ? check.data : check);
+              if (check && check.data) {
+                const s = check.data;
+                const langObj = s.language || s;
+                const globalObj = s.global;
+                if (langObj && langObj.history && langObj.history[today]) {
+                  setTodayPlayed(langObj.history[today]);
+                  setGuesses(langObj.history[today].guesses || []);
+                  setRevealedHints(Math.min(maxReveal, Math.max(1, (langObj.history[today].guesses || []).length + 1)));
+                }
+                if (globalObj && typeof globalObj.streak === 'number') setStreak(globalObj.streak || 0);
+                else setStreak((langObj && langObj.streak) || 0);
+              }
+            } catch (err) {
+              console.debug('GET after POST (incorrect) failed:', err);
+            }
           }
         } catch (e) {
           // ignore
+          console.debug('POST /api/users/modle/result (incorrect) error:', e);
         }
       })();
       toast.error('Not correct. Try again!');
