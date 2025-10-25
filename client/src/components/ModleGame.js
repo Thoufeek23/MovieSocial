@@ -4,11 +4,9 @@ import defaultPuzzles from '../data/modlePuzzles';
 import toast from 'react-hot-toast';
 import { normalizeTitle, levenshtein } from '../utils/fuzzy';
 import { motion, AnimatePresence } from 'framer-motion';
-import axios from 'axios';
+import * as api from '../api';
 
-// API root (mirrors client/src/api/index.js behavior)
-const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://localhost:5001';
-const apiBase = `${apiRoot}/api`;
+// API wrapper (centralized in client/src/api/index.js)
 
 // Note: localStorage usage for modle state removed. Server is the source-of-truth for authenticated users.
 // Local date helpers (YYYY-MM-DD) using the user's local timezone
@@ -90,8 +88,7 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
     const load = async () => {
       try {
         if (user && localStorage.getItem('token')) {
-          const token = localStorage.getItem('token');
-          const res = await axios.get(`${apiBase}/users/modle/status?language=${encodeURIComponent(language)}`, { headers: { Authorization: `Bearer ${token}` } });
+          const res = await api.getModleStatus(language);
           if (res && res.data) {
             const server = res.data;
             const today = effectiveDate;
@@ -173,9 +170,8 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
       // Sync result to server if user is authenticated. Update UI from server response (authoritative).
       (async () => {
         try {
-          if (user && localStorage.getItem('token')) {
-            const token = localStorage.getItem('token');
-            const res = await axios.post(`${apiBase}/users/modle/result`, { date: today, language, correct: true, guesses: newGuesses }, { headers: { Authorization: `Bearer ${token}` } });
+            if (user && localStorage.getItem('token')) {
+            const res = await api.postModleResult({ date: today, language, correct: true, guesses: newGuesses });
             console.debug('POST /api/users/modle/result response:', res && res.data ? res.data : res);
             if (res && res.data) {
               const server = res.data;
@@ -194,7 +190,7 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
 
             // Extra safety: re-fetch authoritative server state after POST to avoid any visibility/race issues
             try {
-              const check = await axios.get(`${apiBase}/users/modle/status?language=${encodeURIComponent(language)}`, { headers: { Authorization: `Bearer ${token}` } });
+              const check = await api.getModleStatus(language);
               console.debug('GET after POST /api/users/modle/status:', check && check.data ? check.data : check);
               if (check && check.data) {
                 const s = check.data;
@@ -221,9 +217,8 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
       // For incorrect guesses, also optionally send to server to keep history (non-blocking)
       (async () => {
         try {
-          if (user && localStorage.getItem('token')) {
-            const token = localStorage.getItem('token');
-            const res = await axios.post(`${apiBase}/users/modle/result`, { date: today, language, correct: false, guesses: newGuesses }, { headers: { Authorization: `Bearer ${token}` } });
+            if (user && localStorage.getItem('token')) {
+            const res = await api.postModleResult({ date: today, language, correct: false, guesses: newGuesses });
             console.debug('POST /api/users/modle/result (incorrect) response:', res && res.data ? res.data : res);
             if (res && res.data) {
               const server = res.data;
@@ -240,7 +235,7 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
 
             // Extra safety: re-fetch authoritative server state after POST
             try {
-              const check = await axios.get(`${apiBase}/users/modle/status?language=${encodeURIComponent(language)}`, { headers: { Authorization: `Bearer ${token}` } });
+              const check = await api.getModleStatus(language);
               console.debug('GET after POST (incorrect) /api/users/modle/status:', check && check.data ? check.data : check);
               if (check && check.data) {
                 const s = check.data;

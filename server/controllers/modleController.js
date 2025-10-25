@@ -7,6 +7,25 @@ function ensure(obj, key, defaultVal) {
   return obj[key];
 }
 
+// Helpers to abstract over plain object or Mongoose Map for user.modle
+function modleGet(user, key) {
+  if (!user.modle) return undefined;
+  if (typeof user.modle.get === 'function') return user.modle.get(key);
+  return user.modle[key];
+}
+
+function modleSet(user, key, val) {
+  if (!user.modle) user.modle = {};
+  if (typeof user.modle.set === 'function') return user.modle.set(key, val);
+  user.modle[key] = val;
+}
+
+function modleKeys(user) {
+  if (!user.modle) return [];
+  if (typeof user.modle.keys === 'function') return Array.from(user.modle.keys());
+  return Object.keys(user.modle || {});
+}
+
 // GET /api/users/modle/status?language=English
 const getModleStatus = async (req, res) => {
   try {
@@ -14,11 +33,11 @@ const getModleStatus = async (req, res) => {
     const lang = (req.query.language || 'English');
     // support a special 'global' language which returns the union-by-date history
     if (lang && String(lang).toLowerCase() === 'global') {
-      const g = (user && user.modle && user.modle._global) ? user.modle._global : { lastPlayed: null, streak: 0, history: {} };
+      const g = modleGet(user, '_global') || { lastPlayed: null, streak: 0, history: {} };
       return res.json(g);
     }
 
-    const modle = (user && user.modle && user.modle[lang]) ? user.modle[lang] : { lastPlayed: null, streak: 0, history: {} };
+    const modle = modleGet(user, lang) || { lastPlayed: null, streak: 0, history: {} };
     res.json(modle);
   } catch (err) {
     logger.error('getModleStatus error', err);
@@ -35,18 +54,16 @@ const postModleResult = async (req, res) => {
 
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ msg: 'User not found' });
-
-    user.modle = user.modle || {};
-    user.modle[language] = user.modle[language] || { lastPlayed: null, streak: 0, history: {} };
+    // Ensure we handle both plain object and Mongoose Map for user.modle
+    let langObj = modleGet(user, language) || { lastPlayed: null, streak: 0, history: {} };
 
     // Prevent overwriting if result already recorded for this date
-    if (user.modle[language].history && user.modle[language].history[date]) {
-      // return current record
-      return res.json(user.modle[language]);
+    if (langObj.history && langObj.history[date]) {
+      return res.json(langObj);
     }
 
     // Determine new streak value
-    const prevDate = user.modle[language].lastPlayed;
+    const prevDate = langObj.lastPlayed;
     // Parse incoming date (expected 'YYYY-MM-DD') as a local date (avoid timezone shifts)
     let yesterday = null;
     try {
@@ -61,29 +78,30 @@ const postModleResult = async (req, res) => {
       yesterday = new Date(new Date(date).getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     }
 
-    let newStreak = user.modle[language].streak || 0;
+  let newStreak = langObj.streak || 0;
     if (correct) {
       if (prevDate === yesterday) newStreak = (user.modle[language].streak || 0) + 1;
       else newStreak = 1;
     }
 
-    // Save history for the date (language-specific)
-    user.modle[language].history = user.modle[language].history || {};
-    user.modle[language].history[date] = { date, correct, guesses };
-    user.modle[language].lastPlayed = date;
-    user.modle[language].streak = newStreak;
+  // Save history for the date (language-specific)
+  langObj.history = langObj.history || {};
+  langObj.history[date] = { date, correct, guesses };
+  langObj.lastPlayed = date;
+  langObj.streak = newStreak;
+  modleSet(user, language, langObj);
 
     // Recompute a global, union-by-date history across all languages and store it at user.modle._global
     try {
       const union = {};
-      const keys = Object.keys(user.modle || {});
+      const keys = modleKeys(user);
       keys.forEach(k => {
         if (!k || k === '_global') return;
-        const langObj = user.modle[k];
-        if (!langObj || !langObj.history) return;
-        Object.keys(langObj.history).forEach(d => {
+        const l = modleGet(user, k);
+        if (!l || !l.history) return;
+        Object.keys(l.history).forEach(d => {
           try {
-            const entry = langObj.history[d];
+            const entry = l.history[d];
             if (entry && entry.correct) {
               // mark the date as correct in the union; store one of the guesses if available
               union[d] = union[d] || { date: d, correct: true, guesses: entry.guesses || [] };
@@ -119,7 +137,7 @@ const postModleResult = async (req, res) => {
       const todayStr = date;
       const unionLastPlayed = Object.keys(union).length ? Object.keys(union).sort().pop() : null;
       const unionStreak = computeStreak(union, todayStr);
-      user.modle._global = { lastPlayed: unionLastPlayed, streak: unionStreak, history: union };
+      modleSet(user, '_global', { lastPlayed: unionLastPlayed, streak: unionStreak, history: union });
     } catch (e) {
       // if global aggregation fails, ignore and continue with language-specific save
     }
@@ -134,7 +152,8 @@ const postModleResult = async (req, res) => {
     await user.save();
 
     // Return both the language-specific and global objects so client can display the authoritative streak
-    res.json({ language: user.modle[language], global: user.modle._global });
+    const globalObj = modleGet(user, '_global');
+    res.json({ language: modleGet(user, language), global: globalObj });
   } catch (err) {
     logger.error('postModleResult error', err);
     res.status(500).json({ msg: 'Server Error' });

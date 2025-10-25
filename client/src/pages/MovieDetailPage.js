@@ -81,7 +81,17 @@ const MovieDetailPage = () => {
   };
 
   const handleEditReview = (review, event) => {
-    const rect = event.currentTarget.getBoundingClientRect();
+    // Compute bounding rect from the event target if available (caller provides event)
+    let rect = { top: 0, left: 0, width: 0, height: 0 };
+    try {
+      const el = event && (event.currentTarget || event.target);
+      if (el && typeof el.getBoundingClientRect === 'function') {
+        rect = el.getBoundingClientRect();
+      }
+    } catch (e) {
+      // ignore and fall back to default rect
+    }
+
     setModalOrigin({ top: rect.top, left: rect.left, width: rect.width, height: rect.height });
     setReviewToEdit(review);
     setIsModalOpen(true);
@@ -147,16 +157,16 @@ const MovieDetailPage = () => {
           <div className="flex-1 pt-24">
             <div className="flex items-center gap-4">
               <h1 className="text-4xl lg:text-5xl font-bold">{movie.title}</h1>
-              {(movie.imdbRating !== null && typeof movie.imdbRating !== 'undefined' && Number(movie.imdbRating) > 0) && (
-                <span className="text-sm bg-gray-700 text-yellow-300 px-2 py-1 rounded-lg font-semibold">{movie.imdbRating} <span className="text-xs text-gray-300">{(movie.imdbRatingSource && (movie.imdbRatingSource.toLowerCase().includes('omdb') || movie.imdbRatingSource.toLowerCase().includes('imdb'))) ? 'IMDb' : movie.imdbRatingSource || 'IMDb'}</span></span>
-              )}
+              {/* IMDb/TMDb rating removed - only Movie Social rating shown below */}
                 {/* Movie Social rating: average of user reviews in our app */}
                 {(() => {
                   if (movie && typeof movie.movieSocialRating !== 'undefined' && movie.movieSocialRating !== null) {
-                    return (
-                      <span className="text-sm bg-gray-700 text-green-300 px-2 py-1 rounded-lg font-semibold">★ {movie.movieSocialRating} <span className="text-xs text-gray-300">Movie Social • {movie.movieSocialCount ?? reviews.length}</span></span>
-                    );
-                  }
+                      return (
+                        <div className="mt-0">
+                          <span className="text-sm bg-gray-700 text-green-400 px-2 py-1 rounded-lg font-semibold">{Number(movie.movieSocialRating).toFixed(1)} <span className="text-xs text-gray-300">Movie Social • {movie.movieSocialCount ?? reviews.length}</span></span>
+                        </div>
+                      );
+                    }
 
                   if (reviews && reviews.length > 0) {
                     const adjustedSum = reviews.reduce((s, r) => {
@@ -171,9 +181,11 @@ const MovieDetailPage = () => {
                       return s + adjusted;
                     }, 0);
                     const weightedAvg = (adjustedSum / reviews.length);
-                    const displayAvg = weightedAvg.toFixed(1);
+                    const displayAvg = Number(weightedAvg.toFixed(1));
                     return (
-                      <span className="text-sm bg-gray-700 text-green-300 px-2 py-1 rounded-lg font-semibold">★ {displayAvg} <span className="text-xs text-gray-300">Movie Social • {reviews.length}</span></span>
+                      <div className="mt-0">
+                        <span className="text-sm bg-gray-700 text-green-400 px-2 py-1 rounded-lg font-semibold">{displayAvg.toFixed(1)} <span className="text-xs text-gray-300">Movie Social • {reviews.length}</span></span>
+                      </div>
                     );
                   }
                   return null;

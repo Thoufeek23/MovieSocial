@@ -2,6 +2,10 @@ const Review = require('../models/Review');
 const logger = require('../utils/logger');
 const badges = require('../utils/badges');
 
+// Simple in-memory TTL cache for movie stats to reduce aggregation load
+const statsCache = new Map(); // movieId -> { value: { movieSocialRating, reviewCount }, expires: Number }
+const STATS_TTL_MS = 30 * 1000; // 30 seconds
+
 // @desc    Create a new review
 // @route   POST /api/reviews
 const createReview = async (req, res) => {
@@ -31,6 +35,9 @@ const createReview = async (req, res) => {
         });
         const savedReview = await newReview.save();
     await savedReview.populate('user', 'username avatar _id badges');
+
+        // Invalidate cached stats for this movieId
+        try { statsCache.delete(String(movieId)); } catch (e) {}
 
         // Add this movie to the user's watched list and remove from watchlist if present
         try {
@@ -109,6 +116,15 @@ const getMovieReviews = async (req, res) => {
 const getMovieStats = async (req, res) => {
     try {
         const movieId = req.params.movieId;
+                // check in-memory cache first
+                try {
+                    const cached = statsCache.get(String(movieId));
+                    if (cached && cached.expires > Date.now()) {
+                        return res.json(cached.value);
+                    }
+                } catch (e) {
+                    // ignore cache errors
+                }
         // Aggregation pipeline:
         // 1) Match reviews for the movieId
         // 2) For each review, compute agreementFraction = avg(agreementVotes.value) if exists, otherwise 1
@@ -138,12 +154,16 @@ const getMovieStats = async (req, res) => {
 
         const result = await Review.aggregate(agg);
         if (!result || result.length === 0) {
-            return res.json({ movieSocialRating: null, reviewCount: 0 });
+            const out = { movieSocialRating: null, reviewCount: 0 };
+            try { statsCache.set(String(movieId), { value: out, expires: Date.now() + STATS_TTL_MS }); } catch (e) {}
+            return res.json(out);
         }
         const r = result[0];
         // Round to one decimal for client convenience
         const movieSocialRating = r.movieSocialAvg === null ? null : Number((r.movieSocialAvg).toFixed(1));
-        res.json({ movieSocialRating, reviewCount: r.reviewCount });
+        const out = { movieSocialRating, reviewCount: r.reviewCount };
+        try { statsCache.set(String(movieId), { value: out, expires: Date.now() + STATS_TTL_MS }); } catch (e) {}
+        res.json(out);
     } catch (error) {
         logger.error('getMovieStats error', error);
         res.status(500).json({ msg: 'Server Error' });
@@ -168,6 +188,8 @@ const updateReview = async (req, res) => {
         
         await review.save();
     await review.populate('user', 'username avatar _id badges');
+        // Invalidate cache for this movie
+        try { statsCache.delete(String(review.movieId)); } catch (e) {}
         res.json(review);
     } catch (error) {
         logger.error(error);
@@ -188,6 +210,9 @@ const deleteReview = async (req, res) => {
         }
 
         await Review.findByIdAndDelete(req.params.id);
+
+    // Invalidate cache for this movie
+    try { statsCache.delete(String(review.movieId)); } catch (e) {}
 
         res.json({ msg: 'Review removed' });
     } catch (error) {
@@ -221,7 +246,10 @@ const voteReview = async (req, res) => {
         await review.save();
         await review.populate('user', 'username avatar _id');
 
-        res.json(review);
+    // Invalidate cached stats for this movie because agreementVotes changed
+    try { statsCache.delete(String(review.movieId)); } catch (e) {}
+
+    res.json(review);
     } catch (error) {
         logger.error(error);
         res.status(500).json({ msg: 'Server Error' });

@@ -33,7 +33,14 @@ const MovieCard = ({ movie, showRating, showDelete = false, onDelete }) => {
     }, [movieId]);
 
     if (count === 0) return <div className="text-xs text-gray-400 mt-1">No ratings yet</div>;
-    return <div className="text-sm text-green-400 mt-1">★ {avg} (Movie Social • {count})</div>;
+    return (
+      <div className="mt-1">
+        <span className="inline-flex items-center h-4 gap-1 bg-gray-700 text-green-400 px-1 py-0 rounded-sm font-semibold text-xs leading-none">
+          <span className="font-semibold">{Number(avg).toFixed(1)}</span>
+          <span className="text-[10px] text-gray-300">Movie Social • {count}</span>
+        </span>
+      </div>
+    );
   };
 
   return (
@@ -67,13 +74,8 @@ const MovieCard = ({ movie, showRating, showDelete = false, onDelete }) => {
           <div className="p-4">
             <h3 className="font-bold text-lg truncate group-hover:text-green-400 transition-colors">{movie.title}</h3>
             <p className="text-gray-400">{movie.release_date?.substring(0, 4) || '—'}</p>
-            {showRating && (
-              movie.imdbRating
-                ? <p className="text-sm text-yellow-400 mt-1">★ {Number(movie.imdbRating).toFixed(1)} {(movie.imdbRatingSource && (movie.imdbRatingSource.toLowerCase().includes('omdb') || movie.imdbRatingSource.toLowerCase().includes('imdb'))) ? '(IMDb)' : `(${movie.imdbRatingSource || 'IMDb'})`}</p>
-                : (typeof movie.vote_average !== 'undefined' && <p className="text-sm text-yellow-400 mt-1">★ {Number(movie.vote_average).toFixed(1)} (TMDb)</p>)
-            )}
-            {/* Movie Social rating (average of user reviews) */}
-            {/** We'll fetch reviews for this movie id and compute average */}
+            {/* showRating (IMDb/TMDb) removed - using Movie Social rating only */}
+            {/* Movie Social rating (server-side weighted) */}
             {typeof movie.id !== 'undefined' && (
               <SocialRating movieId={movie.id} />
             )}
