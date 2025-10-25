@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import InstantSearchBar from './InstantSearchBar';
 import Avatar from './Avatar';
+import * as api from '../api';
 // Use only MS_logo.png as the navbar logo
 // post-related UI moved to sidebar; no inline post controls in navbar
 
@@ -17,22 +18,21 @@ const Navbar = () => {
       try {
         const token = localStorage.getItem('token');
         if (!token) return;
-  const axios = (await import('axios')).default;
-  // Prefer server-provided global streak if available, fallback to per-language aggregation
-  const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://localhost:5001';
-  const apiBase = `${apiRoot}/api`;
-  try {
-    const g = await axios.get(`${apiBase}/users/modle/status?language=global`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data).catch(() => null);
-    if (didCancel) return;
-    if (g && typeof g.streak === 'number') {
-      setNavbarStreak(g.streak || 0);
-      return;
-    }
-  } catch (e) {
-    // continue to per-language fallback
-  }
-  const languages = ['English', 'Hindi', 'Tamil', 'Telugu', 'Kannada', 'Malayalam'];
-  const promises = languages.map(lang => axios.get(`${apiBase}/users/modle/status?language=${encodeURIComponent(lang)}`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data).catch(() => null));
+
+        // Prefer server-provided global streak if available
+        try {
+          const g = await api.getModleStatus('global').then(r => r.data).catch(() => null);
+          if (didCancel) return;
+          if (g && typeof g.streak === 'number') {
+            setNavbarStreak(g.streak || 0);
+            return;
+          }
+        } catch (e) {
+          // fallback to per-language
+        }
+
+        const languages = ['English', 'Hindi', 'Tamil', 'Telugu', 'Kannada', 'Malayalam'];
+        const promises = languages.map(lang => api.getModleStatus(lang).then(r => r.data).catch(() => null));
         const results = await Promise.all(promises);
         if (didCancel) return;
         const streaks = results.map(r => (r && typeof r.streak === 'number') ? r.streak : 0);

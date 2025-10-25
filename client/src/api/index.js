@@ -71,3 +71,7 @@ export const fetchDiscussionsByUser = (username) => API.get(`/discussions/user/$
 // Leaderboard
 export const getLeaderboardGlobal = () => API.get('/stats/top-reviewers');
 export const getLeaderboardRegion = (region) => API.get(`/stats/top-reviewers/region/${encodeURIComponent(region)}`);
+
+// Modle (daily puzzle) endpoints
+export const getModleStatus = (language = 'English') => API.get(`/users/modle/status?language=${encodeURIComponent(language)}`);
+export const postModleResult = (payload) => API.post('/users/modle/result', payload);

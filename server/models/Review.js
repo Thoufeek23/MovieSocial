@@ -13,4 +13,7 @@ const ReviewSchema = new mongoose.Schema({
   agreementVotes: [{ user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, value: { type: Number } }],
 }, { timestamps: true });
 
+// Index movieId for faster lookups/aggregations per movie
+ReviewSchema.index({ movieId: 1 });
+
 module.exports = mongoose.model('Review', ReviewSchema);

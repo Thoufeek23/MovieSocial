@@ -21,8 +21,18 @@ const UserSchema = new mongoose.Schema({
   // Stored as objects so we can include metadata and awardedAt timestamps
   badges: [{ id: { type: String }, name: { type: String }, awardedAt: { type: Date } }],
   // Modle (daily movie puzzle) history and streaks stored per language
+  // Modle (daily movie puzzle) history and streaks stored per language
   // Structure: { <language>: { lastPlayed: 'YYYY-MM-DD', streak: Number, history: { 'YYYY-MM-DD': { date, correct, guesses } } } }
-  modle: { type: Object },
+  // Stored as a Map of language -> ModleEntry for better schema tracking in Mongoose
+  modle: {
+    type: Map,
+    of: new mongoose.Schema({
+      lastPlayed: { type: String, default: null },
+      streak: { type: Number, default: 0 },
+      history: { type: Map, of: new mongoose.Schema({ date: String, correct: Boolean, guesses: [String] }, { _id: false }), default: {} }
+    }, { _id: false }),
+    default: {}
+  },
   // Fields for password reset OTP
   resetOtpHash: { type: String },
   resetOtpExpires: { type: Date },

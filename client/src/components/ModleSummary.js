@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useContext } from 'react';
-import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
+import * as api from '../api';
 
 const ModleSummary = ({ username }) => {
   const [streak, setStreak] = useState(0);
@@ -20,15 +20,19 @@ const ModleSummary = ({ username }) => {
           const apiBase = `${apiRoot}/api`;
           // Prefer server-side global union when available
           try {
-            const res = await axios.get(`${apiBase}/users/modle/status?language=global`, { headers: { Authorization: `Bearer ${token}` } });
-            if (mounted && res && res.data && typeof res.data.streak === 'number') {
-              setStreak(res.data.streak || 0);
-              return;
+            try {
+              const res = await api.getModleStatus('global');
+              if (mounted && res && res.data && typeof res.data.streak === 'number') {
+                setStreak(res.data.streak || 0);
+                return;
+              }
+            } catch (e) {
+              // fallback to per-language polling if global not available
             }
           } catch (e) {
             // fallback to per-language polling if global not available
           }
-          const promises = languages.map(lang => axios.get(`${apiBase}/users/modle/status?language=${encodeURIComponent(lang)}`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data).catch(() => null));
+          const promises = languages.map(lang => api.getModleStatus(lang).then(r => r.data).catch(() => null));
           const results = await Promise.all(promises);
           const streaks = results.map(r => (r && typeof r.streak === 'number') ? r.streak : 0);
           const maxStreak = streaks.length ? Math.max(...streaks) : 0;
