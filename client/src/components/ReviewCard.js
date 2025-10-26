@@ -6,15 +6,32 @@ import { motion } from 'framer-motion';
 import BADGE_MAP from '../data/badges';
 import * as api from '../api';
 
-// A simple component to display non-interactive stars (responsive sizes)
-const DisplayStars = ({ rating }) => {
+// Display non-interactive stars supporting fractional values (e.g. 3.5).
+// Matches the interactive StarRating component's visual technique: a gray star glyph with an
+// absolutely-positioned yellow glyph overlay clipped to the percentage fill. This keeps visuals
+// consistent across the app and ensures half/full fills match exactly.
+const DisplayStars = ({ rating = 0 }) => {
+  const r = Number(rating) || 0;
+  const value = Math.max(0, Math.min(5, r));
+
   return (
-    <div className="flex items-center">
-      {[...Array(5)].map((_, index) => (
-        <span key={index} className={`text-lg md:text-xl ${index < rating ? 'text-yellow-400' : 'text-gray-600'}`}>
-          &#9733;
-        </span>
-      ))}
+    <div className="flex items-center" aria-hidden>
+      {[0, 1, 2, 3, 4].map((idx) => {
+        const val = value - idx; // e.g. for idx=2 and value=3.5 -> val=1.5
+        const pct = Math.max(0, Math.min(100, Math.round(val * 100))); // 0..100
+        const width = pct > 100 ? 100 : pct < 0 ? 0 : pct;
+        return (
+          <span key={idx} className="relative text-lg md:text-xl leading-none mr-1 flex-shrink-0">
+            <span className="text-gray-600">★</span>
+            <span
+              className="absolute left-0 top-0 overflow-hidden text-yellow-400"
+              style={{ width: `${width}%`, WebkitTextFillColor: 'currentColor' }}
+            >
+              ★
+            </span>
+          </span>
+        );
+      })}
     </div>
   );
 };
