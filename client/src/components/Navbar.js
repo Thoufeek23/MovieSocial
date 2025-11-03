@@ -1,6 +1,7 @@
 import React, { useContext, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+import { ModleContext } from '../context/ModleContext';
 import InstantSearchBar from './InstantSearchBar';
 import Avatar from './Avatar';
 import * as api from '../api';
@@ -9,6 +10,7 @@ import * as api from '../api';
 
 const Navbar = () => {
   const { user } = useContext(AuthContext);
+  const { global, refreshGlobal } = useContext(ModleContext);
   // derive modle streak for display in navbar (per-user). Server is source-of-truth for authenticated users.
   const [navbarStreak, setNavbarStreak] = useState(0);
 
@@ -21,14 +23,20 @@ const Navbar = () => {
 
         // Prefer server-provided global streak if available
         try {
-          const g = await api.getModleStatus('global').then(r => r.data).catch(() => null);
+          // Prefer ModleContext global if available
+          if (global && typeof global.streak === 'number') {
+            setNavbarStreak(global.streak || 0);
+            return;
+          }
+          // otherwise, try refreshing global from context
+          const g = await refreshGlobal();
           if (didCancel) return;
           if (g && typeof g.streak === 'number') {
             setNavbarStreak(g.streak || 0);
             return;
           }
         } catch (e) {
-          // fallback to per-language
+          // fallback to per-language polling
         }
 
         const languages = ['English', 'Hindi', 'Tamil', 'Telugu', 'Kannada', 'Malayalam'];
@@ -42,8 +50,27 @@ const Navbar = () => {
         // ignore and keep default 0
       }
     })();
-    return () => { didCancel = true; };
-  }, [user]);
+    // Listen for modle updates to refresh navbar streak immediately after a play
+    const handler = async (e) => {
+      try {
+        console.debug('modleUpdated event received in Navbar; fetching authoritative global...', e && e.detail);
+        // Always fetch authoritative global state from server to avoid races or stale event payloads
+        const g = await refreshGlobal();
+        if (g && typeof g.streak === 'number') {
+          setNavbarStreak(g.streak || 0);
+          return;
+        }
+        // As a fallback, try to use event payload if fetch failed
+        const payload = e && e.detail;
+        if (!payload) return;
+        const s = (payload.global && payload.global.streak != null) ? payload.global.streak : (payload.language && payload.language.streak != null ? payload.language.streak : null);
+        const num = (typeof s === 'number') ? s : (s ? Number(s) : 0);
+        if (!Number.isNaN(num)) setNavbarStreak(num || 0);
+      } catch (err) { console.debug('modleUpdated handler error in Navbar', err); }
+    };
+    window.addEventListener('modleUpdated', handler);
+    return () => { didCancel = true; window.removeEventListener('modleUpdated', handler); };
+  }, [user, global, refreshGlobal]);
   const location = useLocation();
 
   // Only show the top/global search on the Home screen
@@ -76,7 +103,7 @@ const Navbar = () => {
                 <Avatar username={user.username} avatar={user.avatar} sizeClass="w-9 h-9" linkTo={`/profile/${user.username}`} className="border border-gray-600" />
                 <div className="flex flex-col text-right">
                   <Link to="/modle" title="Play Modle" aria-label="Open Modle" className="text-xs text-gray-200 font-semibold cursor-pointer">
-                    {navbarStreak} <span aria-hidden="true">🔥</span>
+                    {(global && typeof global.streak === 'number') ? global.streak : navbarStreak} <span aria-hidden="true">🔥</span>
                   </Link>
                 </div>
                 {/* badge removed per request */}

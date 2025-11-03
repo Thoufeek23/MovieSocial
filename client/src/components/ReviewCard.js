@@ -116,7 +116,7 @@ const ReviewCard = ({ review, onEdit, onDelete }) => {
       initial={{ opacity: 0, y: 50, scale: 0.9 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, transition: { duration: 0.2 } }}
-      className="bg-gray-800 p-4 rounded-lg shadow-lg flex flex-col sm:flex-row gap-5 items-start"
+      className="w-full bg-gray-800 p-4 rounded-lg shadow-lg flex flex-col sm:flex-row gap-5 items-start"
     >
       <Link to={`/movie/${review.movieId}`}>
         <img
@@ -125,7 +125,7 @@ const ReviewCard = ({ review, onEdit, onDelete }) => {
           className="w-24 rounded-md hidden sm:block hover:opacity-80 transition-opacity flex-shrink-0"
         />
       </Link>
-      <div className="flex-1">
+  <div className="flex-1 min-w-0">
         <div className="flex justify-between items-start">
           <div>
             <h3 className="text-lg md:text-xl font-bold">

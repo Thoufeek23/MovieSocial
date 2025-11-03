@@ -25,7 +25,7 @@ const MovieCarousel = ({ title, movies, showRating = false }) => {
     <section className="relative">
       <h2 className="text-3xl font-bold mb-4">{title}</h2>
       <motion.div
-        className="flex overflow-x-auto space-x-4 pb-4 -mx-4 px-4 no-scrollbar"
+        className="flex overflow-x-auto space-x-4 pb-4 px-2 sm:px-4 no-scrollbar"
         variants={containerVariants}
         initial="hidden"
         animate="visible"

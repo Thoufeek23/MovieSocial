@@ -26,18 +26,54 @@ function modleKeys(user) {
   return Object.keys(user.modle || {});
 }
 
+// History helpers to work with either Map or plain object
+function historyGet(history, date) {
+  if (!history) return undefined;
+  if (typeof history.get === 'function') return history.get(date);
+  return history[date];
+}
+
+function historySet(history, date, val) {
+  if (!history) return;
+  if (typeof history.set === 'function') return history.set(date, val);
+  history[date] = val;
+}
+
+function getTodayUTC() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getYesterdayUTC(dateStr) {
+  const parts = String(dateStr).split('-').map(n => parseInt(n, 10));
+  if (parts.length !== 3 || parts.some(isNaN)) return null;
+  const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+  d.setUTCDate(d.getUTCDate() - 1);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
 // GET /api/users/modle/status?language=English
+// Returns authoritative modle status. Streaks are evaluated server-side using UTC days.
 const getModleStatus = async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('modle');
     const lang = (req.query.language || 'English');
     // support a special 'global' language which returns the union-by-date history
+    const today = getTodayUTC();
+
     if (lang && String(lang).toLowerCase() === 'global') {
       const g = modleGet(user, '_global') || { lastPlayed: null, streak: 0, history: {} };
+      // If the lastPlayed isn't today or yesterday, the displayed streak should be 0 (user missed a day)
+      if (!g.lastPlayed) return res.json({ ...g, streak: 0 });
+      const yesterday = getYesterdayUTC(today);
+      if (g.lastPlayed !== today && g.lastPlayed !== yesterday) return res.json({ ...g, streak: 0 });
       return res.json(g);
     }
 
     const modle = modleGet(user, lang) || { lastPlayed: null, streak: 0, history: {} };
+    // If user hasn't played today (and also didn't play yesterday), streak is considered 0 per requirement
+    if (!modle.lastPlayed) return res.json({ ...modle, streak: 0 });
+    const yesterday = getYesterdayUTC(today);
+    if (modle.lastPlayed !== today && modle.lastPlayed !== yesterday) return res.json({ ...modle, streak: 0 });
     res.json(modle);
   } catch (err) {
     logger.error('getModleStatus error', err);
@@ -49,49 +85,60 @@ const getModleStatus = async (req, res) => {
 // body: { date: 'YYYY-MM-DD', language: 'English', correct: boolean, guesses: [] }
 const postModleResult = async (req, res) => {
   try {
-    const { date, language = 'English', correct = false, guesses = [] } = req.body;
-    if (!date) return res.status(400).json({ msg: 'date is required' });
+    // Use server-side UTC date to prevent client-side tampering/refresh replay.
+    const today = getTodayUTC();
+    const { language = 'English', correct = false, guesses = [] } = req.body;
 
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ msg: 'User not found' });
+
     // Ensure we handle both plain object and Mongoose Map for user.modle
     let langObj = modleGet(user, language) || { lastPlayed: null, streak: 0, history: {} };
 
-    // Prevent overwriting if result already recorded for this date
-    if (langObj.history && langObj.history[date]) {
-      return res.json(langObj);
-    }
+    // Ensure history container
+    langObj.history = langObj.history || ({});
 
-    // Determine new streak value
-    const prevDate = langObj.lastPlayed;
-    // Parse incoming date (expected 'YYYY-MM-DD') as a local date (avoid timezone shifts)
-    let yesterday = null;
-    try {
-      const parts = String(date).split('-').map(n => parseInt(n, 10));
-      if (parts.length === 3 && parts.every(p => !Number.isNaN(p))) {
-        const parsed = new Date(parts[0], parts[1] - 1, parts[2]); // local date
-        const yd = new Date(parsed.getTime() - 24 * 60 * 60 * 1000);
-        yesterday = `${yd.getFullYear()}-${String(yd.getMonth() + 1).padStart(2, '0')}-${String(yd.getDate()).padStart(2, '0')}`;
+    // If an entry exists for today, allow updating it when turning an incorrect entry into a correct one
+    const existing = historyGet(langObj.history, today);
+    if (existing) {
+      // If already correct today, do not allow further changes
+      if (existing.correct) {
+        const globalObjExisting = modleGet(user, '_global');
+        return res.status(409).json({ msg: 'Already played today', language: langObj, global: globalObjExisting });
       }
-    } catch (e) {
-      // fallback to the old UTC-based calculation if parsing fails
-      yesterday = new Date(new Date(date).getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+      // Merge guesses (preserve existing guesses and add new ones)
+      const mergedGuesses = Array.from(new Set([...(existing.guesses || []), ...(guesses || [])]));
+      // If the new submission is correct, upgrade the entry; otherwise just update guesses
+      const newCorrect = existing.correct || !!correct;
+      historySet(langObj.history, today, { date: today, correct: newCorrect, guesses: mergedGuesses });
+    } else {
+      // No entry for today yet — create one
+      historySet(langObj.history, today, { date: today, correct: !!correct, guesses: guesses || [] });
     }
 
-  let newStreak = langObj.streak || 0;
-    if (correct) {
-      // If the previous play was exactly yesterday, increment the streak.
-      // Otherwise, the user missed a day — reset the streak to 0 per new requirement.
-      if (prevDate === yesterday) newStreak = (user.modle[language].streak || 0) + 1;
-      else newStreak = 0;
-    }
+    // Helper: compute consecutive correct-streak from history (UTC-aware)
+    const computeConsecutiveCorrect = (history = {}, todayStr) => {
+      if (!history || typeof history !== 'object') return 0;
+      let count = 0;
+      let d = todayStr;
+      while (true) {
+        const entry = historyGet(history, d);
+        if (entry && entry.correct) {
+          count += 1;
+          const prev = getYesterdayUTC(d);
+          if (!prev) break;
+          d = prev;
+        } else break;
+      }
+      return count;
+    };
 
-  // Save history for the date (language-specific)
-  langObj.history = langObj.history || {};
-  langObj.history[date] = { date, correct, guesses };
-  langObj.lastPlayed = date;
-  langObj.streak = newStreak;
-  modleSet(user, language, langObj);
+    // Recompute streak based on history (this handles upgrades from incorrect->correct correctly)
+    const newStreak = computeConsecutiveCorrect(langObj.history, today);
+    langObj.lastPlayed = today;
+    langObj.streak = newStreak;
+    modleSet(user, language, langObj);
 
     // Recompute a global, union-by-date history across all languages and store it at user.modle._global
     try {
@@ -101,17 +148,29 @@ const postModleResult = async (req, res) => {
         if (!k || k === '_global') return;
         const l = modleGet(user, k);
         if (!l || !l.history) return;
-        Object.keys(l.history).forEach(d => {
-          try {
-            const entry = l.history[d];
-            if (entry && entry.correct) {
-              // mark the date as correct in the union; store one of the guesses if available
-              union[d] = union[d] || { date: d, correct: true, guesses: entry.guesses || [] };
+        // history may be a Map or plain object; iterate accordingly
+        if (typeof l.history.keys === 'function') {
+          for (const d of l.history.keys()) {
+            try {
+              const entry = historyGet(l.history, d);
+              if (entry) {
+                // Preserve whether the entry was a correct solve so global streaks count correctly
+                union[d] = union[d] || { date: d, played: true, guesses: entry.guesses || [], correct: !!entry.correct };
+              }
+            } catch (e) {
+              // ignore malformed entries
             }
-          } catch (e) {
-            // ignore malformed entries
           }
-        });
+        } else {
+          Object.keys(l.history).forEach(d => {
+            try {
+              const entry = l.history[d];
+              if (entry) union[d] = union[d] || { date: d, played: true, guesses: entry.guesses || [], correct: !!entry.correct };
+            } catch (e) {
+              // ignore malformed
+            }
+          });
+        }
       });
 
       // helper to compute streak from union history using local date strings (YYYY-MM-DD)
@@ -123,20 +182,15 @@ const postModleResult = async (req, res) => {
           const entry = history[d];
           if (entry && entry.correct) {
             count += 1;
-            const parts = String(d).split('-').map(n => parseInt(n, 10));
-            if (parts.length !== 3 || parts.some(isNaN)) break;
-            const prev = new Date(parts[0], parts[1] - 1, parts[2]);
-            prev.setDate(prev.getDate() - 1);
-            const y = prev.getFullYear();
-            const m = String(prev.getMonth() + 1).padStart(2, '0');
-            const day = String(prev.getDate()).padStart(2, '0');
-            d = `${y}-${m}-${day}`;
+            const prev = getYesterdayUTC(d);
+            if (!prev) break;
+            d = prev;
           } else break;
         }
         return count;
       };
 
-      const todayStr = date;
+      const todayStr = today;
       const unionLastPlayed = Object.keys(union).length ? Object.keys(union).sort().pop() : null;
       const unionStreak = computeStreak(union, todayStr);
       modleSet(user, '_global', { lastPlayed: unionLastPlayed, streak: unionStreak, history: union });

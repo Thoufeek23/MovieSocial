@@ -1,6 +1,7 @@
 import React, { createContext, useReducer, useState } from 'react';
 // jwt-decode exports a named function 'jwtDecode'
 import { jwtDecode } from 'jwt-decode';
+import * as api from '../api';
 
 const initialState = {
   user: null,
@@ -46,6 +47,18 @@ function AuthProvider(props) {
       payload: user,
     });
     setJustLoggedIn(true); // Set the flag to trigger the animation
+    // After login, fetch authoritative modle status and broadcast so UI can update immediately
+    (async () => {
+      try {
+        if (typeof window !== 'undefined') {
+          const g = await api.getModleStatus('global').then(r => r.data).catch(() => null);
+          const payload = g ? { global: g } : null;
+          if (payload) window.dispatchEvent(new CustomEvent('modleUpdated', { detail: payload }));
+        }
+      } catch (e) {
+        // ignore
+      }
+    })();
   };
 
   // Allow updating the cached current user object (e.g., to refresh following list)
@@ -61,6 +74,16 @@ function AuthProvider(props) {
     } catch (e) {
       // ignore
     }
+    // Also refresh modle status for UI consumers
+    (async () => {
+      try {
+        if (typeof window !== 'undefined') {
+          const g = await api.getModleStatus('global').then(r => r.data).catch(() => null);
+          const payload = g ? { global: g } : null;
+          if (payload) window.dispatchEvent(new CustomEvent('modleUpdated', { detail: payload }));
+        }
+      } catch (e) { /* ignore */ }
+    })();
   };
 
   const logout = () => {

@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { normalizeTitle, levenshtein } from '../utils/fuzzy';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as api from '../api';
+import { ModleContext } from '../context/ModleContext';
 
 // API wrapper (centralized in client/src/api/index.js)
 
@@ -66,6 +67,7 @@ function computeStreakFromHistory(history = {}, todayStr) {
 
 const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
   const { user } = useContext(AuthContext);
+  const { updateFromServerPayload, refreshGlobal } = useContext(ModleContext);
   // determine today's date string in YYYY-MM-DD
   const todayStr = localYYYYMMDD();
   const puzzles = propPuzzles && propPuzzles.length ? propPuzzles : defaultPuzzles;
@@ -170,14 +172,17 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
       // Sync result to server if user is authenticated. Update UI from server response (authoritative).
       (async () => {
         try {
+            // prepare holders so we can dispatch an event after sync
+            let langObj = null;
+            let globalObj = null;
             if (user && localStorage.getItem('token')) {
             const res = await api.postModleResult({ date: today, language, correct: true, guesses: newGuesses });
             console.debug('POST /api/users/modle/result response:', res && res.data ? res.data : res);
             if (res && res.data) {
               const server = res.data;
               // server may return either the legacy language object or a { language, global } shape
-              const langObj = server.language || server; // prefer server.language when present
-              const globalObj = server.global;
+              langObj = server.language || server; // prefer server.language when present
+              globalObj = server.global;
               if (langObj && langObj.history && langObj.history[today]) {
                 setTodayPlayed(langObj.history[today]);
                 setGuesses(langObj.history[today].guesses || []);
@@ -194,8 +199,9 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
               console.debug('GET after POST /api/users/modle/status:', check && check.data ? check.data : check);
               if (check && check.data) {
                 const s = check.data;
-                const langObj = s.language || s;
-                const globalObj = s.global;
+                // update holders from authoritative GET
+                langObj = s.language || s;
+                globalObj = s.global;
                 if (langObj && langObj.history && langObj.history[today]) {
                   setTodayPlayed(langObj.history[today]);
                   setGuesses(langObj.history[today].guesses || []);
@@ -208,6 +214,33 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
               console.debug('GET after POST failed:', err);
             }
           }
+            // Notify other UI parts (navbar, profile) that modle state changed
+            try {
+              const eventDetail = { language: langObj || null, global: globalObj || null };
+              console.debug('Dispatching modleUpdated event from ModleGame:', eventDetail);
+              window.dispatchEvent(new CustomEvent('modleUpdated', { detail: eventDetail }));
+              // Also update centralized ModleContext so components read consistent state
+              try { updateFromServerPayload(eventDetail); } catch (e) { /* ignore */ }
+              // Fetch authoritative global state from server and update context/UI
+              try {
+                const g = await refreshGlobal();
+                if (g) {
+                  // If the GET returned authoritative language history for today, prefer that
+                  if (g.history && g.history[today]) {
+                    setTodayPlayed(g.history[today]);
+                    setGuesses(g.history[today].guesses || []);
+                    setRevealedHints(Math.min(maxReveal, Math.max(1, (g.history[today].guesses || []).length + 1)));
+                  }
+                  if (typeof g.streak === 'number') setStreak(g.streak || 0);
+                  // notify listeners with the full global payload
+                  try { window.dispatchEvent(new CustomEvent('modleUpdated', { detail: { global: g } })); } catch (e) {}
+                }
+              } catch (e) {
+                // ignore
+              }
+            } catch (e) {
+              // ignore event dispatch failures
+            }
         } catch (e) {
           // non-fatal: server sync failed, local state remains
           console.debug('POST /api/users/modle/result error:', e);

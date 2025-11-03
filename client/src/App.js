@@ -45,7 +45,7 @@ const AppRoutes = () => {
       <Navbar />
       <div className="flex">
         {!isAuthRoute && <Sidebar />}
-        <main className={isAuthRoute ? 'flex-1 p-4 md:p-6' : 'flex-1 container mx-auto p-4 md:p-6'}>
+  <main className={isAuthRoute ? 'flex-1 p-4 md:p-6 overflow-x-hidden' : 'flex-1 container max-w-full mx-auto p-4 md:p-6 overflow-x-hidden'}>
           <AnimatePresence mode="wait">
           <Routes>
             <Route path="/login" element={<PageWrapper><LoginPage /></PageWrapper>} />
