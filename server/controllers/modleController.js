@@ -80,8 +80,10 @@ const postModleResult = async (req, res) => {
 
   let newStreak = langObj.streak || 0;
     if (correct) {
+      // If the previous play was exactly yesterday, increment the streak.
+      // Otherwise, the user missed a day — reset the streak to 0 per new requirement.
       if (prevDate === yesterday) newStreak = (user.modle[language].streak || 0) + 1;
-      else newStreak = 1;
+      else newStreak = 0;
     }
 
   // Save history for the date (language-specific)

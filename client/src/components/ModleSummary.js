@@ -15,9 +15,7 @@ const ModleSummary = ({ username }) => {
       try {
         // If viewing your own profile and authenticated, fetch streaks from server
         if (user && user.username === username && localStorage.getItem('token')) {
-          const token = localStorage.getItem('token');
-          const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://localhost:5001';
-          const apiBase = `${apiRoot}/api`;
+          //const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://localhost:5001';
           // Prefer server-side global union when available
           try {
             try {
