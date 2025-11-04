@@ -1,6 +1,27 @@
 const axios = require('axios');
 const logger = require('../utils/logger');
 
+// Simple concurrency runner to avoid ESM-only dependency: runs async fn over items
+// with at most `concurrency` tasks in parallel. Mutates items in place when fn does.
+async function runWithConcurrency(items, concurrency, fn) {
+    if (!Array.isArray(items) || items.length === 0) return;
+    const limit = Math.max(1, Number(concurrency) || 3);
+    let idx = 0;
+    const workers = new Array(Math.min(limit, items.length)).fill(0).map(async () => {
+        while (true) {
+            const i = idx++;
+            if (i >= items.length) break;
+            try {
+                // eslint-disable-next-line no-await-in-loop
+                await fn(items[i], i);
+            } catch (e) {
+                // swallow per-item errors; fn should log as needed
+            }
+        }
+    });
+    await Promise.all(workers);
+}
+
 const TMDB_API_BASE_URL = 'https://api.themoviedb.org/3';
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const cache = require('../utils/cache');
@@ -19,33 +40,40 @@ const searchMovies = async (req, res) => {
         const OMDB_API_KEY = process.env.OMDB_API_KEY;
         const logger = require('../utils/logger');
         if (OMDB_ENABLED && OMDB_API_KEY && Array.isArray(data.results) && data.results.length > 0) {
-            await Promise.all(data.results.map(async (m) => {
+            // Limit concurrent OMDb requests to avoid hitting upstream rate limits.
+            // Adjust concurrency as needed via env var OMDB_CONCURRENCY (default 3).
+            const concurrency = Number(process.env.OMDB_CONCURRENCY) || 3;
+
+            await runWithConcurrency(data.results, concurrency, async (m) => {
+                const title = m.title || m.original_title;
+                const year = m.release_date ? m.release_date.substring(0,4) : undefined;
+                // Try cache first (key by title|year)
+                const key = `omdb:t:${title}|y:${year}`;
+                const cached = cache.get(key);
+                if (cached) {
+                    m.imdbRating = cached.imdbRating;
+                    m.imdbRatingSource = cached.imdbRatingSource;
+                    return;
+                }
+
                 try {
-                    const title = m.title || m.original_title;
-                    const year = m.release_date ? m.release_date.substring(0,4) : undefined;
-                    // Try cache first (key by title|year)
-                    const key = `omdb:t:${title}|y:${year}`;
-                    const cached = cache.get(key);
-                    if (cached) {
-                        m.imdbRating = cached.imdbRating;
-                        m.imdbRatingSource = cached.imdbRatingSource;
-                    } else {
-                        const omdbRes = await axios.get('http://www.omdbapi.com/', { params: { apikey: OMDB_API_KEY, t: title, y: year } });
-                        if (omdbRes.data && omdbRes.data.imdbRating && omdbRes.data.imdbRating !== 'N/A') {
-                            m.imdbRating = omdbRes.data.imdbRating;
-                            m.imdbRatingSource = 'OMDb';
-                            cache.set(key, { imdbRating: m.imdbRating, imdbRatingSource: m.imdbRatingSource });
-                        } else if (typeof m.vote_average !== 'undefined') {
-                            m.imdbRating = m.vote_average;
-                            m.imdbRatingSource = 'TMDb';
-                        }
+                    const omdbRes = await axios.get('http://www.omdbapi.com/', { params: { apikey: OMDB_API_KEY, t: title, y: year } });
+                    if (omdbRes.data && omdbRes.data.imdbRating && omdbRes.data.imdbRating !== 'N/A') {
+                        m.imdbRating = omdbRes.data.imdbRating;
+                        m.imdbRatingSource = 'OMDb';
+                        cache.set(key, { imdbRating: m.imdbRating, imdbRatingSource: m.imdbRatingSource });
+                    } else if (typeof m.vote_average !== 'undefined') {
+                        m.imdbRating = m.vote_average;
+                        m.imdbRatingSource = 'TMDb';
                     }
                 } catch (e) {
-                    // Log OMDb errors to help debugging (include status and body if present)
+                    // Log OMDb errors to help debugging (include status, Retry-After and body if present)
                     try {
-                        logger.warn('OMDb item fetch failed', e.response?.status, e.response?.data || e.message);
-                        // If we get a 401 Unauthorized, disable OMDb enrichment for the lifetime of this process
-                        if (e.response?.status === 401 || (e.response?.data && typeof e.response.data.Error === 'string' && e.response.data.Error.toLowerCase().includes('invalid api key'))) {
+                        const status = e.response?.status;
+                        const retryAfter = e.response?.headers?.['retry-after'];
+                        logger.warn('OMDb item fetch failed', status, 'Retry-After:', retryAfter, e.response?.data || e.message);
+                        // If 401, disable OMDb enrichment for process lifetime
+                        if (status === 401 || (e.response?.data && typeof e.response.data.Error === 'string' && e.response.data.Error.toLowerCase().includes('invalid api key'))) {
                             OMDB_ENABLED = false;
                             logger.warn('OMDb appears to be disabled due to invalid API key. Further OMDb calls will be skipped until server restart.');
                         }
@@ -58,7 +86,7 @@ const searchMovies = async (req, res) => {
                         m.imdbRatingSource = 'TMDb';
                     }
                 }
-            }));
+            });
         } else {
             // No OMDb key; fall back to TMDb rating for each result
             if (Array.isArray(data.results)) {
@@ -103,9 +131,7 @@ const getMovieDetails = async (req, res) => {
                     imdbRating = cached.imdbRating;
                     imdbRatingSource = cached.imdbRatingSource;
                 } else {
-                    const omdbRes = await axios.get('http://www.omdbapi.com/', {
-                        params: { apikey: OMDB_API_KEY, i: imdbId }
-                    });
+                    const omdbRes = await axios.get('http://www.omdbapi.com/', { params: { apikey: OMDB_API_KEY, i: imdbId } });
                     if (omdbRes.data && omdbRes.data.imdbRating && omdbRes.data.imdbRating !== 'N/A') {
                         imdbRating = omdbRes.data.imdbRating;
                         imdbRatingSource = 'OMDb';
@@ -115,8 +141,10 @@ const getMovieDetails = async (req, res) => {
             } catch (err) {
                 // If OMDb fails, we'll fall back to TMDb vote_average below
                 try {
-                    logger.warn('OMDb fetch failed', err.response?.status, err.response?.data || err.message);
-                    if (err.response?.status === 401 || (err.response?.data && typeof err.response.data.Error === 'string' && err.response.data.Error.toLowerCase().includes('invalid api key'))) {
+                    const status = err.response?.status;
+                    const retryAfter = err.response?.headers?.['retry-after'];
+                    logger.warn('OMDb fetch failed', status, 'Retry-After:', retryAfter, err.response?.data || err.message);
+                    if (status === 401 || (err.response?.data && typeof err.response.data.Error === 'string' && err.response.data.Error.toLowerCase().includes('invalid api key'))) {
                         OMDB_ENABLED = false;
                         logger.warn('OMDb appears to be disabled due to invalid API key. Further OMDb calls will be skipped until server restart.');
                     }
@@ -151,31 +179,36 @@ const getPopularMovies = async (req, res) => {
         });
         const OMDB_API_KEY = process.env.OMDB_API_KEY;
         if (OMDB_ENABLED && OMDB_API_KEY && Array.isArray(data.results) && data.results.length > 0) {
-            await Promise.all(data.results.map(async (m) => {
+            // Limit concurrent OMDb requests for popular list as well
+            const concurrency = Number(process.env.OMDB_CONCURRENCY) || 3;
+
+            await runWithConcurrency(data.results, concurrency, async (m) => {
+                const title = m.title || m.original_title;
+                const year = m.release_date ? m.release_date.substring(0,4) : undefined;
+                // try cache first
+                const key = `omdb:t:${title}|y:${year}`;
+                const cached = cache.get(key);
+                if (cached) {
+                    m.imdbRating = cached.imdbRating;
+                    m.imdbRatingSource = cached.imdbRatingSource;
+                    return;
+                }
                 try {
-                    const title = m.title || m.original_title;
-                    const year = m.release_date ? m.release_date.substring(0,4) : undefined;
-                    // try cache first
-                    const key = `omdb:t:${title}|y:${year}`;
-                    const cached = cache.get(key);
-                    if (cached) {
-                        m.imdbRating = cached.imdbRating;
-                        m.imdbRatingSource = cached.imdbRatingSource;
-                    } else {
-                        const omdbRes = await axios.get('http://www.omdbapi.com/', { params: { apikey: OMDB_API_KEY, t: title, y: year } });
-                        if (omdbRes.data && omdbRes.data.imdbRating && omdbRes.data.imdbRating !== 'N/A') {
-                            m.imdbRating = omdbRes.data.imdbRating;
-                            m.imdbRatingSource = 'OMDb';
-                            cache.set(key, { imdbRating: m.imdbRating, imdbRatingSource: m.imdbRatingSource });
-                        } else if (typeof m.vote_average !== 'undefined') {
-                            m.imdbRating = m.vote_average;
-                            m.imdbRatingSource = 'TMDb';
-                        }
+                    const omdbRes = await axios.get('http://www.omdbapi.com/', { params: { apikey: OMDB_API_KEY, t: title, y: year } });
+                    if (omdbRes.data && omdbRes.data.imdbRating && omdbRes.data.imdbRating !== 'N/A') {
+                        m.imdbRating = omdbRes.data.imdbRating;
+                        m.imdbRatingSource = 'OMDb';
+                        cache.set(key, { imdbRating: m.imdbRating, imdbRatingSource: m.imdbRatingSource });
+                    } else if (typeof m.vote_average !== 'undefined') {
+                        m.imdbRating = m.vote_average;
+                        m.imdbRatingSource = 'TMDb';
                     }
                 } catch (e) {
                     try {
-                        logger.warn('OMDb item fetch failed', e.response?.status, e.response?.data || e.message);
-                        if (e.response?.status === 401 || (e.response?.data && typeof e.response.data.Error === 'string' && e.response.data.Error.toLowerCase().includes('invalid api key'))) {
+                        const status = e.response?.status;
+                        const retryAfter = e.response?.headers?.['retry-after'];
+                        logger.warn('OMDb item fetch failed', status, 'Retry-After:', retryAfter, e.response?.data || e.message);
+                        if (status === 401 || (e.response?.data && typeof e.response.data.Error === 'string' && e.response.data.Error.toLowerCase().includes('invalid api key'))) {
                             OMDB_ENABLED = false;
                             logger.warn('OMDb appears to be disabled due to invalid API key. Further OMDb calls will be skipped until server restart.');
                         }
@@ -187,7 +220,7 @@ const getPopularMovies = async (req, res) => {
                         m.imdbRatingSource = 'TMDb';
                     }
                 }
-            }));
+            });
         } else {
             if (Array.isArray(data.results)) {
                 data.results.forEach(m => {

@@ -1,5 +1,6 @@
 // Simple in-memory cache with TTL
-const defaultTTL = Number(process.env.OMDB_CACHE_TTL_SECONDS) || 60 * 60 * 24; // default 24h
+// Default OMDb cache TTL (seconds). Default to 7 days to reduce outbound OMDb calls on hosts
+const defaultTTL = Number(process.env.OMDB_CACHE_TTL_SECONDS) || 60 * 60 * 24 * 7; // default 7 days
 
 class SimpleCache {
   constructor() {
