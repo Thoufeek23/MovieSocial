@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AuthContext } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import puzzlesEng from '../data/modlePuzzles';
 import puzzlesHindi from '../data/modlePuzzlesHindi';
@@ -20,11 +21,19 @@ const languageMap = {
 
 const ModlePage = () => {
   const navigate = useNavigate();
-  const storageKey = 'modle_selected_language_date';
+  const { user } = useContext(AuthContext);
+  // Scope the local selection key by username when signed in to avoid cross-account interference
+  const storageKey = user && user.username ? `modle_selected_language_date_${user.username}` : 'modle_selected_language_date';
 
   const handleChoose = (chosen) => {
     // check if user already chose a language today
     try {
+      // If a legacy global selection key exists but we're signed in, ignore/remove it to prevent cross-account blocking
+      const legacyKey = 'modle_selected_language_date';
+      if (user && localStorage.getItem(legacyKey)) {
+        try { localStorage.removeItem(legacyKey); } catch (e) { /* ignore */ }
+      }
+
       const raw = localStorage.getItem(storageKey);
       // local date YYYY-MM-DD
       const d = new Date();
