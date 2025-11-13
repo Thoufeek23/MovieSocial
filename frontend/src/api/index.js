@@ -2,8 +2,8 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // In production the client should be built with REACT_APP_API_URL set to your API root
-// !!IMPORTANT!!: Replace this IP with your computer's local network IP
-const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://192.168.68.94:5001';
+// !!IMPORTANT!!: Replace this IP with your computer's local network IP http://149.125.224.63:5001
+const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://149.125.224.63:5001';
 const API = axios.create({ baseURL: `${apiRoot}/api` });
 
 // Add the JWT to the header of every request if it exists

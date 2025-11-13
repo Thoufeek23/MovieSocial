@@ -1,62 +1,63 @@
-import React, { useEffect } from 'react';
+// frontend/app/_layout.jsx
+
+import { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
-import { ActivityIndicator, View } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
 
-// This is the component that handles the auth logic
-const AuthGuard = () => {
+// This component checks auth state and redirects
+const MainLayout = () => {
   const { user, loading } = useAuth();
+  const segments = useSegments();
   const router = useRouter();
-  const segments = useSegments(); // Gets the current route path
 
   useEffect(() => {
-    if (loading) {
-      return; // Wait until we're done checking for a token
-    }
-
-    // Cast to string to avoid TypeScript literal union mismatch when comparing
-    const seg0 = String(segments[0] ?? '');
-    const inAuthGroup = seg0 === '(auth)';
-    const inAppGroup = seg0 === '(tabs)';
-
-    if (user && !inAppGroup) {
-      // User is signed in but not in the main app.
-      // Redirect them to the home screen.
-      router.replace('/(tabs)');
-    } else if (!user && !inAuthGroup) {
-      // User is not signed in and not in the auth flow.
-      // Redirect them to the login screen.
-      router.replace('/login');
+    // If the auth state changes, ensure we land on the correct route.
+    // When loading finishes and there's no user, send the user to `/login`.
+    // When there's a user, and we're at an auth route, send them to the app tabs.
+    if (!loading) {
+      const first = segments[0];
+      if (!user && first !== 'login' && first !== 'signup') {
+        router.replace('/login');
+      }
+      if (user && (first === 'login' || first === 'signup' || first === undefined)) {
+        router.replace('/(tabs)');
+      }
     }
   }, [user, loading, segments, router]);
 
-  // Show a loading spinner while we check for the token
+  // Show a loading spinner
   if (loading) {
     return (
-      <View className="flex-1 justify-center items-center bg-background">
+      <View className="flex-1 items-center justify-center bg-background">
         <ActivityIndicator size="large" color="#10b981" />
       </View>
     );
   }
 
-  // Show the correct stack of screens
+  // THIS IS THE PART TO UPDATE:
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
+      {/* These are your main app screens, nested in a tab navigator */}
+      <Stack.Screen name="(tabs)" /> 
+      {/* These are your auth screens */}
       <Stack.Screen name="login" />
       <Stack.Screen name="signup" />
-      <Stack.Screen name="(tabs)" />
-      {/* Add other top-level screens like movie/[id] here */}
-      <Stack.Screen name="movie/[id]" />
-      <Stack.Screen name="profile/[username]" />
+      
+      {/* Dynamic routes (e.g. `movie/[id]`, `profile/[username]`) are file-based
+          and automatically registered by expo-router. Removing manual
+          `Stack.Screen` declarations avoids duplicate/"extraneous" warnings. */}
+
     </Stack>
   );
 };
 
-// This is the main layout component
+// This is the root layout
 export default function RootLayout() {
   return (
+    // Wrap the entire app in the AuthProvider
     <AuthProvider>
-      <AuthGuard />
+      <MainLayout />
     </AuthProvider>
   );
 }

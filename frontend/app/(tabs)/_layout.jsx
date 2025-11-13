@@ -24,15 +24,6 @@ export default function TabsLayout() {
           ),
         }}
       />
-      <Tabs.Screen
-        name="explore"
-        options={{
-          title: 'Explore',
-          tabBarIcon: ({ color, size }) => (
-            <Search color={color} size={size} />
-          ),
-        }}
-      />
       {/* Add more tabs as you build them */}
       <Tabs.Screen
         name="profile"

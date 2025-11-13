@@ -6,6 +6,17 @@ import { useRouter, Link } from 'expo-router';
 export default function HomePage() {
   const { user, logout } = useAuth();
   const router = useRouter();
+  const handleLogout = async () => {
+    try {
+      await logout();
+      // small delay to allow native/web splash to finish hiding
+      await new Promise((res) => setTimeout(res, 200));
+      // Replace the current stack with the login screen
+      router.replace('/login');
+    } catch (e) {
+      console.error('Logout failed', e);
+    }
+  };
 
   return (
     <SafeAreaView className="flex-1 items-center justify-center bg-background">
@@ -13,7 +24,7 @@ export default function HomePage() {
       <Text className="text-lg text-foreground mb-4">
         Welcome, {user?.username}!
       </Text>
-      <Button title="Log Out" onPress={logout} color="#10b981" />
+      <Button title="Log Out" onPress={handleLogout} color="#10b981" />
 
       {/* Temp links for testing */}
       <View className="mt-10">
