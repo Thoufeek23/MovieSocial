@@ -2,6 +2,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // In production the client should be built with REACT_APP_API_URL set to your API root
+// !!IMPORTANT!!: Replace this IP with your computer's local network IP
 const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://192.168.68.94:5001';
 const API = axios.create({ baseURL: `${apiRoot}/api` });
 
@@ -16,7 +17,7 @@ API.interceptors.request.use(async (req) => { // <-- Make this async
 
 // Authentication
 export const login = (formData) => API.post('/auth/login', formData);
-export const register = (formData) => API.post('/auth/register', formData);
+export const register = (formData) => API.post('/auth/register', formData); // Use this for simplicity
 export const forgotPassword = (payload) => API.post('/auth/forgot-password', payload);
 export const verifyResetOtp = (payload) => API.post('/auth/verify-otp', payload);
 export const resetPassword = (payload) => API.post('/auth/reset-password', payload);
@@ -29,14 +30,13 @@ export const searchMovies = (query) => API.get(`/movies/search?query=${query}`);
 export const getMovieDetails = (id) => API.get(`/movies/${id}`);
 export const getPopularMovies = () => API.get('/movies/popular');
 
-
 // Reviews
 export const fetchFeed = () => API.get('/reviews/feed');
 export const postReview = (reviewData) => API.post('/reviews', reviewData);
 export const getReviewsForMovie = (movieId) => API.get(`/reviews/movie/${movieId}`);
 export const getMovieStats = (movieId) => API.get(`/reviews/movie/${movieId}/stats`);
-export const updateReview = (id, reviewData) => API.put(`/reviews/${id}`, reviewData); // <-- Add this
-export const deleteReview = (id) => API.delete(`/reviews/${id}`); // <-- Add this
+export const updateReview = (id, reviewData) => API.put(`/reviews/${id}`, reviewData);
+export const deleteReview = (id) => API.delete(`/reviews/${id}`);
 export const fetchMyReviews = () => API.get('/reviews/mine');
 
 // Vote on a review: { value: 1 | 0.5 | 0 }
@@ -70,6 +70,7 @@ export const fetchDiscussionsForMovie = (movieId) => fetchDiscussions({ movieId 
 export const deleteDiscussion = (id) => API.delete(`/discussions/${id}`);
 export const updateDiscussion = (id, data) => API.put(`/discussions/${id}`, data);
 export const fetchDiscussionsByUser = (username) => API.get(`/discussions/user/${username}`);
+
 // Leaderboard
 export const getLeaderboardGlobal = () => API.get('/stats/top-reviewers');
 export const getLeaderboardRegion = (region) => API.get(`/stats/top-reviewers/region/${encodeURIComponent(region)}`);

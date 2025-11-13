@@ -1,27 +1,18 @@
 // tailwind.config.js
-/** @type {import('tailwindcss').Config} */
-const { fontFamily } = require('tailwindcss/defaultTheme');
-
 module.exports = {
   content: [
-    "./App.{js,jsx,ts,tsx}",
-    "./src/**/*.{js,jsx,ts,tsx}" // <-- Add this line
+    './app/**/*.{js,jsx}', // Look for JS/JSX files in app
+    './components/**/*.{js,jsx}', // Look for JS/JSX files in components
   ],
   theme: {
     extend: {
-      fontFamily: {
-        sans: ['Inter', ...fontFamily.sans],
-      },
       colors: {
-        background: 'var(--background)',
-        foreground: 'var(--foreground)',
-        card: 'var(--card)',
-        primary: {
-          DEFAULT: 'var(--primary)',
-          foreground: 'var(--primary-foreground)',
-        },
+        background: '#18181b', // zinc-900
+        card: '#27272a', // zinc-800
+        primary: '#10b981', // emerald-500
+        foreground: '#fafafa', // zinc-50
       },
     },
   },
   plugins: [],
-}
+};
