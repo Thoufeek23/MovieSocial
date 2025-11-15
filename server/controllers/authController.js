@@ -7,8 +7,8 @@ const SignupIntent = require('../models/SignupIntent');
 const logger = require('../utils/logger');
 
 // Helper function to generate JWT
-const generateToken = (id, username) => {
-    return jwt.sign({ user: { id, username } }, process.env.JWT_SECRET, {
+const generateToken = (id, username, isAdmin = false) => {
+    return jwt.sign({ user: { id, username, isAdmin } }, process.env.JWT_SECRET, {
         expiresIn: '30d',
     });
 };
@@ -44,7 +44,7 @@ const registerUser = async (req, res) => {
 
         if (user) {
             res.status(201).json({
-                token: generateToken(user._id, user.username),
+                token: generateToken(user._id, user.username, user.isAdmin),
             });
         } else {
             res.status(400).json({ msg: 'Invalid user data' });
@@ -75,7 +75,7 @@ const loginUser = async (req, res) => {
             }
 
             res.json({
-                token: generateToken(user._id, user.username),
+                token: generateToken(user._id, user.username, user.isAdmin),
             });
         } else {
             res.status(401).json({ msg: 'Invalid email or password' });
@@ -370,10 +370,25 @@ const completeSignup = async (req, res) => {
 
         if (!user) return res.status(500).json({ msg: 'Failed to create user' });
 
-        return res.status(201).json({ token: generateToken(user._id, user.username) });
+        return res.status(201).json({ token: generateToken(user._id, user.username, user.isAdmin) });
     } catch (err) {
         logger.error(err);
         return res.status(500).json({ msg: 'Server error' });
+    }
+};
+
+// @desc Get current user data
+// @route GET /api/auth/me
+const getMe = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id).select('-passwordHash');
+        if (!user) {
+            return res.status(404).json({ msg: 'User not found' });
+        }
+        res.json(user);
+    } catch (error) {
+        logger.error(error);
+        res.status(500).json({ msg: 'Server error' });
     }
 };
 
@@ -386,6 +401,7 @@ module.exports = {
     sendSignupOtp,
     verifySignupOtp,
     completeSignup,
+    getMe,
 };
 
 // Password policy validator

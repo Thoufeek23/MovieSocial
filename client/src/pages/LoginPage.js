@@ -43,7 +43,12 @@ const LoginPage = () => {
     try {
         const { data } = await api.login(formData);
         login(data); // This now sets isJustLoggedIn to true in the context
-        navigate('/'); // Navigate immediately
+        
+        // Small delay to ensure user state is updated before navigation
+        setTimeout(() => {
+          navigate('/');
+          setIsLoading(false);
+        }, 100);
     } catch (err) {
         setError('Invalid credentials. Please try again.');
         console.error(err);

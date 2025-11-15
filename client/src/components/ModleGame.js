@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
-import defaultPuzzles from '../data/modlePuzzles';
 import toast from 'react-hot-toast';
 import { normalizeTitle, levenshtein } from '../utils/fuzzy';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -10,56 +9,12 @@ import { ModleContext } from '../context/ModleContext';
 // API wrapper (centralized in client/src/api/index.js)
 
 // Note: localStorage usage for modle state removed. Server is the source-of-truth for authenticated users.
-// Local date helpers (YYYY-MM-DD) using the user's local timezone
+// Local date helper (YYYY-MM-DD) using the user's local timezone
 function localYYYYMMDD(date = new Date()) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
-}
-
-function parseLocalDate(dateStr) {
-  const parts = String(dateStr).split('-').map(n => parseInt(n, 10));
-  if (parts.length !== 3 || parts.some(isNaN)) return new Date(dateStr);
-  return new Date(parts[0], parts[1] - 1, parts[2]);
-}
-
-function pickPuzzleForDate(dateStr, puzzles) {
-  // dateStr expected as 'YYYY-MM-DD' (local date)
-  const base = parseLocalDate(dateStr);
-  const daysSinceEpoch = Math.floor(base.getTime() / (24 * 60 * 60 * 1000));
-  const n = (puzzles && puzzles.length) ? puzzles.length : 1;
-  let index = ((daysSinceEpoch % n) + n) % n;
-
-  // compute yesterday's index and avoid repeating it
-  const yesterday = new Date(base.getTime() - 24 * 60 * 60 * 1000);
-  const yd = Math.floor(yesterday.getTime() / (24 * 60 * 60 * 1000));
-  const yIndex = ((yd % n) + n) % n;
-  if (n > 1 && index === yIndex) {
-    index = (index + 1) % n;
-  }
-
-  const p = (puzzles && puzzles[index]) ? puzzles[index] : (puzzles && puzzles[0]) || { answer: '', hints: [] };
-  return { answer: (p.answer || '').toUpperCase(), hints: p.hints || [], index };
-}
-
-function computeStreakFromHistory(history = {}, todayStr) {
-  if (!history || typeof history !== 'object') return 0;
-  let count = 0;
-  let d = todayStr;
-  // walk backwards day-by-day while there's a correct entry (use local dates)
-  while (true) {
-    const entry = history[d];
-    if (entry && entry.correct) {
-      count += 1;
-      const prev = parseLocalDate(d);
-      prev.setDate(prev.getDate() - 1);
-      d = localYYYYMMDD(prev);
-    } else {
-      break;
-    }
-  }
-  return count;
 }
 // no localStorage key helpers — we no longer persist modle state in localStorage
 
@@ -70,20 +25,59 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
   const { updateFromServerPayload, refreshGlobal } = useContext(ModleContext);
   // determine today's date string in YYYY-MM-DD
   const todayStr = localYYYYMMDD();
-  const puzzles = propPuzzles && propPuzzles.length ? propPuzzles : defaultPuzzles;
-  // use today's date only in production
   const effectiveDate = todayStr;
-  const [puzzle] = useState(() => ({ ...pickPuzzleForDate(effectiveDate, puzzles), date: effectiveDate }));
-  // prepare normalized answer and fuzzy threshold for rendering and matching
-  const normAnswer = normalizeTitle(puzzle.answer || '');
-  const fuzzyThreshold = Math.max(2, Math.ceil((normAnswer.length || 0) * 0.2));
+  
+  // State for puzzle - now loaded from backend
+  const [puzzle, setPuzzle] = useState(null);
+  const [puzzleLoading, setPuzzleLoading] = useState(true);
+  const [puzzleError, setPuzzleError] = useState(null);
   const [guess, setGuess] = useState('');
   const [guesses, setGuesses] = useState([]);
   const [todayPlayed, setTodayPlayed] = useState(null); // null | { date, correct, guesses }
   const [streak, setStreak] = useState(0);
-  // how many hints are currently revealed to the player; reveal up to 5 hints (or fewer if puzzle has fewer)
-  const maxReveal = Math.min(5, (puzzle.hints && puzzle.hints.length) || 5);
   const [revealedHints, setRevealedHints] = useState(1);
+
+  // Calculate values that depend on puzzle being loaded
+  const normAnswer = puzzle ? normalizeTitle(puzzle.answer || '') : '';
+  const fuzzyThreshold = Math.max(2, Math.ceil((normAnswer.length || 0) * 0.2));
+  const maxReveal = puzzle ? Math.min(5, (puzzle.hints && puzzle.hints.length) || 5) : 5;
+
+  // Load puzzle from backend
+  useEffect(() => {
+    const loadPuzzle = async () => {
+      try {
+        setPuzzleLoading(true);
+        setPuzzleError(null);
+        
+        const res = await api.getDailyPuzzle(language, effectiveDate);
+        if (res && res.data) {
+          const puzzleData = res.data;
+          setPuzzle({
+            answer: puzzleData.answer,
+            hints: puzzleData.hints,
+            date: puzzleData.date,
+            meta: puzzleData.meta || {}
+          });
+        } else {
+          throw new Error('No puzzle data received');
+        }
+      } catch (error) {
+        console.error('Failed to load puzzle:', error);
+        setPuzzleError(error.message || 'Failed to load puzzle');
+        // Fallback to a default puzzle structure
+        setPuzzle({
+          answer: 'LOADING',
+          hints: ['Puzzle is loading...', 'Please check your connection'],
+          date: effectiveDate,
+          meta: {}
+        });
+      } finally {
+        setPuzzleLoading(false);
+      }
+    };
+
+    loadPuzzle();
+  }, [language, effectiveDate]);
 
   useEffect(() => {
     // If user is signed in, prefer server as the source-of-truth.
@@ -120,8 +114,11 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
       setStreak(0);
     };
 
-    load();
-  }, [puzzle, user, maxReveal, language, effectiveDate]);
+    // Only load modle status if puzzle is loaded
+    if (puzzle && !puzzleLoading) {
+      load();
+    }
+  }, [puzzle, user, maxReveal, language, effectiveDate, puzzleLoading]);
 
   // No persistent saveState: persistence happens on the server for authenticated users.
 
@@ -161,10 +158,9 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
   const newHistory = {};
   newHistory[today] = { date: today, correct: isCorrect, guesses: newGuesses };
 
-  // Update UI immediately (in-memory)
+  // Update UI immediately (in-memory) - streak will be updated from server response
   setTodayPlayed(newHistory[today]);
   setGuesses(newGuesses);
-  setStreak(computeStreakFromHistory(newHistory, today));
 
     if (isCorrect) {
       const note = dist > 0 ? ' (accepted with minor typo)' : '';
@@ -298,6 +294,49 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
   };
 
   // reset helper removed (dev/testing-only)
+
+  // Show loading state
+  if (puzzleLoading) {
+    return (
+      <div className="bg-card p-4 rounded-md max-w-2xl mx-auto">
+        <div className="flex items-center justify-center py-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+            <p className="text-gray-400">Loading today's puzzle...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (puzzleError && (!puzzle || puzzle.answer === 'LOADING')) {
+    return (
+      <div className="bg-card p-4 rounded-md max-w-2xl mx-auto">
+        <div className="text-center py-8">
+          <p className="text-red-400 mb-2">Failed to load puzzle</p>
+          <p className="text-gray-400 text-sm">{puzzleError}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="btn btn-primary mt-4"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show puzzle not found state
+  if (!puzzle) {
+    return (
+      <div className="bg-card p-4 rounded-md max-w-2xl mx-auto">
+        <div className="text-center py-8">
+          <p className="text-gray-400">No puzzle available for today.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-card p-4 rounded-md max-w-2xl mx-auto">

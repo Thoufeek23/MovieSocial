@@ -21,6 +21,7 @@ export const resetPassword = (payload) => API.post('/auth/reset-password', paylo
 export const sendSignupOtp = (payload) => API.post('/auth/signup-otp', payload);
 export const verifySignupOtp = (payload) => API.post('/auth/verify-signup-otp', payload);
 export const completeSignup = (payload) => API.post('/auth/complete-signup', payload);
+export const getCurrentUser = () => API.get('/auth/me');
 
 // Movies (Proxy)
 export const searchMovies = (query) => API.get(`/movies/search?query=${query}`);
@@ -75,3 +76,17 @@ export const getLeaderboardRegion = (region) => API.get(`/stats/top-reviewers/re
 // Modle (daily puzzle) endpoints
 export const getModleStatus = (language = 'English') => API.get(`/users/modle/status?language=${encodeURIComponent(language)}`);
 export const postModleResult = (payload) => API.post('/users/modle/result', payload);
+
+// Puzzle endpoints
+export const getDailyPuzzle = (language = 'English', date = null) => {
+  const params = new URLSearchParams({ language });
+  if (date) params.append('date', date);
+  return API.get(`/puzzles/daily?${params.toString()}`);
+};
+export const getPuzzleStats = () => API.get('/puzzles/stats');
+
+// Admin puzzle management endpoints
+export const getAllPuzzles = (language = 'English') => API.get(`/puzzles?language=${encodeURIComponent(language)}`);
+export const createPuzzle = (puzzleData) => API.post('/puzzles', puzzleData);
+export const updatePuzzle = (id, puzzleData) => API.put(`/puzzles/${id}`, puzzleData);
+export const deletePuzzle = (id) => API.delete(`/puzzles/${id}`);

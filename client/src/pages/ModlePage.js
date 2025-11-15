@@ -1,31 +1,66 @@
-import React, { useContext } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import toast from 'react-hot-toast';
-import puzzlesEng from '../data/modlePuzzles';
-import puzzlesHindi from '../data/modlePuzzlesHindi';
-import puzzlesTamil from '../data/modlePuzzlesTamil';
-import puzzlesTelugu from '../data/modlePuzzlesTelugu';
-import puzzlesKannada from '../data/modlePuzzlesKannada';
-import puzzlesMalayalam from '../data/modlePuzzlesMalayalam';
-import { Info, PlayCircle } from 'lucide-react'; // Import icons for a professional look
+import { Info, PlayCircle, CheckCircle } from 'lucide-react'; // Import icons for a professional look
+import * as api from '../api';
 
-const languageMap = {
-  English: puzzlesEng,
-  Hindi: puzzlesHindi,
-  Tamil: puzzlesTamil,
-  Telugu: puzzlesTelugu,
-  Kannada: puzzlesKannada,
-  Malayalam: puzzlesMalayalam,
-};
+// Available languages - no longer need puzzle imports since they come from backend
+const availableLanguages = ['English', 'Hindi', 'Tamil', 'Telugu', 'Kannada', 'Malayalam'];
 
 const ModlePage = () => {
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
+  const [completedToday, setCompletedToday] = useState({});
+  const [loading, setLoading] = useState(true);
   // Scope the local selection key by username when signed in to avoid cross-account interference
   const storageKey = user && user.username ? `modle_selected_language_date_${user.username}` : 'modle_selected_language_date';
 
+  // Check completion status for all languages
+  useEffect(() => {
+    const checkCompletionStatus = async () => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const statusPromises = availableLanguages.map(async (lang) => {
+          try {
+            const response = await api.getModleStatus(lang);
+            const isCompleted = response.data.history && 
+                               response.data.history[today] && 
+                               response.data.history[today].correct;
+            return { lang, completed: isCompleted };
+          } catch (error) {
+            return { lang, completed: false };
+          }
+        });
+
+        const results = await Promise.all(statusPromises);
+        const completionMap = {};
+        results.forEach(({ lang, completed }) => {
+          completionMap[lang] = completed;
+        });
+        setCompletedToday(completionMap);
+      } catch (error) {
+        console.error('Failed to check completion status:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkCompletionStatus();
+  }, [user]);
+
   const handleChoose = (chosen) => {
+    // Check if user has already completed this language today
+    if (user && completedToday[chosen]) {
+      toast.error(`You already completed today's Modle in ${chosen}! Come back tomorrow for a new puzzle.`);
+      return;
+    }
+
     // check if user already chose a language today
     try {
       // If a legacy global selection key exists but we're signed in, ignore/remove it to prevent cross-account blocking
@@ -88,35 +123,58 @@ const ModlePage = () => {
         <h2 className="text-2xl font-semibold text-white">Choose Your Language for Today</h2>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-        {Object.keys(languageMap).map(lang => (
-          <button 
-            key={lang} 
-            onClick={() => handleChoose(lang)} 
-            // 4. Animated, Gradient-Hover Cards
-            className={`
-              group relative p-6 bg-card rounded-xl
-              border border-gray-700
-              transition-all duration-300 ease-in-out
-              hover:-translate-y-1 hover:border-primary
-              hover:shadow-lg hover:shadow-primary/10
-              hover:bg-gradient-to-br hover:from-card hover:to-primary/10
-            `}
-          >
-            <div className="flex justify-between items-center mb-1">
-              <span className="text-2xl font-bold text-white">{lang}</span>
-              <PlayCircle 
-                size={28} 
-                className="text-gray-500 transition-all duration-300
-                           group-hover:text-primary group-hover:translate-x-1" 
-              />
-            </div>
-            <div className="text-sm text-gray-400 text-left transition-colors group-hover:text-gray-300">
-              Play Modle in {lang}
-            </div>
-          </button>
-        ))}
-      </div>
+      {loading && user ? (
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+          <p className="text-gray-400">Loading your progress...</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {availableLanguages.map(lang => {
+            const isCompleted = user && completedToday[lang];
+            return (
+              <button 
+                key={lang} 
+                onClick={() => handleChoose(lang)} 
+                disabled={isCompleted}
+                className={`
+                  group relative p-6 rounded-xl border
+                  transition-all duration-300 ease-in-out
+                  ${isCompleted 
+                    ? 'bg-green-900/20 border-green-700 cursor-not-allowed' 
+                    : 'bg-card border-gray-700 hover:-translate-y-1 hover:border-primary hover:shadow-lg hover:shadow-primary/10 hover:bg-gradient-to-br hover:from-card hover:to-primary/10'
+                  }
+                `}
+              >
+                <div className="flex justify-between items-center mb-1">
+                  <span className={`text-2xl font-bold ${isCompleted ? 'text-green-400' : 'text-white'}`}>
+                    {lang}
+                  </span>
+                  {isCompleted ? (
+                    <CheckCircle 
+                      size={28} 
+                      className="text-green-400" 
+                    />
+                  ) : (
+                    <PlayCircle 
+                      size={28} 
+                      className="text-gray-500 transition-all duration-300
+                                 group-hover:text-primary group-hover:translate-x-1" 
+                    />
+                  )}
+                </div>
+                <div className={`text-sm text-left transition-colors ${
+                  isCompleted 
+                    ? 'text-green-300' 
+                    : 'text-gray-400 group-hover:text-gray-300'
+                }`}>
+                  {isCompleted ? '✅ Completed today!' : `Play Modle in ${lang}`}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
       
       {/* (Removed the redundant "Available languages" text for a cleaner look) */}
     </div>

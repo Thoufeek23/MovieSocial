@@ -13,6 +13,7 @@ if (localStorage.getItem('token')) {
     localStorage.removeItem('token');
   } else {
     initialState.user = decodedToken.user;
+    // We'll fetch full user data in the AuthProvider component
   }
 }
 
@@ -39,14 +40,22 @@ function AuthProvider(props) {
   const [state, dispatch] = useReducer(authReducer, initialState);
   const [isJustLoggedIn, setJustLoggedIn] = useState(false);
 
+
+
+
+
   const login = (userData) => {
     localStorage.setItem('token', userData.token);
     const user = jwtDecode(userData.token).user;
+    
+    // Set user data immediately from JWT (which now includes isAdmin)
     dispatch({
       type: 'LOGIN',
       payload: user,
     });
+    
     setJustLoggedIn(true); // Set the flag to trigger the animation
+    
     // After login, fetch authoritative modle status and broadcast so UI can update immediately
     (async () => {
       try {
