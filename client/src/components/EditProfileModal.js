@@ -3,14 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Avatar from './Avatar';
 import toast from 'react-hot-toast';
 import * as api from '../api';
-import COUNTRIES from '../data/countries'; // Import country data
+
 import { X } from 'lucide-react';
 
 const EditProfileModal = ({ isOpen, onClose, profile, onUpdated }) => {
   const [bio, setBio] = useState(profile?.bio || '');
   const [avatarPreview, setAvatarPreview] = useState(profile?.avatar || '');
-  const [country, setCountry] = useState(profile?.country || '');
-  const [stateRegion, setStateRegion] = useState(profile?.state || ''); // Use 'state' field if available
   const [isLoading, setIsLoading] = useState(false);
   const avatarRef = useRef(null);
 
@@ -19,8 +17,6 @@ const EditProfileModal = ({ isOpen, onClose, profile, onUpdated }) => {
     if (profile) {
       setBio(profile.bio || '');
       setAvatarPreview(profile.avatar || '');
-      setCountry(profile.country || '');
-      setStateRegion(profile.state || ''); // Prioritize 'state' field
     }
   }, [profile]);
 
@@ -36,15 +32,7 @@ const EditProfileModal = ({ isOpen, onClose, profile, onUpdated }) => {
     reader.readAsDataURL(file);
   };
 
-  // Handle country change
-  const handleCountryChange = (e) => {
-    const countryCode = e.target.value;
-    const countryObj = COUNTRIES.find(c => c.code === countryCode);
-    setCountry(countryCode);
-    // Reset state/region or set to country name if no states
-    const statesList = countryObj?.states || [];
-    setStateRegion(statesList.length > 0 ? '' : (countryObj ? countryObj.name : ''));
-  };
+
 
   // Handle saving changes
   const save = async () => {
@@ -52,8 +40,6 @@ const EditProfileModal = ({ isOpen, onClose, profile, onUpdated }) => {
     try {
       const payload = {
         bio,
-        country,
-        state: stateRegion, // Send the state/region value as 'state'
       };
       // Only include avatar if it's different from the original or a new one was selected
       if (avatarPreview !== profile?.avatar) {
@@ -144,64 +130,7 @@ const EditProfileModal = ({ isOpen, onClose, profile, onUpdated }) => {
                 <p className="text-xs text-gray-500 mt-1 text-right">{bio.length}/200</p>
               </div>
 
-              {/* Country Section */}
-              <div>
-                <label htmlFor="country" className="block text-sm font-medium text-gray-300 mb-2">Country</label>
-                <select
-                  id="country"
-                  name="country"
-                  value={country}
-                  onChange={handleCountryChange}
-                  className="w-full p-3 bg-gray-900 border border-gray-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition duration-200 appearance-none" // Added appearance-none
-                >
-                  <option value="">Select country</option>
-                  {COUNTRIES.map(c => (
-                    <option key={c.code} value={c.code} className="bg-gray-800 text-white">{c.name}</option> // Added styles for options
-                  ))}
-                </select>
-              </div>
 
-              {/* State/Region Section */}
-              <div>
-                <label htmlFor="state" className="block text-sm font-medium text-gray-300 mb-2">State / Region</label>
-                {(() => {
-                  const countryObj = COUNTRIES.find(c => c.code === country);
-                  const statesList = countryObj?.states || [];
-                  const isDisabled = !country || statesList.length === 0;
-
-                  if (statesList.length > 0) {
-                    return (
-                      <select
-                        id="state"
-                        name="state"
-                        value={stateRegion}
-                        onChange={(e) => setStateRegion(e.target.value)}
-                        disabled={isDisabled}
-                        className="w-full p-3 bg-gray-900 border border-gray-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed appearance-none" // Added appearance-none
-                      >
-                        <option value="">Select state/region</option>
-                        {statesList.map(s => (
-                          <option key={s} value={s} className="bg-gray-800 text-white">{s}</option> // Added styles for options
-                        ))}
-                      </select>
-                    );
-                  } else {
-                    // Input field when no predefined states (or country not selected)
-                    return (
-                      <input
-                        id="state"
-                        name="state"
-                        value={stateRegion} // Value might be country name if no states
-                        onChange={(e) => setStateRegion(e.target.value)}
-                        disabled={!country} // Only allow input if a country is selected
-                        placeholder={country ? "Enter state/region" : "Select a country first"}
-                        className="w-full p-3 bg-gray-900 border border-gray-700 rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                      />
-                    );
-                  }
-                })()}
-                <p className="text-xs text-gray-500 mt-1">Used for regional leaderboards.</p>
-              </div>
 
               {/* Action Buttons */}
               <div className="flex justify-end gap-3 pt-4 border-t border-gray-700">

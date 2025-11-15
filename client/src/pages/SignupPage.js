@@ -3,12 +3,12 @@ import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AuthContext } from '../context/AuthContext';
 import * as api from '../api';
-import COUNTRIES from '../data/countries';
+
 import AuthLayout from '../components/AuthLayout';
 import Curtain from '../components/Curtain';
 
 const SignupPage = () => {
-  const [formData, setFormData] = useState({ name: '', age: '', username: '', email: '', password: '', confirmPassword: '', country: '', state: '' });
+  const [formData, setFormData] = useState({ name: '', age: '', username: '', email: '', password: '', confirmPassword: '' });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [signupStep, setSignupStep] = useState(1); // 1: enter details, 2: enter otp, 3: complete
@@ -79,8 +79,6 @@ const SignupPage = () => {
         username: formData.username.trim(),
         email: formData.email.trim(),
         password: formData.password,
-        country: formData.country || '',
-        state: formData.state || '',
       };
 
       await api.sendSignupOtp(payload);
@@ -111,11 +109,11 @@ const SignupPage = () => {
     setIsLoading(true);
     try {
       const { data } = await api.completeSignup({ email: formData.email.trim(), signupToken });
-      // login will set token in localStorage and update context
-      login(data);
-      // show curtains and navigate to home immediately so the completed signup page is not visible
+      // login will set token in localStorage and update context, mark as new user
+      login(data, true);
+      // show curtains and navigate to interests page for new users
       setShowCurtains(true);
-      navigate('/');
+      navigate('/interests');
     } catch (err) {
       setError(err.response?.data?.msg || 'Failed to complete signup');
       console.error(err);
@@ -164,49 +162,7 @@ const SignupPage = () => {
             <label htmlFor="username" className="absolute left-0 -top-4 text-gray-400 text-sm transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-placeholder-shown:top-3 peer-focus:-top-4 peer-focus:text-primary peer-focus:text-sm">Username</label>
           </motion.div>
 
-          <motion.div variants={itemVariants} className="relative">
-            <label htmlFor="country" className="block text-sm text-gray-400 mb-2">Country</label>
-            <select id="country" name="country" value={formData.country} onChange={(e) => {
-              const countryCode = e.target.value;
-              const countryObj = COUNTRIES.find(c => c.code === countryCode);
-              // If the selected country has no predefined states, set state to the country name and disable entry
-              const statesList = countryObj ? (countryObj.states || []) : [];
-              const nextState = statesList.length > 0 ? '' : (countryObj ? countryObj.name : '');
-              setFormData(prev => ({ ...prev, country: countryCode, state: nextState }));
-            }} className="w-full bg-gray-900 border p-2 rounded text-white">
-              <option value="">Select country</option>
-              {COUNTRIES.map(c => (
-                <option key={c.code} value={c.code} style={{ color: '#fff', backgroundColor: '#111827' }}>{c.name}</option>
-              ))}
-            </select>
-          </motion.div>
 
-          <motion.div variants={itemVariants} className="relative">
-            <label htmlFor="state" className="block text-sm text-gray-400 mb-2">State / Region</label>
-              {(() => {
-                const countryObj = COUNTRIES.find(c => c.code === formData.country);
-                const statesList = (countryObj?.states || []);
-                if (!formData.country) {
-                  return (
-                    <input placeholder="Choose a country first" disabled className="w-full bg-gray-800 border p-2 rounded text-gray-400" />
-                  );
-                }
-                if (statesList && statesList.length > 0) {
-                  return (
-                    <select id="state" name="state" value={formData.state} onChange={(e) => setFormData(prev => ({ ...prev, state: e.target.value }))} className="w-full bg-gray-900 border p-2 rounded text-white">
-                      <option value="">Select state</option>
-                      {statesList.map(s => (
-                        <option key={s} value={s} style={{ color: '#fff', backgroundColor: '#111827' }}>{s}</option>
-                      ))}
-                    </select>
-                  );
-                }
-                // No predefined states: show a disabled input containing the country name (state set to country)
-                return (
-                  <input id="state" name="state" value={formData.state} disabled className="w-full bg-gray-800 border p-2 rounded text-gray-400" />
-                );
-              })()}
-          </motion.div>
 
           <motion.div variants={itemVariants} className="relative">
             <input id="email" name="email" type="email" onChange={handleChange} className="peer h-12 w-full border-b-2 border-gray-600 text-white bg-transparent placeholder-transparent focus:outline-none focus:border-primary transition-colors" placeholder="Email" required />

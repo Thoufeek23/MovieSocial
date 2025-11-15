@@ -3,6 +3,8 @@ import { Toaster } from 'react-hot-toast';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import PrivateRoute from './components/PrivateRoute';
+import ProtectedRoute from './components/ProtectedRoute';
+import InterestsRoute from './components/InterestsRoute';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
@@ -17,6 +19,7 @@ import BadgeDetail from './pages/BadgeDetail';
 import ModlePage from './pages/ModlePage';
 import ModlePlayPage from './pages/ModlePlayPage';
 import PuzzleAdmin from './pages/PuzzleAdmin';
+import InterestsPage from './pages/InterestsPage';
 import { AnimatePresence, motion } from 'framer-motion';
 import Curtain from './components/Curtain';
 import React, { useContext } from 'react';
@@ -39,7 +42,7 @@ const PageWrapper = ({ children }) => {
 
 const AppRoutes = () => {
   const location = useLocation();
-  const isAuthRoute = ['/login', '/signup'].includes(location.pathname);
+  const isAuthRoute = ['/login', '/signup', '/interests'].includes(location.pathname);
 
   return (
     <>
@@ -51,9 +54,26 @@ const AppRoutes = () => {
           <Routes>
             <Route path="/login" element={<PageWrapper><LoginPage /></PageWrapper>} />
             <Route path="/signup" element={<PageWrapper><SignupPage /></PageWrapper>} />
-            <Route path="/search" element={<PageWrapper><SearchPage /></PageWrapper>} />
-            <Route path="/modle" element={<PageWrapper><ModlePage /></PageWrapper>} />
-            <Route path="/modle/play" element={<PageWrapper><ModlePlayPage /></PageWrapper>} />
+            <Route path="/interests" element={
+              <InterestsRoute>
+                <PageWrapper><InterestsPage /></PageWrapper>
+              </InterestsRoute>
+            } />
+            <Route path="/search" element={
+              <ProtectedRoute>
+                <PageWrapper><SearchPage /></PageWrapper>
+              </ProtectedRoute>
+            } />
+            <Route path="/modle" element={
+              <ProtectedRoute>
+                <PageWrapper><ModlePage /></PageWrapper>
+              </ProtectedRoute>
+            } />
+            <Route path="/modle/play" element={
+              <ProtectedRoute>
+                <PageWrapper><ModlePlayPage /></PageWrapper>
+              </ProtectedRoute>
+            } />
             <Route 
               path="/admin/puzzles" 
               element={
@@ -62,21 +82,49 @@ const AppRoutes = () => {
                 </PrivateRoute>
               } 
             />
-            <Route path="/movie/:id" element={<PageWrapper><MovieDetailPage /></PageWrapper>} />
-            <Route path="/profile/:username" element={<PageWrapper><ProfilePage /></PageWrapper>} />
-            <Route path="/leaderboard" element={<PageWrapper><Leaderboard /></PageWrapper>} />
-            <Route path="/badges/:badgeId" element={<PageWrapper><BadgeDetail /></PageWrapper>} />
-              <Route path="/discussions/:id" element={<PageWrapper><DiscussionPage /></PageWrapper>} />
-              <Route path="/discussions" element={<PageWrapper><DiscussionsListPage /></PageWrapper>} />
-              <Route path="/reviews" element={<PageWrapper><ReviewsPage /></PageWrapper>} />
+            <Route path="/movie/:id" element={
+              <ProtectedRoute>
+                <PageWrapper><MovieDetailPage /></PageWrapper>
+              </ProtectedRoute>
+            } />
+            <Route path="/profile/:username" element={
+              <ProtectedRoute>
+                <PageWrapper><ProfilePage /></PageWrapper>
+              </ProtectedRoute>
+            } />
+            <Route path="/leaderboard" element={
+              <ProtectedRoute>
+                <PageWrapper><Leaderboard /></PageWrapper>
+              </ProtectedRoute>
+            } />
+            <Route path="/badges/:badgeId" element={
+              <ProtectedRoute>
+                <PageWrapper><BadgeDetail /></PageWrapper>
+              </ProtectedRoute>
+            } />
+              <Route path="/discussions/:id" element={
+                <ProtectedRoute>
+                  <PageWrapper><DiscussionPage /></PageWrapper>
+                </ProtectedRoute>
+              } />
+              <Route path="/discussions" element={
+                <ProtectedRoute>
+                  <PageWrapper><DiscussionsListPage /></PageWrapper>
+                </ProtectedRoute>
+              } />
+              <Route path="/reviews" element={
+                <ProtectedRoute>
+                  <PageWrapper><ReviewsPage /></PageWrapper>
+                </ProtectedRoute>
+              } />
             <Route
               path="/"
               element={
-                <PrivateRoute>
+                <ProtectedRoute>
                   <PageWrapper>
                     <HomePage />
                   </PageWrapper>
-                </PrivateRoute>
+                </ProtectedRoute>
               }
             />
           </Routes>

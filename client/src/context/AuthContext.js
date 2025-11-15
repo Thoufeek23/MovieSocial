@@ -5,6 +5,7 @@ import * as api from '../api';
 
 const initialState = {
   user: null,
+  isNewUser: false,
 };
 
 if (localStorage.getItem('token')) {
@@ -23,6 +24,8 @@ const AuthContext = createContext({
   logout: () => {},
   isJustLoggedIn: false,
   setJustLoggedIn: () => {},
+  isNewUser: false,
+  setNewUser: () => {},
 });
 
 function authReducer(state, action) {
@@ -30,7 +33,9 @@ function authReducer(state, action) {
     case 'LOGIN':
       return { ...state, user: action.payload };
     case 'LOGOUT':
-      return { ...state, user: null };
+      return { ...state, user: null, isNewUser: false };
+    case 'SET_NEW_USER':
+      return { ...state, isNewUser: action.payload };
     default:
       return state;
   }
@@ -44,7 +49,7 @@ function AuthProvider(props) {
 
 
 
-  const login = (userData) => {
+  const login = (userData, isNewUser = false) => {
     localStorage.setItem('token', userData.token);
     const user = jwtDecode(userData.token).user;
     
@@ -53,6 +58,11 @@ function AuthProvider(props) {
       type: 'LOGIN',
       payload: user,
     });
+    
+    // Set new user flag if this is their first login
+    if (isNewUser) {
+      dispatch({ type: 'SET_NEW_USER', payload: true });
+    }
     
     setJustLoggedIn(true); // Set the flag to trigger the animation
     
@@ -101,9 +111,22 @@ function AuthProvider(props) {
     setJustLoggedIn(false);
   };
 
+  const setNewUser = (isNew) => {
+    dispatch({ type: 'SET_NEW_USER', payload: isNew });
+  };
+
   return (
     <AuthContext.Provider
-      value={{ user: state.user, login, logout, setUser, isJustLoggedIn, setJustLoggedIn }}
+      value={{ 
+        user: state.user, 
+        login, 
+        logout, 
+        setUser, 
+        isJustLoggedIn, 
+        setJustLoggedIn,
+        isNewUser: state.isNewUser,
+        setNewUser
+      }}
       {...props}
     />
   );

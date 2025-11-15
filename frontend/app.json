@@ -8,7 +8,7 @@
     "icon": "./assets/images/MS_icon.png",
     "userInterfaceStyle": "dark",
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/MS_icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#18181b"
     },
@@ -21,11 +21,6 @@
     },
     "android": {
       "icon": "./assets/images/MS_icon.png",
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "backgroundColor": "#18181b"
-      },
       "package": "com.thoufeek23.moviesocial"
     },
     "web": {
