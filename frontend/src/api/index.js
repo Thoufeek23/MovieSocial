@@ -94,3 +94,15 @@ export const getLeaderboardRegion = (region) => API.get(`/stats/top-reviewers/re
 // Modle (daily puzzle) endpoints
 export const getModleStatus = (language = 'English') => API.get(`/users/modle/status?language=${encodeURIComponent(language)}`);
 export const postModleResult = (payload) => API.post('/users/modle/result', payload);
+export const getDailyPuzzle = (language = 'English', date = null) => {
+  const params = new URLSearchParams({ language });
+  if (date) params.append('date', date);
+  return API.get(`/puzzles/daily?${params.toString()}`);
+};
+
+// Discussion helpers for mobile
+export const getDiscussionById = (id) => API.get(`/discussions/${id}`);
+export const createDiscussion = (discussionData) => API.post('/discussions', discussionData);
+export const addCommentToDiscussion = (id, commentData) => API.post(`/discussions/${id}/comments`, commentData);
+export const deleteCommentFromDiscussion = (discussionId, commentId) => API.delete(`/discussions/${discussionId}/comments/${commentId}`);
+export const createReview = (reviewData) => API.post('/reviews', reviewData);

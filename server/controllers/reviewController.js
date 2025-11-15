@@ -16,8 +16,8 @@ const createReview = async (req, res) => {
             return res.status(400).json({ msg: 'Rating is required' });
         }
         const numericRating = Number(rating);
-        if (Number.isNaN(numericRating) || numericRating < 1 || numericRating > 5) {
-            return res.status(400).json({ msg: 'Rating must be a number between 1 and 5' });
+        if (Number.isNaN(numericRating) || numericRating < 0.5 || numericRating > 5) {
+            return res.status(400).json({ msg: 'Rating must be a number between 0.5 and 5' });
         }
         // Prevent a user from posting more than one review per movie
         const existing = await Review.findOne({ user: req.user.id, movieId });

@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const initialState = {
   user: null,
   loading: true, // Add a loading state
+  isNewUser: false,
 };
 
 // Create the context
@@ -17,6 +18,8 @@ const AuthContext = createContext({
   setUser: (user) => {},
   isJustLoggedIn: false,
   setJustLoggedIn: () => {},
+  isNewUser: false,
+  setNewUser: () => {},
 });
 
 function authReducer(state, action) {
@@ -24,9 +27,11 @@ function authReducer(state, action) {
     case 'LOGIN':
       return { ...state, user: action.payload };
     case 'LOGOUT':
-      return { ...state, user: null };
+      return { ...state, user: null, isNewUser: false };
     case 'SET_LOADING': // Add new action type
       return { ...state, loading: action.payload };
+    case 'SET_NEW_USER':
+      return { ...state, isNewUser: action.payload };
     default:
       return state;
   }
@@ -60,7 +65,7 @@ function AuthProvider(props) {
     loadUserFromStorage();
   }, []); // Empty array means this runs once on mount
 
-  const login = async (userData) => {
+  const login = async (userData, isNewUser = false) => {
     try {
       await AsyncStorage.setItem('token', userData.token);
       const user = jwtDecode(userData.token).user;
@@ -68,10 +73,18 @@ function AuthProvider(props) {
         type: 'LOGIN',
         payload: user,
       });
+      dispatch({
+        type: 'SET_NEW_USER',
+        payload: isNewUser,
+      });
       setJustLoggedIn(true);
     } catch (e) {
       console.error("Failed to save token", e);
     }
+  };
+
+  const setNewUser = (isNew) => {
+    dispatch({ type: 'SET_NEW_USER', payload: isNew });
   };
 
   const setUser = (user) => {
@@ -93,11 +106,13 @@ function AuthProvider(props) {
       value={{
         user: state.user,
         loading: state.loading,
+        isNewUser: state.isNewUser,
         login,
         logout,
         setUser,
         isJustLoggedIn,
         setJustLoggedIn,
+        setNewUser,
       }}
       {...props}
     />

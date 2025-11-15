@@ -3,28 +3,46 @@
 import { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
+import { ModleProvider } from '../src/context/ModleContext';
 import { View, ActivityIndicator } from 'react-native';
 
 // This component checks auth state and redirects
 const MainLayout = () => {
-  const { user, loading } = useAuth();
+  const { user, loading, isNewUser, setNewUser } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
     // If the auth state changes, ensure we land on the correct route.
-    // When loading finishes and there's no user, send the user to `/login`.
-    // When there's a user, and we're at an auth route, send them to the app tabs.
     if (!loading) {
       const first = segments[0];
-      if (!user && first !== 'login' && first !== 'signup') {
-        router.replace('/login');
+      
+      // Handle unauthenticated users
+      if (!user) {
+        if (first !== 'login' && first !== 'signup') {
+          router.replace('/login');
+        }
+        return;
       }
-      if (user && (first === 'login' || first === 'signup' || first === undefined)) {
-        router.replace('/(tabs)');
+      
+      // Handle authenticated users
+      if (user) {
+        if (first === 'login' || first === 'signup') {
+          // Check if this is a new user who needs to see interests
+          if (isNewUser) {
+            router.replace('/interests');
+          } else {
+            router.replace('/(tabs)/');
+          }
+        }
+        // If we're on interests page and user completes it, go to tabs
+        if (first === 'interests' && !isNewUser) {
+          router.replace('/(tabs)/');
+        }
+        // If first is undefined, let it naturally go to default route
       }
     }
-  }, [user, loading, segments, router]);
+  }, [user, loading, segments, isNewUser]);
 
   // Show a loading spinner
   if (loading) {
@@ -35,29 +53,30 @@ const MainLayout = () => {
     );
   }
 
-  // THIS IS THE PART TO UPDATE:
   return (
-    <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
-      {/* These are your main app screens, nested in a tab navigator */}
-      <Stack.Screen name="(tabs)" /> 
-      {/* These are your auth screens */}
-      <Stack.Screen name="login" />
-      <Stack.Screen name="signup" />
-      
-      {/* Dynamic routes (e.g. `movie/[id]`, `profile/[username]`) are file-based
-          and automatically registered by expo-router. Removing manual
-          `Stack.Screen` declarations avoids duplicate/"extraneous" warnings. */}
-
-    </Stack>
+    <View style={{ flex: 1 }}>
+      <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} /> 
+        <Stack.Screen name="login" options={{ headerShown: false }} />
+        <Stack.Screen name="signup" options={{ headerShown: false }} />
+        <Stack.Screen name="interests" options={{ headerShown: false }} />
+        <Stack.Screen name="create-review" options={{ headerShown: false }} />
+        <Stack.Screen name="create-discussion" options={{ headerShown: false }} />
+        <Stack.Screen name="profile/[username]" options={{ headerShown: false }} />
+        <Stack.Screen name="+not-found" options={{ headerShown: false }} />
+      </Stack>
+    </View>
   );
 };
 
 // This is the root layout
 export default function RootLayout() {
   return (
-    // Wrap the entire app in the AuthProvider
+    // Wrap the entire app in the AuthProvider and ModleProvider
     <AuthProvider>
-      <MainLayout />
+      <ModleProvider>
+        <MainLayout />
+      </ModleProvider>
     </AuthProvider>
   );
 }

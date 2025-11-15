@@ -23,6 +23,11 @@ const registerUser = async (req, res) => {
             return res.status(400).json({ msg: 'Please enter all fields' });
         }
 
+        // Validate username length
+        if (username.trim().length > 10) {
+            return res.status(400).json({ msg: 'Username cannot be more than 10 characters' });
+        }
+
         const userExists = await User.findOne({ email });
         if (userExists) {
             return res.status(400).json({ msg: 'User with that email already exists' });
@@ -218,6 +223,11 @@ const sendSignupOtp = async (req, res) => {
     // Accept country/state but normalize/validate them before storing
     let { country, state } = req.body;
     if (!username || !email || !password) return res.status(400).json({ msg: 'username, email and password required' });
+    
+    // Validate username length
+    if (username.trim().length > 10) {
+        return res.status(400).json({ msg: 'Username cannot be more than 10 characters' });
+    }
 
     // small helpers
     const normalizeCountry = (c) => {

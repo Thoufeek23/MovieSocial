@@ -1,317 +1,444 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
+import React, { useState } from 'react';
+import { 
+  View, 
+  Text, 
+  Image,
+  ImageBackground, 
+  KeyboardAvoidingView, 
+  Platform, 
   TouchableOpacity,
-  SafeAreaView,
-  ActivityIndicator,
-  ImageBackground,
+  Pressable,
   ScrollView,
-  KeyboardAvoidingView,
-  Platform,
+  StyleSheet,
+  Dimensions
 } from 'react-native';
-import { useRouter, Link } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Link, useRouter } from 'expo-router';
+import { MotiView } from 'moti';
+
 import { useAuth } from '../src/context/AuthContext';
 import * as api from '../src/api';
-import { Eye, EyeOff, Clapperboard } from 'lucide-react-native';
+import { FloatingLabelInput } from '../components/FloatingLabelInput';
 
-const IMG_BASE_URL = 'https://image.tmdb.org/t/p/original';
-
-const PasswordCheckItem = ({ text, valid }) => (
-  <Text className={valid ? 'text-green-400' : 'text-gray-500'}>
-    {valid ? '✓' : '•'} {text}
-  </Text>
-);
+import COUNTRIES from '../src/data/countries';
 
 export default function SignupPage() {
-  const router = useRouter();
-  const { login } = useAuth();
-
-  const [formData, setFormData] = useState({
-    username: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
+  const [formData, setFormData] = useState({ 
+    name: '', 
+    age: '', 
+    username: '', 
+    email: '', 
+    password: '', 
+    confirmPassword: '', 
+    country: '', 
+    state: '' 
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [signupStep, setSignupStep] = useState(1); // 1: enter details, 2: enter otp, 3: complete
+  const [otp, setOtp] = useState('');
+  const [signupToken, setSignupToken] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [passwordChecks, setPasswordChecks] = useState({
-    length: false,
-    upper: false,
-    lower: false,
-    number: false,
-    special: false,
+  const [passwordChecks, setPasswordChecks] = useState({ 
+    length: false, 
+    upper: false, 
+    lower: false, 
+    number: false, 
+    special: false 
   });
+  
+  const { login } = useAuth();
+  const router = useRouter();
 
-  const canSubmit =
-    Object.values(passwordChecks).every(Boolean) &&
-    formData.password === formData.confirmPassword;
+  // Use static poster image instead of dynamic background
+  const staticPoster = require('../assets/images/poster1.png');
 
-  const [backdrops, setBackdrops] = useState([]);
-  const [currentBackdrop, setCurrentBackdrop] = useState(0);
+  const handleChange = (field, value) => {
+    setFormData({ ...formData, [field]: value });
+    if (error) setError(''); // Clear error when user starts typing
 
-  useEffect(() => {
-    const fetchBackdrops = async () => {
-      try {
-        const res = await api.getPopularMovies();
-        const urls = res.data.results
-          .map((m) => m.backdrop_path)
-          .filter(Boolean)
-          .slice(0, 10);
-        setBackdrops(urls);
-      } catch (error) {
-        console.error('Could not fetch movie backdrops', error);
-      }
-    };
-    fetchBackdrops();
-  }, []);
-
-  useEffect(() => {
-    if (backdrops.length > 1) {
-      const interval = setInterval(() => {
-        setCurrentBackdrop((prev) => (prev + 1) % backdrops.length);
-      }, 5000);
-      return () => clearInterval(interval);
-    }
-  }, [backdrops]);
-
-  const handleChange = (name, value) => {
-    setFormData({ ...formData, [name]: value });
-    if (error) setError('');
-
-    if (name === 'password') {
-      const v = value;
+    if (field === 'password') {
       const checks = {
-        length: v.length >= 8,
-        upper: /[A-Z]/.test(v),
-        lower: /[a-z]/.test(v),
-        number: /\d/.test(v),
-        special: /[\W_]/.test(v),
+        length: value.length >= 8,
+        upper: /[A-Z]/.test(value),
+        lower: /[a-z]/.test(value),
+        number: /\d/.test(value),
+        special: /[\W_]/.test(value),
       };
       setPasswordChecks(checks);
     }
   };
 
   const handleSubmit = async () => {
-    if (!canSubmit) {
-      if (formData.password !== formData.confirmPassword) {
-        setError('Passwords do not match.');
-      } else {
-        setError('Password does not meet requirements.');
-      }
+    setError('');
+
+    // Basic validations
+    if (!formData.name.trim() || !formData.age.trim() || !formData.username.trim() || !formData.email.trim() || !formData.password) {
+      setError('Please fill out all fields.');
+      return;
+    }
+
+    if (formData.username.trim().length > 10) {
+      setError('Username cannot be more than 10 characters.');
+      return;
+    }
+
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(formData.email)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+
+    const ageNum = Number(formData.age);
+    if (!Number.isInteger(ageNum) || ageNum < 8 || ageNum > 120) {
+      setError('Please enter a valid age (must be at least 8).');
+      return;
+    }
+
+    // Password policy validation
+    const pwd = formData.password;
+    const pwdPolicy = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+    if (!pwdPolicy.test(pwd)) {
+      setError('Password must be at least 8 characters and include uppercase, lowercase, number and special character.');
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match. Please retype your password.');
       return;
     }
 
     setIsLoading(true);
-    setError('');
     try {
-      await api.register({ // Using simple 'register' from your API
-        username: formData.username,
-        email: formData.email,
+      // Start signup OTP flow
+      const payload = {
+        name: formData.name.trim(),
+        age: ageNum,
+        username: formData.username.trim(),
+        email: formData.email.trim(),
         password: formData.password,
-      });
+        country: formData.country || '',
+        state: formData.state || '',
+      };
 
-      // Automatically log them in after successful signup
-      const { data } = await api.login({
-        email: formData.email,
-        password: formData.password,
-      });
-      login(data);
-      // AuthGuard will handle the redirect
+      await api.sendSignupOtp(payload);
+      setSignupStep(2);
     } catch (err) {
-      const msg =
-        err?.response?.data?.message ||
-        err?.response?.data?.msg ||
-        'An error occurred. Please try again.';
-      setError(msg);
+      setError(err.response?.data?.msg || 'Failed to start signup.');
+      console.error(err);
+    } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    setError('');
+    setIsLoading(true);
+    try {
+      const { data } = await api.verifySignupOtp({ email: formData.email.trim(), otp });
+      setSignupToken(data.signupToken);
+      setSignupStep(3);
+    } catch (err) {
+      setError(err.response?.data?.msg || 'Invalid OTP');
+      console.error(err);
+    } finally { 
+      setIsLoading(false); 
+    }
+  };
+
+  const handleCompleteSignup = async () => {
+    setError('');
+    setIsLoading(true);
+    try {
+      const { data } = await api.completeSignup({ email: formData.email.trim(), signupToken });
+      await login(data, true); // Pass true to indicate this is a new user signup
+      // Navigation will be handled by _layout.jsx
+    } catch (err) {
+      setError(err.response?.data?.msg || 'Failed to complete signup');
+      console.error(err);
+    } finally { 
+      setIsLoading(false); 
     }
   };
 
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className="flex-1"
+      style={signupStyles.container}
     >
       <ImageBackground
-        source={{
-          uri: backdrops.length
-            ? `${IMG_BASE_URL}${backdrops[currentBackdrop]}`
-            : null,
-        }}
+        source={staticPoster}
         resizeMode="cover"
-        className="flex-1"
+        style={signupStyles.backgroundImage}
       >
-        <View className="flex-1 bg-black/70 p-6 justify-center">
-          <SafeAreaView className="flex-1 justify-center">
-            <ScrollView showsVerticalScrollIndicator={false}>
-              
-              <View className="items-center mb-8">
-                <Clapperboard size={48} className="text-primary" />
-                <Text className="text-4xl font-bold text-white mt-3">
-                  MovieSocial
-                </Text>
-                <Text className="text-lg text-gray-300 mt-2">
-                  Join the community.
-                </Text>
+        <View style={signupStyles.overlay}>
+          <SafeAreaView style={signupStyles.safeArea}>
+            {/* Header Section */}
+            <MotiView
+              from={{ opacity: 0, translateY: 30 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={{ type: 'timing', duration: 800, delay: 300 }}
+              style={signupStyles.headerSection}
+            >
+              <View style={signupStyles.logoContainer}>
+                <Image 
+                  source={require('../assets/images/MS_logo.png')}
+                  style={signupStyles.logoImage}
+                  resizeMode="contain"
+                />
               </View>
+            </MotiView>
 
-              <View className="bg-card/80 p-6 rounded-2xl">
-                <Text className="text-3xl font-bold text-white mb-2">
+            {/* Form Section */}
+            <ScrollView 
+              style={signupStyles.formContainer}
+              showsVerticalScrollIndicator={false}
+            >
+              <MotiView
+                from={{ opacity: 0, translateY: 20 }}
+                animate={{ opacity: 1, translateY: 0 }}
+                transition={{ type: 'timing', duration: 800, delay: 500 }}
+                style={signupStyles.formCard}
+              >
+                <Text style={signupStyles.welcomeTitle}>
                   Create Account
                 </Text>
-                <Text className="text-gray-300 mb-6">
-                  Start your movie journey today.
+                <Text style={signupStyles.welcomeSubtitle}>
+                  Join the community and start sharing your thoughts on film.
                 </Text>
 
-                <View className="space-y-5">
-                  {error ? (
-                    <Text className="text-red-400 text-center p-3 bg-red-500/20 rounded-lg">
+                {/* Error Message */}
+                {error && (
+                  <MotiView
+                    from={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    style={signupStyles.errorContainer}
+                  >
+                    <Text style={signupStyles.errorText}>
                       {error}
                     </Text>
-                  ) : null}
+                  </MotiView>
+                )}
 
-                  <View>
-                    <Text className="text-sm font-medium text-gray-300 mb-2">
-                      Username
-                    </Text>
-                    <TextInput
-                      className="w-full px-4 py-3 rounded-lg bg-background text-white border border-gray-700 focus:border-primary"
-                      placeholder="Your unique username"
-                      placeholderTextColor="#6b7280"
-                      autoCapitalize="none"
-                      value={formData.username}
-                      onChangeText={(value) => handleChange('username', value)}
-                    />
-                  </View>
+                {/* Step 1: Registration Form */}
+                {signupStep === 1 && (
+                  <View style={signupStyles.inputsContainer}>
+                    <MotiView
+                      from={{ opacity: 0, translateX: -20 }}
+                      animate={{ opacity: 1, translateX: 0 }}
+                      transition={{ type: 'spring', stiffness: 100, delay: 700 }}
+                      style={signupStyles.inputWrapper}
+                    >
+                      <FloatingLabelInput
+                        label="Full Name"
+                        value={formData.name}
+                        onChangeText={(value) => handleChange('name', value)}
+                      />
+                    </MotiView>
 
-                  <View>
-                    <Text className="text-sm font-medium text-gray-300 mb-2">
-                      Email
-                    </Text>
-                    <TextInput
-                      className="w-full px-4 py-3 rounded-lg bg-background text-white border border-gray-700 focus:border-primary"
-                      placeholder="you@example.com"
-                      placeholderTextColor="#6b7280"
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      value={formData.email}
-                      onChangeText={(value) => handleChange('email', value)}
-                    />
-                  </View>
+                    <MotiView
+                      from={{ opacity: 0, translateX: -20 }}
+                      animate={{ opacity: 1, translateX: 0 }}
+                      transition={{ type: 'spring', stiffness: 100, delay: 750 }}
+                      style={signupStyles.inputWrapper}
+                    >
+                      <FloatingLabelInput
+                        label="Age"
+                        value={formData.age}
+                        onChangeText={(value) => handleChange('age', value)}
+                        keyboardType="numeric"
+                      />
+                    </MotiView>
 
-                  <View>
-                    <Text className="text-sm font-medium text-gray-300 mb-2">
-                      Password
-                    </Text>
-                    <View className="flex-row items-center">
-                      <TextInput
-                        className="flex-1 w-full px-4 py-3 rounded-lg bg-background text-white border border-gray-700 focus:border-primary"
-                        placeholder="••••••••"
-                        placeholderTextColor="#6b7280"
-                        secureTextEntry={!showPassword}
+                    <MotiView
+                      from={{ opacity: 0, translateX: -20 }}
+                      animate={{ opacity: 1, translateX: 0 }}
+                      transition={{ type: 'spring', stiffness: 100, delay: 800 }}
+                      style={signupStyles.inputWrapper}
+                    >
+                      <FloatingLabelInput
+                        label="Username"
+                        value={formData.username}
+                        onChangeText={(value) => handleChange('username', value)}
                         autoCapitalize="none"
+                        maxLength={10}
+                      />
+                    </MotiView>
+
+                    <MotiView
+                      from={{ opacity: 0, translateX: -20 }}
+                      animate={{ opacity: 1, translateX: 0 }}
+                      transition={{ type: 'spring', stiffness: 100, delay: 850 }}
+                      style={signupStyles.inputWrapper}
+                    >
+                      <FloatingLabelInput
+                        label="Email"
+                        value={formData.email}
+                        onChangeText={(value) => handleChange('email', value)}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                      />
+                    </MotiView>
+
+                    <MotiView
+                      from={{ opacity: 0, translateX: -20 }}
+                      animate={{ opacity: 1, translateX: 0 }}
+                      transition={{ type: 'spring', stiffness: 100, delay: 900 }}
+                      style={signupStyles.inputWrapper}
+                    >
+                      <FloatingLabelInput
+                        label="Password"
                         value={formData.password}
                         onChangeText={(value) => handleChange('password', value)}
+                        isPassword={true}
                       />
-                      <TouchableOpacity
-                        onPress={() => setShowPassword(!showPassword)}
-                        className="absolute right-0 p-3"
-                      >
-                        {showPassword ? (
-                          <EyeOff size={20} color="#9ca3af" />
-                        ) : (
-                          <Eye size={20} color="#9ca3af" />
-                        )}
-                      </TouchableOpacity>
-                    </View>
-                  </View>
+                    </MotiView>
 
-                  <View className="space-y-1 px-1">
-                    <PasswordCheckItem
-                      text="Minimum 8 characters"
-                      valid={passwordChecks.length}
-                    />
-                    <PasswordCheckItem
-                      text="Uppercase letter (A-Z)"
-                      valid={passwordChecks.upper}
-                    />
-                    <PasswordCheckItem
-                      text="Lowercase letter (a-z)"
-                      valid={passwordChecks.lower}
-                    />
-                    <PasswordCheckItem
-                      text="A number (0-9)"
-                      valid={passwordChecks.number}
-                    />
-                    <PasswordCheckItem
-                      text="A special character (e.g. !@#$%)"
-                      valid={passwordChecks.special}
-                    />
-                  </View>
-
-                  <View>
-                    <Text className="text-sm font-medium text-gray-300 mb-2">
-                      Confirm Password
-                    </Text>
-                    <View className="flex-row items-center">
-                      <TextInput
-                        className="flex-1 w-full px-4 py-3 rounded-lg bg-background text-white border border-gray-700 focus:border-primary"
-                        placeholder="••••••••"
-                        placeholderTextColor="#6b7280"
-                        secureTextEntry={!showConfirmPassword}
-                        autoCapitalize="none"
-                        value={formData.confirmPassword}
-                        onChangeText={(value) =>
-                          handleChange('confirmPassword', value)
-                        }
-                      />
-                      <TouchableOpacity
-                        onPress={() =>
-                          setShowConfirmPassword(!showConfirmPassword)
-                        }
-                        className="absolute right-0 p-3"
-                      >
-                        {showConfirmPassword ? (
-                          <EyeOff size={20} color="#9ca3af" />
-                        ) : (
-                          <Eye size={20} color="#9ca3af" />
-                        )}
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  <TouchableOpacity
-                    onPress={handleSubmit}
-                    disabled={isLoading || !canSubmit}
-                    className={`w-full py-4 rounded-lg ${
-                      isLoading || !canSubmit ? 'bg-primary/50' : 'bg-primary'
-                    } items-center justify-center`}
-                  >
-                    {isLoading ? (
-                      <ActivityIndicator color="#ffffff" />
-                    ) : (
-                      <Text className="text-white font-bold text-base">
-                        Sign Up
+                    {/* Password Requirements */}
+                    <View style={signupStyles.passwordChecks}>
+                      <Text style={[signupStyles.passwordCheckText, { color: passwordChecks.length ? '#10b981' : '#6b7280' }]}>
+                        {passwordChecks.length ? '✓' : '•'} Minimum 8 characters
                       </Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
+                      <Text style={[signupStyles.passwordCheckText, { color: passwordChecks.upper ? '#10b981' : '#6b7280' }]}>
+                        {passwordChecks.upper ? '✓' : '•'} Uppercase letter (A-Z)
+                      </Text>
+                      <Text style={[signupStyles.passwordCheckText, { color: passwordChecks.lower ? '#10b981' : '#6b7280' }]}>
+                        {passwordChecks.lower ? '✓' : '•'} Lowercase letter (a-z)
+                      </Text>
+                      <Text style={[signupStyles.passwordCheckText, { color: passwordChecks.number ? '#10b981' : '#6b7280' }]}>
+                        {passwordChecks.number ? '✓' : '•'} A number (0-9)
+                      </Text>
+                      <Text style={[signupStyles.passwordCheckText, { color: passwordChecks.special ? '#10b981' : '#6b7280' }]}>
+                        {passwordChecks.special ? '✓' : '•'} A special character (e.g. !@#$%)
+                      </Text>
+                    </View>
 
-                <View className="flex-row justify-center mt-6">
-                  <Text className="text-gray-300">
-                    Already have an account?{' '}
-                  </Text>
-                  <Link href="/login" asChild>
-                    <TouchableOpacity>
-                      <Text className="text-primary font-bold">Login</Text>
-                    </TouchableOpacity>
-                  </Link>
-                </View>
-              </View>
+                    <MotiView
+                      from={{ opacity: 0, translateX: -20 }}
+                      animate={{ opacity: 1, translateX: 0 }}
+                      transition={{ type: 'spring', stiffness: 100, delay: 950 }}
+                      style={signupStyles.inputWrapper}
+                    >
+                      <FloatingLabelInput
+                        label="Confirm Password"
+                        value={formData.confirmPassword}
+                        onChangeText={(value) => handleChange('confirmPassword', value)}
+                        isPassword={true}
+                      />
+                    </MotiView>
+
+                    <MotiView
+                      from={{ opacity: 0, translateY: 20 }}
+                      animate={{ opacity: 1, translateY: 0 }}
+                      transition={{ type: 'timing', duration: 500, delay: 1000 }}
+                      style={signupStyles.buttonContainer}
+                    >
+                      <Pressable
+                        onPress={handleSubmit}
+                        disabled={isLoading}
+                        style={[
+                          signupStyles.signupButton,
+                          { backgroundColor: isLoading ? '#6b7280' : '#10b981' }
+                        ]}
+                      >
+                        <Text style={signupStyles.signupButtonText}>
+                          {isLoading ? 'Sending OTP...' : 'Sign Up'}
+                        </Text>
+                      </Pressable>
+                    </MotiView>
+                  </View>
+                )}
+
+                {/* Step 2: OTP Verification */}
+                {signupStep === 2 && (
+                  <View style={signupStyles.otpContainer}>
+                    <Text style={signupStyles.otpText}>
+                      We've sent an OTP to <Text style={signupStyles.emailText}>{formData.email}</Text>. Enter it below to verify your email.
+                    </Text>
+                    <FloatingLabelInput
+                      label="Enter OTP"
+                      value={otp}
+                      onChangeText={setOtp}
+                      keyboardType="numeric"
+                      maxLength={6}
+                    />
+                    <View style={signupStyles.otpButtons}>
+                      <Pressable
+                        onPress={() => setSignupStep(1)}
+                        style={signupStyles.backButton}
+                      >
+                        <Text style={signupStyles.backButtonText}>Back</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={handleVerifyOtp}
+                        disabled={isLoading || otp.trim().length === 0}
+                        style={[
+                          signupStyles.verifyButton,
+                          { 
+                            backgroundColor: (isLoading || otp.trim().length === 0) ? '#6b7280' : '#10b981',
+                            opacity: (isLoading || otp.trim().length === 0) ? 0.7 : 1
+                          }
+                        ]}
+                      >
+                        <Text style={signupStyles.verifyButtonText}>
+                          {isLoading ? 'Verifying...' : 'Verify'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                )}
+
+                {/* Step 3: Complete Signup */}
+                {signupStep === 3 && (
+                  <View style={signupStyles.completeContainer}>
+                    <Text style={signupStyles.completeText}>
+                      Verification successful. Click below to complete account creation.
+                    </Text>
+                    <View style={signupStyles.otpButtons}>
+                      <Pressable
+                        onPress={() => setSignupStep(2)}
+                        style={signupStyles.backButton}
+                      >
+                        <Text style={signupStyles.backButtonText}>Back</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={handleCompleteSignup}
+                        disabled={isLoading}
+                        style={[
+                          signupStyles.completeButton,
+                          { backgroundColor: isLoading ? '#6b7280' : '#10b981' }
+                        ]}
+                      >
+                        <Text style={signupStyles.completeButtonText}>
+                          {isLoading ? 'Completing...' : 'Complete Signup'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                )}
+
+                {/* Login Link */}
+                <MotiView
+                  from={{ opacity: 0, translateY: 10 }}
+                  animate={{ opacity: 1, translateY: 0 }}
+                  transition={{ type: 'timing', duration: 500, delay: 1100 }}
+                  style={signupStyles.loginContainer}
+                >
+                  <View style={signupStyles.loginBox}>
+                    <View style={signupStyles.loginText}>
+                      <Text style={{ color: '#f3f4f6', fontSize: 16, fontWeight: '500' }}>
+                        Already have an account?{' '}
+                      </Text>
+                      <Link href="/login" asChild>
+                        <TouchableOpacity>
+                          <Text style={signupStyles.loginLink}>
+                            Log In
+                          </Text>
+                        </TouchableOpacity>
+                      </Link>
+                    </View>
+                  </View>
+                </MotiView>
+              </MotiView>
             </ScrollView>
           </SafeAreaView>
         </View>
@@ -319,3 +446,44 @@ export default function SignupPage() {
     </KeyboardAvoidingView>
   );
 }
+
+const { width, height } = Dimensions.get('window');
+
+const signupStyles = StyleSheet.create({
+  container: { flex: 1 },
+  backgroundImage: { flex: 1, width: width, height: height },
+  overlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.75)' },
+  safeArea: { flex: 1 },
+  scrollContainer: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 20, paddingVertical: 20 },
+  logoContainer: { alignItems: 'center', marginBottom: 20 },
+  logoImage: { width: 100, height: 100 },
+  formCard: { backgroundColor: 'rgba(255, 255, 255, 0.05)', padding: 20, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)' },
+  title: { fontSize: 28, fontWeight: 'bold', color: 'white', textAlign: 'center', marginBottom: 8 },
+  subtitle: { fontSize: 16, color: '#d1d5db', textAlign: 'center', marginBottom: 20 },
+  errorContainer: { backgroundColor: 'rgba(220, 38, 38, 0.2)', borderWidth: 1, borderColor: '#dc2626', padding: 12, borderRadius: 10, marginBottom: 15 },
+  errorText: { color: '#fecaca', textAlign: 'center', fontWeight: '500' },
+  inputWrapper: { marginBottom: 15 },
+  inputRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  halfInput: { width: '48%' },
+  passwordRequirements: { marginTop: 8 },
+  requirementRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+  requirementText: { marginLeft: 6, fontSize: 12 },
+  submitButton: { width: '100%', paddingVertical: 15, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 10, shadowColor: '#10b981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 },
+  submitButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
+  loginContainer: { alignItems: 'center', marginTop: 20 },
+  loginBox: { backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 15, padding: 15, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)' },
+  loginText: { flexDirection: 'row', alignItems: 'center' },
+  loginLink: { color: '#10b981', fontWeight: 'bold' },
+  otpContainer: { alignItems: 'center', marginBottom: 20 },
+  otpTitle: { fontSize: 24, fontWeight: 'bold', color: 'white', marginBottom: 8 },
+  otpSubtitle: { fontSize: 16, color: '#d1d5db', textAlign: 'center', marginBottom: 20 },
+  otpInput: { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderRadius: 12, padding: 15, fontSize: 18, color: 'white', textAlign: 'center', letterSpacing: 8, marginBottom: 15, width: '100%' },
+  resendContainer: { marginTop: 15, alignItems: 'center' },
+  resendText: { color: '#d1d5db' },
+  resendButton: { color: '#10b981', fontWeight: 'bold' },
+  successContainer: { alignItems: 'center' },
+  successIcon: { fontSize: 60, marginBottom: 20 },
+  successTitle: { fontSize: 28, fontWeight: 'bold', color: 'white', marginBottom: 10 },
+  successSubtitle: { fontSize: 16, color: '#d1d5db', textAlign: 'center', marginBottom: 30 },
+  continueButton: { width: '100%', paddingVertical: 15, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }
+});
