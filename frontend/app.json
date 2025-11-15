@@ -1,14 +1,14 @@
 {
   "expo": {
-    "name": "MovieSocial (JS)",
-    "slug": "moviesocial-js",
+    "name": "MovieSocial",
+    "slug": "moviesocial",
     "scheme": "moviesocial",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/MS_icon.png",
     "userInterfaceStyle": "dark",
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/MS_icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#18181b"
     },
@@ -17,13 +17,13 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "foregroundImage": "./assets/images/MS_icon.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "backgroundColor": "#18181b"
       }
     },
     "web": {
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/MS_icon.png"
     },
     "plugins": [
       "expo-router"

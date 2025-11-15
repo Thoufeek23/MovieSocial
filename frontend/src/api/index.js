@@ -2,9 +2,25 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // In production the client should be built with REACT_APP_API_URL set to your API root
-// !!IMPORTANT!!: Replace this IP with your computer's local network IP http://149.125.224.63:5001
-const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://149.125.224.63:5001';
-const API = axios.create({ baseURL: `${apiRoot}/api` });
+// For development: localhost for web, network IP for device testing
+const getApiUrl = () => {
+  if (process.env.REACT_APP_API_URL) {
+    return process.env.REACT_APP_API_URL.replace(/\/$/, '');
+  }
+  
+  // For Expo development
+  if (__DEV__) {
+    // Try localhost first, fallback to network IP if needed
+    return 'http://192.168.68.55:5001';
+  }
+  
+  return 'http://192.168.68.55:5001';
+};
+
+const API = axios.create({ 
+  baseURL: `${getApiUrl()}/api`,
+  timeout: 10000, // 10 second timeout
+});
 
 // Add the JWT to the header of every request if it exists
 API.interceptors.request.use(async (req) => { // <-- Make this async

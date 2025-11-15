@@ -1,129 +1,234 @@
 // frontend/app/login.jsx
 
-import { useState } from 'react';
-import { View, Text, Image, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { 
+  View, 
+  Text, 
+  Image,
+  ImageBackground, 
+  KeyboardAvoidingView, 
+  Platform, 
+  TouchableOpacity,
+  Pressable
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, useRouter } from 'expo-router';
 import { MotiView } from 'moti';
 
 import { useAuth } from '../src/context/AuthContext';
 import * as api from '../src/api';
-import { AuthButton } from '../components/AuthButton';
-import { AuthInput } from '../components/AuthInput';
-
-// Use the logo from your web app
-const logo = require('../assets/images/icon.png'); // Make sure to add your logo to this path
+import { FloatingLabelInput } from '../components/FloatingLabelInput';
+import { loginStyles } from './styles/loginStyles';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState(null);
+  const [formData, setFormData] = useState({ email: '', password: '' });
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [currentBackdrop, setCurrentBackdrop] = useState(0);
   
-  const { login } = useAuth(); // Get the login function from your context
+  const { login } = useAuth();
   const router = useRouter();
 
-  const handleLogin = async () => {
-    if (!email || !password) {
+  // Local poster images
+  const posterImages = [
+    require('../assets/images/poster1.png'),
+    require('../assets/images/poster2.png'),
+    require('../assets/images/poster3.png'),
+    require('../assets/images/poster4.png'),
+    require('../assets/images/poster5.png'),
+  ];
+
+  // Auto-rotate backgrounds
+  useEffect(() => {
+    // Start with first poster immediately
+    setCurrentBackdrop(0);
+    
+    const interval = setInterval(() => {
+      setCurrentBackdrop(prev => (prev + 1) % posterImages.length);
+    }, 6000);
+    
+    return () => clearInterval(interval);
+  }, [posterImages.length]);
+
+  const handleChange = (field, value) => {
+    setFormData({ ...formData, [field]: value });
+    if (error) setError(''); // Clear error when user starts typing
+  };
+
+  const handleSubmit = async () => {
+    if (!formData.email || !formData.password) {
       setError('Please fill in all fields.');
       return;
     }
+    
     setLoading(true);
-    setError(null);
+    setError('');
     try {
-      // Call the backend API, then pass the returned token object to
-      // the AuthContext `login` method which expects `{ token }`.
-      const { data } = await api.login({ email, password });
+      const { data } = await api.login(formData);
       await login(data);
-      // If login is successful, the _layout.jsx will automatically
-      // redirect to the '(tabs)' group.
+      // AuthGuard will handle the redirect
     } catch (err) {
       console.error('Login error:', err);
-      setError(err?.response?.data?.message || err?.message || 'Login failed. Please try again.');
+      setError(err?.response?.data?.message || err?.message || 'Invalid credentials. Please try again.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
-    // SafeAreaView ensures content isn't hidden by the notch or home bar
-    <SafeAreaView className="flex-1 bg-background">
-      {/* KeyboardAvoidingView moves content up when keyboard appears */}
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="flex-1 justify-center p-6"
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={loginStyles.container}
+    >
+      <ImageBackground
+        source={posterImages[currentBackdrop]}
+        resizeMode="cover"
+        style={loginStyles.backgroundImage}
       >
-        <MotiView
-          from={{ opacity: 0, translateY: 30 }}
-          animate={{ opacity: 1, translateY: 0 }}
-          transition={{ type: 'timing', duration: 500 }}
-          className="items-center"
-        >
-          <Image 
-            source={logo}
-            style={{ width: 96, height: 96 }}
-            className="mb-4"
-            resizeMode="contain"
-          />
-          <Text className="text-foreground text-3xl font-bold mb-2">
-            Welcome Back!
-          </Text>
-          <Text className="text-gray-400 text-lg mb-8">
-            Sign in to your account
-          </Text>
-        </MotiView>
-        
-        {/* Form Inputs */}
-        <MotiView
-          from={{ opacity: 0, translateY: 20 }}
-          animate={{ opacity: 1, translateY: 0 }}
-          transition={{ type: 'timing', duration: 500, delay: 200 }}
-        >
-          <AuthInput
-            icon="mail-outline"
-            placeholder="Email"
-            value={email}
-            onChangeText={setEmail}
-          />
-          <AuthInput
-            icon="lock-closed-outline"
-            placeholder="Password"
-            value={password}
-            onChangeText={setPassword}
-            isPassword={true}
-          />
-          
-          {/* Error Message */}
-          {error && (
-            <Text className="text-red-500 text-center my-2">{error}</Text>
-          )}
+        {/* Enhanced gradient overlay for better text readability */}
+        <View style={loginStyles.overlay}>
+          <SafeAreaView style={loginStyles.safeArea}>
+            {/* Header Section */}
+              <MotiView
+                from={{ opacity: 0, translateY: 30 }}
+                animate={{ opacity: 1, translateY: 0 }}
+                transition={{ type: 'timing', duration: 800, delay: 300 }}
+                style={loginStyles.headerSection}
+              >
+                <View style={loginStyles.logoContainer}>
+                  <Image 
+                    source={require('../assets/images/MS_logo.png')}
+                    style={loginStyles.logoImage}
+                    resizeMode="contain"
+                  />
+                </View>
+                {/*<View style={loginStyles.taglineContainer}>
+                  <Text style={loginStyles.taglineText}>
+                    Discover, Discuss, Decide. Your ultimate movie companion.
+                  </Text>
+                </View>*/}
+              </MotiView>
 
-          {/* Login Button */}
-          <AuthButton
-            title="Login"
-            onPress={handleLogin}
-            isLoading={loading}
-          />
-        </MotiView>
+              {/* Form Section */}
+              <View style={loginStyles.formContainer}>
+                <MotiView
+                  from={{ opacity: 0, translateY: 20 }}
+                  animate={{ opacity: 1, translateY: 0 }}
+                  transition={{ type: 'timing', duration: 800, delay: 500 }}
+                  style={loginStyles.formCard}
+                >
+                  <Text style={loginStyles.welcomeTitle}>
+                    Welcome!
+                  </Text>
+                  <Text style={loginStyles.welcomeSubtitle}>
+                    Login to continue your movie journey.
+                  </Text>
 
-        {/* Navigation Links */}
-        <MotiView
-          from={{ opacity: 0, translateY: 10 }}
-          animate={{ opacity: 1, translateY: 0 }}
-          transition={{ type: 'timing', duration: 500, delay: 400 }}
-          className="flex-row justify-between mt-6"
-        >
-          <Link href="/signup" asChild>
-            <Text className="text-primary font-bold text-base">
-              Create an account
-            </Text>
-          </Link>
-          <Link href="/forgot-password" asChild>
-            <Text className="text-gray-400 text-base">
-              Forgot Password?
-            </Text>
-          </Link>
-        </MotiView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+                  {/* Error Message */}
+                  {error && (
+                    <MotiView
+                      from={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      style={loginStyles.errorContainer}
+                    >
+                      <Text style={loginStyles.errorText}>
+                        {error}
+                      </Text>
+                    </MotiView>
+                  )}
+
+                  {/* Form Inputs */}
+                  <View style={loginStyles.inputsContainer}>
+                    <MotiView
+                      from={{ opacity: 0, translateX: -20 }}
+                      animate={{ opacity: 1, translateX: 0 }}
+                      transition={{ type: 'spring', stiffness: 100, delay: 700 }}
+                      style={loginStyles.inputWrapper}
+                    >
+                      <FloatingLabelInput
+                        label="Email"
+                        value={formData.email}
+                        onChangeText={(value) => handleChange('email', value)}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                      />
+                    </MotiView>
+
+                    <MotiView
+                      from={{ opacity: 0, translateX: -20 }}
+                      animate={{ opacity: 1, translateX: 0 }}
+                      transition={{ type: 'spring', stiffness: 100, delay: 800 }}
+                      style={loginStyles.inputWrapper}
+                    >
+                      <FloatingLabelInput
+                        label="Password"
+                        value={formData.password}
+                        onChangeText={(value) => handleChange('password', value)}
+                        isPassword={true}
+                      />
+                    </MotiView>
+                  </View>
+
+                  {/* Login Button */}
+                  <MotiView
+                    from={{ opacity: 0, translateY: 20 }}
+                    animate={{ opacity: 1, translateY: 0 }}
+                    transition={{ type: 'timing', duration: 500, delay: 900 }}
+                    style={loginStyles.buttonContainer}
+                  >
+                    <Pressable
+                      onPress={handleSubmit}
+                      disabled={loading}
+                      style={[
+                        loginStyles.loginButton,
+                        { backgroundColor: loading ? '#6b7280' : '#10b981' }
+                      ]}
+                    >
+                      <Text style={loginStyles.loginButtonText}>
+                        {loading ? 'Logging in...' : 'Login'}
+                      </Text>
+                    </Pressable>
+                  </MotiView>
+
+                  {/* Forgot Password Link */}
+                  <View style={loginStyles.forgotPasswordContainer}>
+                    <Link href="/forgot-password" asChild>
+                      <TouchableOpacity style={loginStyles.forgotPasswordButton}>
+                        <Text style={loginStyles.forgotPasswordText}>
+                          Forgot password?
+                        </Text>
+                      </TouchableOpacity>
+                    </Link>
+                  </View>
+                </MotiView>
+
+                {/* Sign Up Link */}
+                <MotiView
+                  from={{ opacity: 0, translateY: 10 }}
+                  animate={{ opacity: 1, translateY: 0 }}
+                  transition={{ type: 'timing', duration: 500, delay: 1000 }}
+                  style={loginStyles.signupContainer}
+                >
+                  <View style={loginStyles.signupBox}>
+                    <View style={loginStyles.signupText}>
+                      <Text style={{ color: '#f3f4f6', fontSize: 16, fontWeight: '500' }}>
+                        Don't have an account?{' '}
+                      </Text>
+                      <Link href="/signup" asChild>
+                        <TouchableOpacity>
+                          <Text style={loginStyles.signupLink}>
+                            Sign Up
+                          </Text>
+                        </TouchableOpacity>
+                      </Link>
+                    </View>
+                  </View>
+                </MotiView>
+              </View>
+          </SafeAreaView>
+        </View>
+      </ImageBackground>
+    </KeyboardAvoidingView>
   );
 }
+
