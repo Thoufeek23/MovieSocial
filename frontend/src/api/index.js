@@ -8,13 +8,8 @@ const getApiUrl = () => {
     return process.env.REACT_APP_API_URL.replace(/\/$/, '');
   }
   
-  // For Expo development
-  if (__DEV__) {
-    // Try localhost first, fallback to network IP if needed
-    return 'http://192.168.68.55:5001';
-  }
-  
-  return 'http://192.168.68.55:5001';
+  // Use hosted backend for production
+  return 'https://moviesocial-backend-khd2.onrender.com';
 };
 
 const API = axios.create({ 

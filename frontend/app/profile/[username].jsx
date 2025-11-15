@@ -51,6 +51,11 @@ const ProfilePage = () => {
     try {
       if (showRefreshLoader) setRefreshing(true);
       else setLoading(true);
+      
+      // Validate username parameter
+      if (!username || typeof username !== 'string') {
+        throw new Error('Invalid username parameter');
+      }
 
       const { data } = await api.getUserProfile(username);
       setProfile(data);
@@ -110,7 +115,7 @@ const ProfilePage = () => {
   };
 
   useEffect(() => {
-    if (username) {
+    if (username && typeof username === 'string' && username.trim()) {
       fetchProfile();
     }
   }, [username, currentUser]);
@@ -250,7 +255,17 @@ const ProfilePage = () => {
             <TouchableOpacity
               key={tab.name}
               style={styles.tabItem}
-              onPress={() => router.push(tab.route)}
+              onPress={() => {
+                if (tab.name === 'profile' && currentUser?.username) {
+                  // If we're already on this user's profile, don't navigate
+                  if (pathname.includes(`/profile/${currentUser.username}`)) {
+                    return;
+                  }
+                  router.push(`/profile/${currentUser.username}`);
+                } else {
+                  router.push(tab.route);
+                }
+              }}
               activeOpacity={0.7}
             >
               <View style={[

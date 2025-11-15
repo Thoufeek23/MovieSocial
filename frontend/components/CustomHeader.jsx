@@ -106,7 +106,11 @@ const CustomHeader = ({ title, showLogo = false }) => {
             {/* Left Side - User Avatar & Create Button */}
             <View style={styles.leftSection}>
               <TouchableOpacity 
-                onPress={() => router.push('/(tabs)/profile')}
+                onPress={() => {
+                  if (user?.username) {
+                    router.push(`/profile/${user.username}`);
+                  }
+                }}
                 style={styles.avatarContainer}
               >
                 <Avatar user={user} size={38} />

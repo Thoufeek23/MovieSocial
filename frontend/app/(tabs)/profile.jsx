@@ -11,11 +11,11 @@ export default function ProfileTab() {
 
   useEffect(() => {
     if (user?.username) {
-      // Redirect to the dynamic profile page
-      router.replace(`/profile/${user.username}`);
+      // Navigate to the dynamic profile page
+      router.push(`/profile/${user.username}`);
     } else {
       // If no user, redirect to login
-      router.replace('/login');
+      router.push('/login');
     }
   }, [user, router]);
 
