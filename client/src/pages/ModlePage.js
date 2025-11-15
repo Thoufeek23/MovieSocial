@@ -13,8 +13,8 @@ const ModlePage = () => {
   const { user } = useContext(AuthContext);
   const [completedToday, setCompletedToday] = useState({});
   const [loading, setLoading] = useState(true);
-  // Scope the local selection key by username when signed in to avoid cross-account interference
-  const storageKey = user && user.username ? `modle_selected_language_date_${user.username}` : 'modle_selected_language_date';
+  const [globalDailyLimitReached, setGlobalDailyLimitReached] = useState(false);
+  const [playedLanguage, setPlayedLanguage] = useState(null);
 
   // Check completion status for all languages
   useEffect(() => {
@@ -26,6 +26,33 @@ const ModlePage = () => {
 
       try {
         const today = new Date().toISOString().slice(0, 10);
+        
+        // First check global status to see if user has played ANY language today
+        try {
+          const globalResponse = await api.getModleStatus('global');
+          if (globalResponse.data.history && globalResponse.data.history[today]) {
+            // User has already played today - set global daily limit reached
+            setGlobalDailyLimitReached(true);
+            // Find which language they played
+            for (const lang of availableLanguages) {
+              try {
+                const langResponse = await api.getModleStatus(lang);
+                if (langResponse.data.history && 
+                    langResponse.data.history[today] && 
+                    langResponse.data.history[today].correct) {
+                  setPlayedLanguage(lang);
+                  break;
+                }
+              } catch (e) { /* ignore */ }
+            }
+            setLoading(false);
+            return;
+          }
+        } catch (error) {
+          console.debug('Failed to check global status:', error);
+        }
+        
+        // If no global daily limit, check individual language completion status
         const statusPromises = availableLanguages.map(async (lang) => {
           try {
             const response = await api.getModleStatus(lang);
@@ -55,40 +82,21 @@ const ModlePage = () => {
   }, [user]);
 
   const handleChoose = (chosen) => {
+    // Check if global daily limit is reached
+    if (globalDailyLimitReached) {
+      toast.error('Daily limit reached! One Modle per day across all languages. Come back tomorrow!');
+      return;
+    }
+    
     // Check if user has already completed this language today
     if (user && completedToday[chosen]) {
       toast.error(`You already completed today's Modle in ${chosen}! Come back tomorrow for a new puzzle.`);
       return;
     }
 
-    // check if user already chose a language today
-    try {
-      // If a legacy global selection key exists but we're signed in, ignore/remove it to prevent cross-account blocking
-      const legacyKey = 'modle_selected_language_date';
-      if (user && localStorage.getItem(legacyKey)) {
-        try { localStorage.removeItem(legacyKey); } catch (e) { /* ignore */ }
-      }
-
-      const raw = localStorage.getItem(storageKey);
-      // local date YYYY-MM-DD
-      const d = new Date();
-      const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      if (raw) {
-        const obj = JSON.parse(raw);
-        if (obj && obj.date === today && obj.lang && obj.lang !== chosen) {
-          // enforce in production: cannot switch languages until tomorrow
-          toast.error(`You already played in ${obj.lang} today. You cannot switch languages until tomorrow.`);
-          return;
-        }
-      }
-
-      // save choice for today and proceed to play page
-  localStorage.setItem(storageKey, JSON.stringify({ date: today, lang: chosen }));
-  navigate(`/modle/play?lang=${encodeURIComponent(chosen)}`);
-    } catch (err) {
-      console.error('Failed to save language selection', err);
-      navigate(`/modle/play?lang=${encodeURIComponent(chosen)}`);
-    }
+    // Allow users to play different languages - global streak system supports this
+    // Just navigate to the selected language
+    navigate(`/modle/play?lang=${encodeURIComponent(chosen)}`);
   };
 
   return (
@@ -111,22 +119,41 @@ const ModlePage = () => {
           <h2 className="text-xl font-semibold text-white">How to Play</h2>
         </div>
         <ul className="list-disc list-inside text-gray-300 space-y-1.5 text-sm md:text-base">
-          <li>Choose one language to play per day. Your streak is tracked per language.</li>
+          <li>Choose any language to play each day. Your streak continues regardless of which language you play.</li>
           <li>Guess the movie title based on the hints provided.</li>
           <li>Each incorrect guess reveals another hint, up to a maximum number of hints.</li>
-          <li>You can only guess once per revealed hint until all hints are shown.</li>
+          <li>Play consistently every day to maintain your streak across all languages!</li>
         </ul>
       </div>
 
       {/* 3. Language Selection */}
       <div className="text-center mb-6">
-        <h2 className="text-2xl font-semibold text-white">Choose Your Language for Today</h2>
+        <h2 className="text-2xl font-semibold text-white">
+          {globalDailyLimitReached ? "Today's Modle Complete!" : "Choose Your Language for Today"}
+        </h2>
       </div>
 
       {loading && user ? (
         <div className="text-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
           <p className="text-gray-400">Loading your progress...</p>
+        </div>
+      ) : globalDailyLimitReached ? (
+        <div className="max-w-md mx-auto bg-gray-800 border-2 border-green-500 rounded-xl p-8 text-center">
+          <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
+          <h3 className="text-xl font-bold text-green-500 mb-2">Daily Limit Reached!</h3>
+          <p className="text-white mb-2">
+            You've already completed today's Modle{playedLanguage ? ` in ${playedLanguage}` : ''}.
+          </p>
+          <p className="text-gray-400 mb-4">
+            Come back tomorrow for a new puzzle in any language!
+          </p>
+          <div className="flex items-center justify-center gap-2 bg-gray-700 rounded-lg px-3 py-2">
+            <Info className="w-4 h-4 text-gray-400" />
+            <span className="text-sm text-gray-400 italic">
+              One Modle per day across all languages
+            </span>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">

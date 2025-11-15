@@ -84,6 +84,29 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
     const load = async () => {
       try {
         if (user && localStorage.getItem('token')) {
+          // First check global status to see if user has played today
+          const globalRes = await api.getModleStatus('global');
+          if (globalRes && globalRes.data) {
+            const globalServer = globalRes.data;
+            const today = effectiveDate;
+            
+            // Check if user has played ANY language today
+            if (globalServer.history && globalServer.history[today]) {
+              // User has already played today - block all languages
+              setTodayPlayed({ 
+                correct: true, 
+                globalDaily: true, 
+                date: today,
+                msg: 'Already played today\'s Modle! One puzzle per day across all languages.' 
+              });
+              setStreak(globalServer.streak || 0);
+              setGuesses([]);
+              setRevealedHints(1);
+              return;
+            }
+          }
+          
+          // If not played globally, get language-specific data
           const res = await api.getModleStatus(language);
           if (res && res.data) {
             const server = res.data;
@@ -98,7 +121,8 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
               setGuesses([]);
               setRevealedHints(1);
             }
-            setStreak(server.streak || 0);
+            // Use global streak for display (cross-language streak)
+            setStreak(server.globalStreak || server.streak || 0);
             return;
           }
         }
@@ -126,8 +150,11 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
     e.preventDefault();
     const normalized = (guess || '').toString().trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (!normalized) return;
-    if (todayPlayed && todayPlayed.correct) {
-      toast('You already solved today\'s puzzle.');
+    if (todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily)) {
+      const message = todayPlayed.globalDaily 
+        ? 'Already played today\'s Modle! One puzzle per day across all languages. Come back tomorrow!' 
+        : 'You already solved today\'s puzzle.';
+      toast.error(message);
       return;
     }
 
@@ -184,9 +211,9 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
                 setGuesses(langObj.history[today].guesses || []);
                 setRevealedHints(Math.min(maxReveal, Math.max(1, (langObj.history[today].guesses || []).length + 1)));
               }
-              // prefer global streak if provided by the server
-              if (globalObj && typeof globalObj.streak === 'number') setStreak(globalObj.streak || 0);
-              else setStreak((langObj && langObj.streak) || 0);
+              // Always use primary/global streak for display
+              const primaryStreak = server.primaryStreak || (globalObj && globalObj.streak) || (server.globalStreak) || 0;
+              setStreak(primaryStreak);
             }
 
             // Extra safety: re-fetch authoritative server state after POST to avoid any visibility/race issues
@@ -203,8 +230,9 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
                   setGuesses(langObj.history[today].guesses || []);
                   setRevealedHints(Math.min(maxReveal, Math.max(1, (langObj.history[today].guesses || []).length + 1)));
                 }
-                if (globalObj && typeof globalObj.streak === 'number') setStreak(globalObj.streak || 0);
-                else setStreak((langObj && langObj.streak) || 0);
+                // Use primary/global streak for display
+                const primaryStreak = check.data.primaryStreak || (globalObj && globalObj.streak) || check.data.globalStreak || 0;
+                setStreak(primaryStreak);
               }
             } catch (err) {
               console.debug('GET after POST failed:', err);
@@ -240,6 +268,23 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
         } catch (e) {
           // non-fatal: server sync failed, local state remains
           console.debug('POST /api/users/modle/result error:', e);
+          
+          // Handle daily limit reached
+          if (e.response && e.response.status === 409) {
+            const errorMsg = e.response.data?.msg || 'You have already played today.';
+            const isGlobalLimit = e.response?.data?.dailyLimitReached;
+            toast.error(errorMsg);
+            
+            // If global daily limit, set appropriate state
+            if (isGlobalLimit) {
+              setTodayPlayed({ 
+                correct: true, 
+                globalDaily: true, 
+                date: today,
+                msg: errorMsg 
+              });
+            }
+          }
         }
       })();
     } else {
@@ -258,8 +303,9 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
                 setGuesses(langObj.history[today].guesses || []);
                 setRevealedHints(Math.min(maxReveal, Math.max(1, (langObj.history[today].guesses || []).length + 1)));
               }
-              if (globalObj && typeof globalObj.streak === 'number') setStreak(globalObj.streak || 0);
-              else setStreak((langObj && langObj.streak) || 0);
+              // Always use primary/global streak for display
+              const primaryStreak = server.primaryStreak || (globalObj && globalObj.streak) || (server.globalStreak) || 0;
+              setStreak(primaryStreak);
             }
 
             // Extra safety: re-fetch authoritative server state after POST
@@ -275,8 +321,9 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
                   setGuesses(langObj.history[today].guesses || []);
                   setRevealedHints(Math.min(maxReveal, Math.max(1, (langObj.history[today].guesses || []).length + 1)));
                 }
-                if (globalObj && typeof globalObj.streak === 'number') setStreak(globalObj.streak || 0);
-                else setStreak((langObj && langObj.streak) || 0);
+                // Use primary/global streak for display
+                const primaryStreak = check.data.primaryStreak || (globalObj && globalObj.streak) || check.data.globalStreak || 0;
+                setStreak(primaryStreak);
               }
             } catch (err) {
               console.debug('GET after POST (incorrect) failed:', err);
@@ -285,6 +332,23 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
         } catch (e) {
           // ignore
           console.debug('POST /api/users/modle/result (incorrect) error:', e);
+          
+          // Handle daily limit reached
+          if (e.response && e.response.status === 409) {
+            const errorMsg = e.response.data?.msg || 'You have already played today.';
+            const isGlobalLimit = e.response?.data?.dailyLimitReached;
+            
+            // If global daily limit, set appropriate state and show error
+            if (isGlobalLimit) {
+              toast.error(errorMsg);
+              setTodayPlayed({ 
+                correct: true, 
+                globalDaily: true, 
+                date: today,
+                msg: errorMsg 
+              });
+            }
+          }
         }
       })();
       toast.error('Not correct. Try again!');
@@ -348,13 +412,17 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
           </div>
           <div className="text-right text-sm text-gray-400">
             <div>Guesses: {guesses.length}</div>
-            {todayPlayed && todayPlayed.correct && <div className="text-green-400">Solved</div>}
+            {todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily) && (
+              <div className={todayPlayed.globalDaily ? "text-yellow-400" : "text-green-400"}>
+                {todayPlayed.globalDaily ? "Daily Limit" : "Solved"}
+              </div>
+            )}
           </div>
         </div>
       </div>
 
       {/* --- Win Animation --- */}
-      {todayPlayed && todayPlayed.correct && (
+      {todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily) && (
         <motion.div
           initial={{ scale: 0.5, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -388,7 +456,7 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
           </AnimatePresence>
         </div>
         {/* --- Reduced Hint Explanation Text --- */}
-        {revealedHints < maxReveal && !(todayPlayed && todayPlayed.correct) && (
+        {revealedHints < maxReveal && !(todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily)) && (
           <div className="text-xs text-gray-500 mt-2">Submit a guess to reveal the next hint.</div>
         )}
       </div>
@@ -402,7 +470,7 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
           className="input input-bordered flex-1 px-3 py-2 rounded-md border border-gray-600 bg-gray-700 text-white placeholder-gray-400 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none" // Updated styles
           spellCheck={false}
           autoComplete="off"
-          disabled={todayPlayed && todayPlayed.correct} // Disable input if solved
+          disabled={todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily)} // Disable input if solved or daily limit reached
         />
         {/* --- Button Animation --- */}
         <motion.button
@@ -410,7 +478,7 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
           className="btn btn-primary" // Uses existing button style from index.css
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          disabled={todayPlayed && todayPlayed.correct} // Disable button if solved
+          disabled={todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily)} // Disable button if solved or daily limit reached
         >
           Guess
         </motion.button>

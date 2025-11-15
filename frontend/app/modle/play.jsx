@@ -37,11 +37,27 @@ const ModlePlayPage = () => {
       }
 
       try {
+        // First check global status to see if user has played ANY language today
+        const globalResponse = await api.getModleStatus('global');
+        const today = new Date().toISOString().slice(0, 10);
+        
+        if (globalResponse.data.history && globalResponse.data.history[today]) {
+          Alert.alert(
+            'Daily Limit Reached',
+            'You have already played today\'s Modle in another language! One puzzle per day across all languages.',
+            [
+              {
+                text: 'OK',
+                onPress: () => router.replace('/modle')
+              }
+            ]
+          );
+          return;
+        }
+        
+        // If no global daily limit, check language-specific status
         const response = await api.getModleStatus(language);
         const modleStatus = response.data;
-        
-        // Get today's date in YYYY-MM-DD format
-        const today = new Date().toISOString().slice(0, 10);
         
         // Check if user played today and got it correct
         if (modleStatus.history && modleStatus.history[today] && modleStatus.history[today].correct) {

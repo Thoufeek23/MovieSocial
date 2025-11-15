@@ -260,16 +260,16 @@ const DiscussionPage = () => {
                 {discussion.comments.map(c => (
                   <div key={c._id} className="flex gap-4 items-start bg-background border border-gray-800 rounded-lg p-4">
                     <div>
-                      <Avatar username={c.user.username} avatar={c.user.avatar} sizeClass="w-12 h-12" />
+                      <Avatar username={c.user?.username || 'Unknown'} avatar={c.user?.avatar} sizeClass="w-12 h-12" />
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center justify-between">
                         <div>
-                          <Link to={`/profile/${c.user.username}`} className="font-semibold text-gray-100 hover:underline">{c.user.username}</Link>
+                          <Link to={`/profile/${c.user?.username || 'unknown'}`} className="font-semibold text-gray-100 hover:underline">{c.user?.username || 'Unknown User'}</Link>
                           <div className="text-xs text-gray-500">{timeAgo(c.createdAt)}</div>
                         </div>
                         <div className="text-sm text-gray-400 flex items-center gap-2">
-                          {(user && (String(user.id || user._id) === String(c.user._id) || String(user.id || user._id) === String(discussion.starter?._id))) && (
+                          {(user && c.user && (String(user.id || user._id) === String(c.user._id) || String(user.id || user._id) === String(discussion.starter?._id))) && (
                             <>
                               {editingCommentId === c._id ? (
                                 <div className="flex items-center gap-2">
@@ -328,13 +328,13 @@ const DiscussionPage = () => {
                           {c.replies.map(r => (
                             <div key={r._id} className="flex gap-3 items-start">
                               <div>
-                                <Avatar username={r.user.username} avatar={r.user.avatar} sizeClass="w-8 h-8" />
+                                <Avatar username={r.user?.username || 'Unknown'} avatar={r.user?.avatar} sizeClass="w-8 h-8" />
                               </div>
                               <div className="flex-1 bg-[#0f0f10] border border-gray-800 rounded-md p-3 text-sm text-gray-200">
                                 <div className="flex items-center justify-between">
-                                  <div className="font-semibold text-gray-100">{r.user.username} <span className="text-xs text-gray-500">• {timeAgo(r.createdAt)}</span></div>
+                                  <div className="font-semibold text-gray-100">{r.user?.username || 'Unknown User'} <span className="text-xs text-gray-500">• {timeAgo(r.createdAt)}</span></div>
                                   <div className="text-sm text-gray-400">
-                                    {(user && (String(user.id || user._id) === String(r.user._id) || String(user.id || user._id) === String(discussion.starter?._id))) && (
+                                    {(user && r.user && (String(user.id || user._id) === String(r.user._id) || String(user.id || user._id) === String(discussion.starter?._id))) && (
                                       <button onClick={() => showConfirm('Delete this reply?', async () => {
                                         setCommentProcessing(true);
                                         try {

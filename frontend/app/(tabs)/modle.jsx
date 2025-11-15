@@ -13,7 +13,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import { AuthContext } from '../../src/context/AuthContext';
 import * as api from '../../src/api';
 
@@ -25,6 +25,8 @@ export default function ModlePage() {
   const { user } = useContext(AuthContext);
   const [completedToday, setCompletedToday] = useState({});
   const [loading, setLoading] = useState(true);
+  const [globalDailyLimitReached, setGlobalDailyLimitReached] = useState(false);
+  const [playedLanguage, setPlayedLanguage] = useState(null);
 
   // Check completion status for all languages
   useEffect(() => {
@@ -36,6 +38,33 @@ export default function ModlePage() {
 
       try {
         const today = new Date().toISOString().slice(0, 10);
+        
+        // First check global status to see if user has played ANY language today
+        try {
+          const globalResponse = await api.getModleStatus('global');
+          if (globalResponse.data.history && globalResponse.data.history[today]) {
+            // User has already played today - set global daily limit reached
+            setGlobalDailyLimitReached(true);
+            // Find which language they played
+            for (const lang of availableLanguages) {
+              try {
+                const langResponse = await api.getModleStatus(lang);
+                if (langResponse.data.history && 
+                    langResponse.data.history[today] && 
+                    langResponse.data.history[today].correct) {
+                  setPlayedLanguage(lang);
+                  break;
+                }
+              } catch (e) { /* ignore */ }
+            }
+            setLoading(false);
+            return;
+          }
+        } catch (error) {
+          console.debug('Failed to check global status:', error);
+        }
+        
+        // If no global daily limit, check individual language completion status
         const statusPromises = availableLanguages.map(async (lang) => {
           try {
             const response = await api.getModleStatus(lang);
@@ -65,6 +94,15 @@ export default function ModlePage() {
   }, [user]);
 
   const handleChoose = async (chosen) => {
+    // Check if global daily limit is reached
+    if (globalDailyLimitReached) {
+      Alert.alert(
+        'Daily Limit Reached',
+        'One Modle per day across all languages. Come back tomorrow!'
+      );
+      return;
+    }
+    
     // Check if user has already completed this language today
     if (user && completedToday[chosen]) {
       Alert.alert(
@@ -74,46 +112,8 @@ export default function ModlePage() {
       return;
     }
 
-    // Scope the local selection key by username when signed in
-    const storageKey = user && user.username 
-      ? `modle_selected_language_date_${user.username}` 
-      : 'modle_selected_language_date';
-
-    try {
-      // If a legacy global selection key exists but we're signed in, ignore/remove it
-      const legacyKey = 'modle_selected_language_date';
-      if (user) {
-        try { 
-          await AsyncStorage.removeItem(legacyKey); 
-        } catch (e) { 
-          /* ignore */ 
-        }
-      }
-
-      const raw = await AsyncStorage.getItem(storageKey);
-      // local date YYYY-MM-DD
-      const d = new Date();
-      const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      
-      if (raw) {
-        const obj = JSON.parse(raw);
-        if (obj && obj.date === today && obj.lang && obj.lang !== chosen) {
-          // enforce in production: cannot switch languages until tomorrow
-          Alert.alert(
-            'Language Locked',
-            `You already played in ${obj.lang} today. You cannot switch languages until tomorrow.`
-          );
-          return;
-        }
-      }
-
-      // save choice for today and proceed to play page
-      await AsyncStorage.setItem(storageKey, JSON.stringify({ date: today, lang: chosen }));
-      router.push(`/modle/play?lang=${encodeURIComponent(chosen)}`);
-    } catch (err) {
-      console.error('Failed to save language selection', err);
-      router.push(`/modle/play?lang=${encodeURIComponent(chosen)}`);
-    }
+    // Navigate to the selected language (global validation prevents multiple plays per day)
+    router.push(`/modle/play?lang=${encodeURIComponent(chosen)}`);
   };
 
   return (
@@ -148,12 +148,31 @@ export default function ModlePage() {
         </View>
 
         {/* Language Selection */}
-        <Text style={styles.selectionTitle}>Choose Your Language for Today</Text>
+        <Text style={styles.selectionTitle}>
+          {globalDailyLimitReached ? "Today's Modle Complete!" : "Choose Your Language for Today"}
+        </Text>
 
         {loading && user ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#10b981" />
             <Text style={styles.loadingText}>Loading your progress...</Text>
+          </View>
+        ) : globalDailyLimitReached ? (
+          <View style={styles.dailyLimitCard}>
+            <Ionicons name="checkmark-circle" size={48} color="#10b981" />
+            <Text style={styles.dailyLimitTitle}>Daily Limit Reached!</Text>
+            <Text style={styles.dailyLimitMessage}>
+              You've already completed today's Modle{playedLanguage ? ` in ${playedLanguage}` : ''}.
+            </Text>
+            <Text style={styles.dailyLimitSubtext}>
+              Come back tomorrow for a new puzzle in any language!
+            </Text>
+            <View style={styles.dailyLimitInfo}>
+              <Ionicons name="information-circle" size={16} color="#6b7280" />
+              <Text style={styles.dailyLimitInfoText}>
+                One Modle per day across all languages
+              </Text>
+            </View>
           </View>
         ) : (
           <View style={styles.languageGrid}>
@@ -307,5 +326,47 @@ const styles = StyleSheet.create({
   },
   languageDescriptionCompleted: {
     color: '#10b981',
+  },
+  dailyLimitCard: {
+    backgroundColor: '#1f2937',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#10b981',
+    marginHorizontal: 16,
+  },
+  dailyLimitTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#10b981',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  dailyLimitMessage: {
+    fontSize: 16,
+    color: 'white',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  dailyLimitSubtext: {
+    fontSize: 14,
+    color: '#9ca3af',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  dailyLimitInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#374151',
+    borderRadius: 8,
+  },
+  dailyLimitInfoText: {
+    fontSize: 12,
+    color: '#9ca3af',
+    fontStyle: 'italic',
   },
 });

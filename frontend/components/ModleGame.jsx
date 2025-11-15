@@ -85,10 +85,35 @@ const ModleGame = ({ language = 'English' }) => {
     const load = async () => {
       try {
         if (user) {
+          // First check global status to see if user has played today
+          const globalRes = await api.getModleStatus('global');
+          if (globalRes && globalRes.data) {
+            const globalServer = globalRes.data;
+            const today = effectiveDate;
+            
+            // Check if user has played ANY language today
+            if (globalServer.history && globalServer.history[today]) {
+              // User has already played today - block all languages
+              setTodayPlayed({ 
+                correct: true, 
+                globalDaily: true, 
+                date: today,
+                msg: 'Already played today\'s Modle! One puzzle per day across all languages.' 
+              });
+              setStreak(globalServer.streak || 0);
+              setGuesses([]);
+              setRevealedHints(1);
+              return;
+            }
+          }
+          
+          // If not played globally, get language-specific data
           const res = await api.getModleStatus(language);
           if (res && res.data) {
             const server = res.data;
             const today = effectiveDate;
+            
+            // Check if user has played today for this language
             if (server.history && server.history[today]) {
               setTodayPlayed(server.history[today]);
               setGuesses(server.history[today].guesses || []);
@@ -99,7 +124,9 @@ const ModleGame = ({ language = 'English' }) => {
               setGuesses([]);
               setRevealedHints(1);
             }
-            setStreak(server.streak || 0);
+            
+            // Use global streak for display (this is the cross-language streak)
+            setStreak(server.globalStreak || 0);
             return;
           }
         }
@@ -146,10 +173,16 @@ const ModleGame = ({ language = 'English' }) => {
 
   const handleSubmitGuess = async () => {
     const normalized = (guess || '').toString().trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (!normalized) return;
+    if (!normalized) {
+      Alert.alert('Invalid Guess', 'Please enter a movie title.');
+      return;
+    }
     
-    if (todayPlayed && todayPlayed.correct) {
-      Alert.alert('Already Solved', 'You already solved today\'s puzzle.');
+    if (todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily)) {
+      const message = todayPlayed.globalDaily 
+        ? 'Already played today\'s Modle! One puzzle per day across all languages. Come back tomorrow!' 
+        : 'You have already solved today\'s puzzle! Come back tomorrow for a new challenge.';
+      Alert.alert('Daily Limit Reached', message);
       return;
     }
 
@@ -196,7 +229,7 @@ const ModleGame = ({ language = 'English' }) => {
             guesses: newGuesses 
           });
           
-          if (res && res.data) {
+            if (res && res.data) {
             const server = res.data;
             const langObj = server.language || server;
             const globalObj = server.global;
@@ -207,13 +240,9 @@ const ModleGame = ({ language = 'English' }) => {
               setRevealedHints(Math.min(maxReveal, Math.max(1, (langObj.history[today].guesses || []).length + 1)));
             }
             
-            if (globalObj && typeof globalObj.streak === 'number') {
-              setStreak(globalObj.streak || 0);
-            } else {
-              setStreak((langObj && langObj.streak) || 0);
-            }
-
-            // Update context
+            // Always use primary/global streak for display
+            const primaryStreak = server.primaryStreak || (globalObj && globalObj.streak) || 0;
+            setStreak(primaryStreak);            // Update context
             updateFromServerPayload({ language: langObj, global: globalObj });
             
             // Refresh global state
@@ -225,6 +254,22 @@ const ModleGame = ({ language = 'English' }) => {
           }
         } catch (e) {
           console.debug('POST /api/users/modle/result error:', e);
+          if (e.response && e.response.status === 409) {
+            const errorMsg = e.response.data?.msg || 'You have already played today.';
+            const isGlobalLimit = e.response?.data?.dailyLimitReached;
+            const title = isGlobalLimit ? 'Daily Limit Reached' : 'Already Played';
+            Alert.alert(title, errorMsg);
+            
+            // If global daily limit, set appropriate state
+            if (isGlobalLimit) {
+              setTodayPlayed({ 
+                correct: true, 
+                globalDaily: true, 
+                date: effectiveDate,
+                msg: errorMsg 
+              });
+            }
+          }
         }
       }
     } else {
@@ -249,14 +294,46 @@ const ModleGame = ({ language = 'English' }) => {
               setRevealedHints(Math.min(maxReveal, Math.max(1, (langObj.history[today].guesses || []).length + 1)));
             }
             
-            if (globalObj && typeof globalObj.streak === 'number') {
-              setStreak(globalObj.streak || 0);
-            } else {
-              setStreak((langObj && langObj.streak) || 0);
-            }
+            // Always use primary/global streak for display
+            const primaryStreak = server.primaryStreak || (globalObj && globalObj.streak) || 0;
+            setStreak(primaryStreak);
           }
         } catch (e) {
           console.debug('POST incorrect guess error:', e);
+          if (e.response && e.response.status === 409) {
+            const errorMsg = e.response.data?.msg || 'You have already played today.';
+            const isGlobalLimit = e.response?.data?.dailyLimitReached;
+            const title = isGlobalLimit ? 'Daily Limit Reached' : 'Already Played';
+            Alert.alert(title, errorMsg);
+            
+            // If global daily limit, set appropriate state
+            if (isGlobalLimit) {
+              setTodayPlayed({ 
+                correct: true, 
+                globalDaily: true, 
+                date: effectiveDate,
+                msg: errorMsg 
+              });
+            }
+            // Reload the current status to sync with server
+            try {
+              const res = await api.getModleStatus(language);
+              if (res && res.data) {
+                const server = res.data;
+                const today = effectiveDate;
+                if (server.history && server.history[today]) {
+                  setTodayPlayed(server.history[today]);
+                  setGuesses(server.history[today].guesses || []);
+                }
+                // Use primary streak from response or global streak
+                const primaryStreak = server.primaryStreak || (server.global && server.global.streak) || server.streak || 0;
+                setStreak(primaryStreak);
+              }
+            } catch (syncError) {
+              console.debug('Failed to sync status:', syncError);
+            }
+            return;
+          }
         }
       }
       Alert.alert('Incorrect', 'Not correct. Try again!');
@@ -322,16 +399,29 @@ const ModleGame = ({ language = 'English' }) => {
             <Text style={styles.statValue}>{guesses.length}</Text>
           </View>
         </View>
-        {todayPlayed && todayPlayed.correct && (
+        {todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily) ? (
           <View style={styles.solvedBadge}>
-            <Ionicons name="checkmark-circle" size={16} color="#10b981" />
-            <Text style={styles.solvedText}>Solved</Text>
+            <Ionicons 
+              name={todayPlayed.globalDaily ? "alert-circle" : "checkmark-circle"} 
+              size={16} 
+              color={todayPlayed.globalDaily ? "#f59e0b" : "#10b981"} 
+            />
+            <Text style={styles.solvedText}>
+              {todayPlayed.globalDaily 
+                ? "Daily limit reached! One puzzle per day across all languages" 
+                : "Solved! Come back tomorrow for a new puzzle"}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.playingBadge}>
+            <Ionicons name="time-outline" size={16} color="#f59e0b" />
+            <Text style={styles.playingText}>One puzzle per day - keep your streak alive!</Text>
           </View>
         )}
       </View>
 
       {/* Win Animation */}
-      {todayPlayed && todayPlayed.correct && (
+      {todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily) && (
         <Animated.View 
           style={[
             styles.winContainer,
@@ -361,7 +451,7 @@ const ModleGame = ({ language = 'English' }) => {
             </View>
           ))}
         </View>
-        {revealedHints < maxReveal && !(todayPlayed && todayPlayed.correct) && (
+        {revealedHints < maxReveal && !(todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily)) && (
           <Text style={styles.hintNote}>Submit a guess to reveal the next hint.</Text>
         )}
       </View>
@@ -377,15 +467,15 @@ const ModleGame = ({ language = 'English' }) => {
             placeholderTextColor="#6b7280"
             autoCapitalize="words"
             autoCorrect={false}
-            editable={!(todayPlayed && todayPlayed.correct)}
+            editable={!(todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily))}
           />
           <TouchableOpacity
             style={[
               styles.guessButton,
-              (todayPlayed && todayPlayed.correct) && styles.guessButtonDisabled
+              (todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily)) && styles.guessButtonDisabled
             ]}
             onPress={handleSubmitGuess}
-            disabled={todayPlayed && todayPlayed.correct}
+            disabled={todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily)}
           >
             <Text style={styles.guessButtonText}>Guess</Text>
           </TouchableOpacity>
@@ -517,6 +607,21 @@ const styles = StyleSheet.create({
   solvedText: {
     color: '#10b981',
     fontWeight: '600',
+  },
+  playingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f59e0b/20',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    gap: 6,
+  },
+  playingText: {
+    color: '#f59e0b',
+    fontWeight: '600',
+    fontSize: 12,
   },
   winContainer: {
     backgroundColor: '#10b981/20',

@@ -26,11 +26,19 @@ const ModlePlayPage = () => {
       }
 
       try {
+        // First check global status to see if user has played ANY language today
+        const globalResponse = await api.getModleStatus('global');
+        const today = new Date().toISOString().slice(0, 10);
+        
+        if (globalResponse.data.history && globalResponse.data.history[today]) {
+          toast.error('Daily limit reached! You have already played today\'s Modle in another language. One puzzle per day across all languages.');
+          navigate('/modle');
+          return;
+        }
+        
+        // If no global daily limit, check language-specific status
         const response = await api.getModleStatus(lang);
         const modleStatus = response.data;
-        
-        // Get today's date in YYYY-MM-DD format
-        const today = new Date().toISOString().slice(0, 10);
         
         // Check if user played today and got it correct
         if (modleStatus.history && modleStatus.history[today] && modleStatus.history[today].correct) {
@@ -86,7 +94,7 @@ const ModlePlayPage = () => {
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Modle — {lang}</h1>
-      <p className="text-gray-400 mb-4">Playing Modle in <strong>{lang}</strong>. You can only choose one language per day.</p>
+      <p className="text-gray-400 mb-4">Playing Modle in <strong>{lang}</strong>. Your streak continues across all languages!</p>
       <ModleGame language={lang} />
     </div>
   );
