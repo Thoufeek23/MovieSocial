@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -15,9 +15,12 @@ import DiscussionCard from '../../components/DiscussionCard';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import EmptyState from '../../components/EmptyState';
 import * as api from '../../src/api';
+import { useScrollToTop } from './_layout';
 
 export default function DiscussionsPage() {
   const router = useRouter();
+  const flatListRef = useRef(null);
+  const { registerScrollRef } = useScrollToTop();
   const [discussions, setDiscussions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -25,6 +28,13 @@ export default function DiscussionsPage() {
   useEffect(() => {
     loadDiscussions();
   }, []);
+
+  // Register scroll ref for tab navigation
+  useEffect(() => {
+    if (registerScrollRef) {
+      registerScrollRef('discussions', flatListRef);
+    }
+  }, [registerScrollRef]);
 
   const loadDiscussions = async () => {
     try {
@@ -131,6 +141,7 @@ export default function DiscussionsPage() {
       <View style={styles.content}>
         {discussions.length > 0 ? (
           <FlatList
+            ref={flatListRef}
             data={discussions}
             renderItem={renderDiscussion}
             keyExtractor={(item, index) => item?._id || `discussion-${index}`}

@@ -3,7 +3,8 @@ const router = express.Router();
 const { 
     createReview, 
     getMyReviews,
-    getFeedReviews, 
+    getFeedReviews,
+    getPersonalizedFeedReviews,
     getMovieReviews, 
     getMovieStats,
     updateReview, 
@@ -17,6 +18,9 @@ router.route('/')
 
 router.route('/feed')
     .get(protect, getFeedReviews);
+
+router.route('/personalized')
+    .get(protect, getPersonalizedFeedReviews);
 
 router.route('/mine')
     .get(protect, getMyReviews);

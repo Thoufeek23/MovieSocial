@@ -72,8 +72,16 @@ const HomePage = () => {
             popularRes = await api.getPopularMovies();
           }
           setPopularMovies(popularRes.data.results || popularRes.data || []);
-          const feedRes = await api.fetchFeed();
-          setReviews(feedRes.data);
+          
+          // Get personalized or regular reviews based on login status
+          try {
+            const feedRes = user ? await api.fetchPersonalizedFeed() : await api.fetchFeed();
+            setReviews(feedRes.data);
+          } catch (error) {
+            // Fallback to regular feed if personalized fails
+            const feedRes = await api.fetchFeed();
+            setReviews(feedRes.data);
+          }
           // load discussions
           try {
             const discRes = await fetchDiscussions({ sortBy: 'comments' });

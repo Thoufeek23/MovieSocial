@@ -33,6 +33,7 @@ export const getPersonalizedMovies = () => API.get('/movies/personalized');
 
 // Reviews
 export const fetchFeed = () => API.get('/reviews/feed');
+export const fetchPersonalizedFeed = () => API.get('/reviews/personalized');
 export const postReview = (reviewData) => API.post('/reviews', reviewData);
 export const getReviewsForMovie = (movieId) => API.get(`/reviews/movie/${movieId}`);
 export const getMovieStats = (movieId) => API.get(`/reviews/movie/${movieId}/stats`);

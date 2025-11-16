@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -10,13 +10,18 @@ import {
   Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../src/context/AuthContext';
 import ReviewCard from '../../components/ReviewCard';
 import ReviewModal from '../../components/ReviewModal';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import EmptyState from '../../components/EmptyState';
 import * as api from '../../src/api';
+import { useScrollToTop } from './_layout';
 
 export default function ReviewsPage() {
+  const { user } = useAuth();
+  const flatListRef = useRef(null);
+  const { registerScrollRef } = useScrollToTop();
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -25,15 +30,29 @@ export default function ReviewsPage() {
 
   useEffect(() => {
     loadReviews();
-  }, []);
+  }, [user]);
+
+  // Register scroll ref for tab navigation
+  useEffect(() => {
+    if (registerScrollRef) {
+      registerScrollRef('reviews', flatListRef);
+    }
+  }, [registerScrollRef]);
 
   const loadReviews = async () => {
     try {
-      const response = await api.fetchFeed();
+      // Use personalized feed if user is logged in, otherwise regular feed
+      const response = user ? await api.fetchPersonalizedFeed().catch(() => api.fetchFeed()) : await api.fetchFeed();
       setReviews(response.data || []);
     } catch (error) {
-      console.error('Failed to load reviews:', error);
-      setReviews([]);
+      // Fallback to regular feed if anything fails
+      try {
+        const response = await api.fetchFeed();
+        setReviews(response.data || []);
+      } catch (fallbackError) {
+        console.error('Failed to load reviews:', fallbackError);
+        setReviews([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -79,9 +98,9 @@ export default function ReviewsPage() {
   };
 
   const handleReviewPosted = async () => {
-    // Refresh reviews after posting/editing
+    // Refresh reviews after posting/editing with personalized logic
     try {
-      const response = await api.fetchFeed();
+      const response = user ? await api.fetchPersonalizedFeed().catch(() => api.fetchFeed()) : await api.fetchFeed();
       setReviews(response.data || []);
     } catch (error) {
       console.error('Failed to refresh reviews:', error);
@@ -111,10 +130,21 @@ export default function ReviewsPage() {
 
   return (
     <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>
+          {user ? 'Reviews For You' : 'Latest Reviews'}
+        </Text>
+        <Text style={styles.headerSubtitle}>
+          {user ? 'Reviews based on your interests' : 'Latest reviews from the community'}
+        </Text>
+      </View>
+      
       {/* Content */}
       <View style={styles.content}>
         {reviews.length > 0 ? (
           <FlatList
+            ref={flatListRef}
             data={reviews}
             renderItem={renderReview}
             keyExtractor={(item, index) => item?._id || `review-${index}`}
@@ -164,7 +194,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#09090b',
     paddingTop: 120,
   },
-
+  header: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1f2937',
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 16,
+    color: '#9ca3af',
+  },
   content: {
     flex: 1,
   },

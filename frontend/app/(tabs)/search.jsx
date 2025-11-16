@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, SafeAreaView, FlatList, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import SearchBar from '../../components/SearchBar';
@@ -6,12 +6,15 @@ import MovieCard from '../../components/MovieCard';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import EmptyState from '../../components/EmptyState';
 import * as api from '../../src/api';
+import { useScrollToTop } from './_layout';
 
 const { width } = Dimensions.get('window');
 const cardWidth = (width - 60) / 2;
 
 export default function SearchPage() {
   const router = useRouter();
+  const flatListRef = useRef(null);
+  const { registerScrollRef } = useScrollToTop();
   const [query, setQuery] = useState('');
   const [movies, setMovies] = useState([]);
   const [popularMovies, setPopularMovies] = useState([]);
@@ -21,6 +24,13 @@ export default function SearchPage() {
   useEffect(() => {
     loadPopularMovies();
   }, []);
+
+  // Register scroll ref for tab navigation
+  useEffect(() => {
+    if (registerScrollRef) {
+      registerScrollRef('search', flatListRef);
+    }
+  }, [registerScrollRef]);
 
   const loadPopularMovies = async () => {
     try {
@@ -98,6 +108,7 @@ export default function SearchPage() {
 
           {displayMovies.length > 0 ? (
             <FlatList
+              ref={flatListRef}
               data={displayMovies}
               renderItem={renderMovie}
               keyExtractor={(item) => item.id.toString()}

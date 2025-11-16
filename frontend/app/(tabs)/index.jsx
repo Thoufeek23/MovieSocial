@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, SafeAreaView, ScrollView, Image, TouchableOpacity, Pressable } from 'react-native';
 import { useAuth } from '../../src/context/AuthContext';
 import { ModleContext } from '../../src/context/ModleContext';
-import { useRouter, Link } from 'expo-router';
+import { useRouter, Link, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import MovieCarousel from '../../components/MovieCarousel';
 import ReviewCard from '../../components/ReviewCard';
@@ -10,11 +10,14 @@ import DiscussionCard from '../../components/DiscussionCard';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import EmptyState from '../../components/EmptyState';
 import * as api from '../../src/api';
+import { useScrollToTop } from './_layout';
 
 export default function HomePage() {
   const { user, logout } = useAuth();
   const { global } = React.useContext(ModleContext);
   const router = useRouter();
+  const scrollViewRef = useRef(null);
+  const { registerScrollRef } = useScrollToTop();
   const [popularMovies, setPopularMovies] = useState([]);
   const [recentReviews, setRecentReviews] = useState([]);
   const [discussions, setDiscussions] = useState([]);
@@ -28,6 +31,13 @@ export default function HomePage() {
     }
   }, [global]);
   
+  // Register scroll ref for tab navigation
+  useEffect(() => {
+    if (registerScrollRef) {
+      registerScrollRef('index', scrollViewRef);
+    }
+  }, [registerScrollRef]);
+  
   useEffect(() => {
     loadData();
   }, []);
@@ -37,7 +47,7 @@ export default function HomePage() {
       setLoading(true);
       const [moviesRes, reviewsRes, discussionsRes] = await Promise.allSettled([
         user ? api.getPersonalizedMovies().catch(() => api.getPopularMovies()) : api.getPopularMovies(),
-        api.fetchFeed(),
+        user ? api.fetchPersonalizedFeed().catch(() => api.fetchFeed()) : api.fetchFeed(),
         api.fetchDiscussions({ sortBy: 'comments' })
       ]);
 
@@ -90,7 +100,7 @@ export default function HomePage() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#09090b' }}>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: 120 }}>
+      <ScrollView ref={scrollViewRef} style={{ flex: 1 }} contentContainerStyle={{ paddingTop: 120 }} showsVerticalScrollIndicator={false}>
 
         {/* Welcome Section 
         <View style={{ paddingHorizontal: 20, paddingVertical: 24 }}>

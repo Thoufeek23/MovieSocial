@@ -370,10 +370,66 @@ const getPersonalizedMovies = async (req, res) => {
             }
         }
         
-        // Sort by release date (newest first) and take top 20
-        const sortedMovies = allMovies
-            .sort((a, b) => new Date(b.release_date) - new Date(a.release_date))
-            .slice(0, 20);
+        // Shuffle movies to mix languages evenly instead of showing all movies from one language first
+        const shuffleArray = (array) => {
+            const shuffled = [...array];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        };
+        
+        // Group movies by language for balanced distribution
+        const moviesByLang = {};
+        allMovies.forEach(movie => {
+            const lang = movie.original_language || 'unknown';
+            if (!moviesByLang[lang]) moviesByLang[lang] = [];
+            moviesByLang[lang].push(movie);
+        });
+        
+        // Sort movies within each language by popularity/release date
+        Object.keys(moviesByLang).forEach(lang => {
+            moviesByLang[lang].sort((a, b) => {
+                // Primary sort: popularity (higher popularity first)
+                const popDiff = (b.popularity || 0) - (a.popularity || 0);
+                if (Math.abs(popDiff) > 1) return popDiff;
+                
+                // Secondary sort: release date (newer first)
+                return new Date(b.release_date || '1900-01-01') - new Date(a.release_date || '1900-01-01');
+            });
+        });
+        
+        // Create balanced mix by taking movies round-robin from each language
+        const sortedMovies = [];
+        const languages = Object.keys(moviesByLang);
+        const maxMoviesPerLang = Math.ceil(20 / languages.length); // Ensure fair distribution
+        let maxRounds = Math.max(...Object.values(moviesByLang).map(movies => movies.length));
+        
+        for (let round = 0; round < maxRounds && sortedMovies.length < 20; round++) {
+            for (const lang of shuffleArray(languages)) { // Shuffle language order each round
+                if (sortedMovies.length >= 20) break;
+                
+                const langMovies = moviesByLang[lang];
+                if (round < langMovies.length) {
+                    // Only add if this language hasn't exceeded its fair share
+                    const currentLangCount = sortedMovies.filter(m => m.original_language === lang).length;
+                    if (currentLangCount < maxMoviesPerLang) {
+                        sortedMovies.push(langMovies[round]);
+                    }
+                }
+            }
+        }
+        
+        // Fill remaining slots with best remaining movies if needed
+        const usedIds = new Set(sortedMovies.map(m => m.id));
+        const remainingMovies = allMovies
+            .filter(m => !usedIds.has(m.id))
+            .sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+        
+        while (sortedMovies.length < 20 && remainingMovies.length > 0) {
+            sortedMovies.push(remainingMovies.shift());
+        }
         
         // Add OMDb ratings if available
         const OMDB_API_KEY = process.env.OMDB_API_KEY;

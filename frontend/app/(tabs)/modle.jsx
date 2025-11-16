@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import MaskedView from '@react-native-masked-view/masked-view';
 
 import { AuthContext } from '../../src/context/AuthContext';
 import * as api from '../../src/api';
+import { useScrollToTop } from './_layout';
 
 // Available languages - no longer need puzzle imports since they come from backend
 const availableLanguages = ['English', 'Hindi', 'Tamil', 'Telugu', 'Kannada', 'Malayalam'];
@@ -23,10 +24,19 @@ const availableLanguages = ['English', 'Hindi', 'Tamil', 'Telugu', 'Kannada', 'M
 export default function ModlePage() {
   const router = useRouter();
   const { user } = useContext(AuthContext);
+  const scrollViewRef = useRef(null);
+  const { registerScrollRef } = useScrollToTop();
   const [completedToday, setCompletedToday] = useState({});
   const [loading, setLoading] = useState(true);
   const [globalDailyLimitReached, setGlobalDailyLimitReached] = useState(false);
   const [playedLanguage, setPlayedLanguage] = useState(null);
+
+  // Register scroll ref for tab navigation
+  useEffect(() => {
+    if (registerScrollRef) {
+      registerScrollRef('modle', scrollViewRef);
+    }
+  }, [registerScrollRef]);
 
   // Check completion status for all languages
   useEffect(() => {
@@ -118,7 +128,7 @@ export default function ModlePage() {
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView ref={scrollViewRef} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Gradient Title */}
         <View style={styles.titleContainer}>
           <Text style={styles.title}>Modle — Movie Wordle</Text>

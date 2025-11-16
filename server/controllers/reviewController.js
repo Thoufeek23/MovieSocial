@@ -98,6 +98,136 @@ const getFeedReviews = async (req, res) => {
     }
 };
 
+// @desc    Get personalized reviews based on user interests
+// @route   GET /api/reviews/personalized
+const getPersonalizedFeedReviews = async (req, res) => {
+    try {
+        let userInterests = [];
+        
+        // Get user interests if logged in
+        if (req.user?.id) {
+            const User = require('../models/User');
+            const user = await User.findById(req.user.id).select('interests');
+            userInterests = user?.interests || [];
+        }
+        
+        // If no interests, fall back to regular feed
+        if (userInterests.length === 0) {
+            return getFeedReviews(req, res);
+        }
+        
+        // Map interests to language codes for movie filtering
+        const languageMap = {
+            'English': 'en',
+            'Hindi': 'hi', 
+            'Tamil': 'ta',
+            'Telugu': 'te',
+            'Malayalam': 'ml',
+            'Kannada': 'kn',
+            'Korean': 'ko',
+            'French': 'fr',
+            'Spanish': 'es'
+        };
+        
+        const languageCodes = userInterests
+            .filter(interest => languageMap[interest])
+            .map(interest => languageMap[interest]);
+        
+        if (languageCodes.length === 0) {
+            return getFeedReviews(req, res);
+        }
+        
+        // Get movie details for reviews to filter by language
+        const axios = require('axios');
+        const tmdbApi = axios.create({ baseURL: 'https://api.themoviedb.org/3' });
+        
+        // Get recent reviews first
+        const allReviews = await Review.find()
+            .populate('user', 'username avatar _id badges')
+            .sort({ createdAt: -1 })
+            .limit(100); // Get more to filter from
+        
+        const reviewsByLanguage = {};
+        
+        // Group reviews by language
+        for (const review of allReviews) {
+            try {
+                const movieResponse = await tmdbApi.get(`/movie/${review.movieId}`, {
+                    params: { api_key: process.env.TMDB_API_KEY }
+                });
+                
+                const movie = movieResponse.data;
+                if (movie.original_language && languageCodes.includes(movie.original_language)) {
+                    if (!reviewsByLanguage[movie.original_language]) {
+                        reviewsByLanguage[movie.original_language] = [];
+                    }
+                    reviewsByLanguage[movie.original_language].push(review);
+                }
+            } catch (error) {
+                // If movie fetch fails, skip this review
+                continue;
+            }
+        }
+        
+        // Helper function to shuffle array
+        const shuffleArray = (array) => {
+            const shuffled = [...array];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        };
+        
+        // Shuffle reviews within each language
+        Object.keys(reviewsByLanguage).forEach(lang => {
+            reviewsByLanguage[lang] = shuffleArray(reviewsByLanguage[lang]);
+        });
+        
+        // Create balanced mix using round-robin distribution
+        const personalizedReviews = [];
+        const maxReviewsPerLang = Math.ceil(20 / languageCodes.length);
+        const languages = Object.keys(reviewsByLanguage);
+        
+        if (languages.length > 0) {
+            let round = 0;
+            while (personalizedReviews.length < 20 && round < maxReviewsPerLang) {
+                for (const lang of languages) {
+                    if (personalizedReviews.length >= 20) break;
+                    
+                    const langReviews = reviewsByLanguage[lang];
+                    if (langReviews && langReviews[round]) {
+                        personalizedReviews.push(langReviews[round]);
+                    }
+                }
+                round++;
+            }
+        }
+        
+        // If we don't have enough personalized reviews, mix with general feed
+        if (personalizedReviews.length < 10) {
+            const generalReviews = await Review.find()
+                .populate('user', 'username avatar _id badges')
+                .sort({ createdAt: -1 })
+                .limit(20 - personalizedReviews.length);
+            
+            // Add general reviews that aren't already included
+            const personalizedIds = personalizedReviews.map(r => r._id.toString());
+            const additionalReviews = generalReviews.filter(r => 
+                !personalizedIds.includes(r._id.toString())
+            );
+            
+            personalizedReviews.push(...additionalReviews);
+        }
+        
+        // Final shuffle to ensure good distribution
+        const finalReviews = shuffleArray(personalizedReviews).slice(0, 20);
+        res.json(finalReviews);
+    } catch (error) {
+        res.status(500).json({ msg: 'Server Error' });
+    }
+};
+
 // @desc    Get all reviews for a specific movie
 // @route   GET /api/reviews/movie/:movieId
 const getMovieReviews = async (req, res) => {
@@ -260,6 +390,7 @@ module.exports = {
     createReview,
     getMyReviews,
     getFeedReviews,
+    getPersonalizedFeedReviews,
     getMovieReviews,
     getMovieStats,
     updateReview,

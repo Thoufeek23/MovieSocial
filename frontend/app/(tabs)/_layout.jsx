@@ -1,12 +1,57 @@
-import React from 'react';
+import React, { createContext, useContext, useRef } from 'react';
 import { Tabs, useRouter } from 'expo-router';
 import { Home, Search, BookOpen, Puzzle, FileText, User } from 'lucide-react-native';
-import { View, Platform } from 'react-native';
+import { View, Platform, TouchableOpacity } from 'react-native';
 import CustomHeader from '../../components/CustomHeader';
 import { usePathname } from 'expo-router';
 
+// Create context for scroll refs
+const ScrollToTopContext = createContext(null);
+
+export const useScrollToTop = () => {
+  const context = useContext(ScrollToTopContext);
+  return context;
+};
+
 export default function TabsLayout() {
   const pathname = usePathname();
+  const scrollRefs = useRef({});
+  
+  const scrollToTop = (tabName) => {
+    const scrollRef = scrollRefs.current[tabName];
+    
+    if (scrollRef && scrollRef.current) {
+      // Try FlatList method first, then ScrollView method
+      if (scrollRef.current.scrollToOffset) {
+        scrollRef.current.scrollToOffset({ offset: 0, animated: true });
+      } else if (scrollRef.current.scrollTo) {
+        scrollRef.current.scrollTo({ y: 0, animated: true });
+      }
+    }
+  };
+  
+  const registerScrollRef = (tabName, ref) => {
+    scrollRefs.current[tabName] = ref;
+  };
+  
+  const handleTabPress = (tabName, onPress) => {
+    const currentTab = getCurrentTabFromPath(pathname);
+    
+    if (currentTab === tabName) {
+      scrollToTop(tabName);
+    } else {
+      onPress?.();
+    }
+  };
+  
+  const getCurrentTabFromPath = (path) => {
+    if (path.includes('/search')) return 'search';
+    if (path.includes('/discussions')) return 'discussions';
+    if (path.includes('/reviews')) return 'reviews';
+    if (path.includes('/modle')) return 'modle';
+    if (path.includes('/profile')) return 'profile';
+    return 'index'; // default to home
+  };
   
   // Determine header title and logo based on current route
   const getHeaderProps = () => {
@@ -40,10 +85,11 @@ export default function TabsLayout() {
   };
 
   return (
-    <View style={{ flex: 1 }}>
-      {/* Global sticky header */}
-      <CustomHeader {...getHeaderProps()} />
-      <Tabs
+    <ScrollToTopContext.Provider value={{ scrollToTop, registerScrollRef }}>
+      <View style={{ flex: 1 }}>
+        {/* Global sticky header */}
+        <CustomHeader {...getHeaderProps()} />
+        <Tabs
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: '#10b981',
@@ -121,6 +167,16 @@ export default function TabsLayout() {
               />
             </View>
           ),
+          tabBarButton: (props) => {
+            return (
+              <TouchableOpacity 
+                {...props}
+                onPress={(e) => {
+                  handleTabPress('index', () => props.onPress?.(e));
+                }}
+              />
+            );
+          },
         }}
       />
       <Tabs.Screen
@@ -144,6 +200,16 @@ export default function TabsLayout() {
               />
             </View>
           ),
+          tabBarButton: (props) => {
+            return (
+              <TouchableOpacity 
+                {...props}
+                onPress={(e) => {
+                  handleTabPress('search', () => props.onPress?.(e));
+                }}
+              />
+            );
+          },
         }}
       />
       <Tabs.Screen
@@ -167,6 +233,16 @@ export default function TabsLayout() {
               />
             </View>
           ),
+          tabBarButton: (props) => {
+            return (
+              <TouchableOpacity 
+                {...props}
+                onPress={(e) => {
+                  handleTabPress('discussions', () => props.onPress?.(e));
+                }}
+              />
+            );
+          },
         }}
       />
       <Tabs.Screen
@@ -190,6 +266,16 @@ export default function TabsLayout() {
               />
             </View>
           ),
+          tabBarButton: (props) => {
+            return (
+              <TouchableOpacity 
+                {...props}
+                onPress={(e) => {
+                  handleTabPress('modle', () => props.onPress?.(e));
+                }}
+              />
+            );
+          },
         }}
       />
       <Tabs.Screen
@@ -213,6 +299,16 @@ export default function TabsLayout() {
               />
             </View>
           ),
+          tabBarButton: (props) => {
+            return (
+              <TouchableOpacity 
+                {...props}
+                onPress={(e) => {
+                  handleTabPress('reviews', () => props.onPress?.(e));
+                }}
+              />
+            );
+          },
         }}
       />
       <Tabs.Screen
@@ -236,9 +332,20 @@ export default function TabsLayout() {
               />
             </View>
           ),
+          tabBarButton: (props) => {
+            return (
+              <TouchableOpacity 
+                {...props}
+                onPress={(e) => {
+                  handleTabPress('profile', () => props.onPress?.(e));
+                }}
+              />
+            );
+          },
         }}
         />
-      </Tabs>
-    </View>
+        </Tabs>
+      </View>
+    </ScrollToTopContext.Provider>
   );
 }
