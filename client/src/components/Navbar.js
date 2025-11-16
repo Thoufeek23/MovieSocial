@@ -4,6 +4,7 @@ import { AuthContext } from '../context/AuthContext';
 import { ModleContext } from '../context/ModleContext';
 import InstantSearchBar from './InstantSearchBar';
 import Avatar from './Avatar';
+import { Sparkles } from 'lucide-react';
 import * as api from '../api';
 // Use only MS_logo.png as the navbar logo
 // post-related UI moved to sidebar; no inline post controls in navbar
@@ -99,6 +100,14 @@ const Navbar = () => {
         <div className="flex items-center space-x-3">
           {user ? (
             <>
+              {/* AI Movie Picker Icon */}
+              <Link 
+                to="/ai-recommendations" 
+                title="Pick a movie for me"
+                className="p-2 rounded-lg hover:bg-gray-800 transition-all duration-200"
+              >
+                <Sparkles className="w-5 h-5 text-green-400" />
+              </Link>
               <div className="flex items-center gap-2">
                 <Avatar username={user.username} avatar={user.avatar} sizeClass="w-9 h-9" linkTo={`/profile/${user.username}`} className="border border-gray-600" />
                 <div className="flex flex-col text-right">

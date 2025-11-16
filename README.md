@@ -47,6 +47,7 @@ Create a .env file in the server/ folder:
 MONGO_URI=your_mongodb_connection_string
 JWT_SECRET=your_super_secret_key
 TMDB_API_KEY=your_tmdb_api_key
+GEMINI_API_KEY=your_gemini_api_key
 PORT=5001
 
 Run the backend:
@@ -76,7 +77,7 @@ Option A — Split hosting (fast, recommended)
 Steps (quick):
 
 1. Configure server environment variables on the host (Render/Heroku):
-   - MONGO_URI, JWT_SECRET, TMDB_API_KEY, OMDB_API_KEY, PORT (optional), CORS_ORIGIN
+   - MONGO_URI, JWT_SECRET, TMDB_API_KEY, GEMINI_API_KEY, OMDB_API_KEY, PORT (optional), CORS_ORIGIN
 2. Deploy server (point Render/Heroku to the repo's root or the `server/` folder).
 3. Deploy client to Vercel/Netlify. Set `REACT_APP_API_URL` to your API URL (e.g. `https://api.example.com`).
 
@@ -124,6 +125,7 @@ This is the easiest, free-friendly option. Vercel provides a very fast static ho
      - `MONGO_URI` (Atlas connection string)
      - `JWT_SECRET`
      - `TMDB_API_KEY`
+     - `GEMINI_API_KEY` (for AI movie recommendations)
      - `OMDB_API_KEY` (optional)
      - `CORS_ORIGIN` => set to your Vercel URL (e.g. `https://movie-social.vercel.app`) or `*` for testing.
    - Deploy the server. Railway will provide a URL like `https://<project>.up.railway.app`.

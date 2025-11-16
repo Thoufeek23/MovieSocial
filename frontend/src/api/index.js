@@ -9,7 +9,7 @@ const getApiUrl = () => {
   }
   
   // Use hosted backend for production
-  //return "http://192.168.68.64:5001"
+  //return "http://192.168.68.70:5001"
   return 'https://moviesocial-backend-khd2.onrender.com';
 };
 
@@ -98,6 +98,10 @@ export const getDailyPuzzle = (language = 'English', date = null) => {
   if (date) params.append('date', date);
   return API.get(`/puzzles/daily?${params.toString()}`);
 };
+
+// AI Movie Recommendations
+export const getAIMovieRecommendations = (preferences) => API.post('/ai/movie-recommendations', preferences);
+export const testAIConnection = () => API.get('/ai/test');
 
 // Discussion helpers for mobile
 export const getDiscussionById = (id) => API.get(`/discussions/${id}`);

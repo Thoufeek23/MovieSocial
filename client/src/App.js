@@ -20,6 +20,7 @@ import ModlePage from './pages/ModlePage';
 import ModlePlayPage from './pages/ModlePlayPage';
 import PuzzleAdmin from './pages/PuzzleAdmin';
 import InterestsPage from './pages/InterestsPage';
+import AIMovieRecommendationPage from './pages/AIMovieRecommendationPage';
 import { AnimatePresence, motion } from 'framer-motion';
 import Curtain from './components/Curtain';
 import React, { useContext } from 'react';
@@ -72,6 +73,11 @@ const AppRoutes = () => {
             <Route path="/modle/play" element={
               <ProtectedRoute>
                 <PageWrapper><ModlePlayPage /></PageWrapper>
+              </ProtectedRoute>
+            } />
+            <Route path="/ai-recommendations" element={
+              <ProtectedRoute>
+                <PageWrapper><AIMovieRecommendationPage /></PageWrapper>
               </ProtectedRoute>
             } />
             <Route 

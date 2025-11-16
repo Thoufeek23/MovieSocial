@@ -82,6 +82,10 @@ export const getLeaderboardRegion = (region) => API.get(`/stats/top-reviewers/re
 export const getModleStatus = (language = 'English') => API.get(`/users/modle/status?language=${encodeURIComponent(language)}`);
 export const postModleResult = (payload) => API.post('/users/modle/result', payload);
 
+// AI Recommendations
+export const getAIMovieRecommendations = (preferences) => API.post('/ai/movie-recommendations', preferences);
+export const testAIConnection = () => API.get('/ai/test');
+
 // Puzzle endpoints
 export const getDailyPuzzle = (language = 'English', date = null) => {
   const params = new URLSearchParams({ language });

@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Sparkles } from 'lucide-react-native';
 import { useAuth } from '../src/context/AuthContext';
 import { ModleContext } from '../src/context/ModleContext';
 import Avatar from './Avatar';
@@ -149,16 +150,29 @@ const CustomHeader = ({ title, showLogo = false }) => {
               )}
             </View>
 
-            {/* Right Side - Modle Streak */}
-            <TouchableOpacity 
-              onPress={() => router.push('/(tabs)/modle')}
-              style={styles.streakContainer}
-            >
-              <View style={styles.streakBadge}>
-                <Text style={styles.streakText}>{navbarStreak}</Text>
-                <Text style={styles.fireEmoji}>🔥</Text>
-              </View>
-            </TouchableOpacity>
+            {/* Right Side - AI Movie Picker & Modle Streak */}
+            <View style={styles.rightSection}>
+              {/* AI Movie Picker Icon */}
+              {user && (
+                <TouchableOpacity 
+                  onPress={() => router.push('/ai-recommendations')}
+                  style={styles.aiPickerButton}
+                >
+                  <Sparkles color="#10b981" size={20} />
+                </TouchableOpacity>
+              )}
+              
+              {/* Modle Streak */}
+              <TouchableOpacity 
+                onPress={() => router.push('/(tabs)/modle')}
+                style={styles.streakContainer}
+              >
+                <View style={styles.streakBadge}>
+                  <Text style={styles.streakText}>{navbarStreak}</Text>
+                  <Text style={styles.fireEmoji}>🔥</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
@@ -262,8 +276,18 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     textAlign: 'center',
   },
-  streakContainer: {
+  rightSection: {
     width: 90,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  aiPickerButton: {
+    padding: 8,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  streakContainer: {
     alignItems: 'flex-end',
     justifyContent: 'center',
   },

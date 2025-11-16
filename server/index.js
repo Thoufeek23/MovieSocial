@@ -185,6 +185,7 @@ app.use('/api/reviews', require('./routes/reviews'));
 app.use('/api/movies', require('./routes/movies'));
 app.use('/api/discussions', require('./routes/discussions'));
 app.use('/api/puzzles', require('./routes/puzzles'));
+app.use('/api/ai', require('./routes/ai'));
 // Stats and leaderboards
 app.use('/api/stats', require('./routes/stats'));
 // Debug endpoints for runtime checks (safe to remove after debugging)
