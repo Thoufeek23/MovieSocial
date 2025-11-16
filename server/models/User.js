@@ -8,6 +8,8 @@ const UserSchema = new mongoose.Schema({
   bio: { type: String, default: '' },
   // Default avatar uses the public asset '/default_dp.png' (place the provided image in client/public/default_dp.png)
   avatar: { type: String, default: '/default_dp.png' },
+  // User's movie language interests (selected during signup)
+  interests: [{ type: String }],
   // Region/state for leaderboard grouping (optional)
   country: { type: String },
   state: { type: String },

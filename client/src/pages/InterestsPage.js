@@ -36,7 +36,6 @@ const InterestsPage = () => {
           .slice(0, 10);
         setBackdrops(urls);
       } catch (error) {
-        console.error("Could not fetch movie backdrops for interests screen", error);
         // Use some default placeholder
         setBackdrops(['']);
       }
@@ -67,11 +66,22 @@ const InterestsPage = () => {
     }
   };
 
-  const handleContinue = () => {
-    // Clear the new user flag since they've completed interests
-    setNewUser(false);
-    // Navigate to main app
-    navigate('/');
+  const handleContinue = async () => {
+    try {
+      // Save top 3 interests to user profile
+      if (selectedInterests.length > 0) {
+        const topThreeInterests = selectedInterests.slice(0, 3);
+        await api.saveInterests(topThreeInterests);
+      }
+      // Clear the new user flag since they've completed interests
+      setNewUser(false);
+      // Navigate to main app
+      navigate('/');
+    } catch (error) {
+      // Still navigate even if saving fails
+      setNewUser(false);
+      navigate('/');
+    }
   };
 
   const handleSkip = () => {

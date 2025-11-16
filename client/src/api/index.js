@@ -2,6 +2,7 @@ import axios from 'axios';
 
 // In production the client should be built with REACT_APP_API_URL set to your API root 
 const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'https://moviesocial-backend-khd2.onrender.com';
+//const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://localhost:5001';
 const API = axios.create({ baseURL: `${apiRoot}/api` });
 
 // Add the JWT to the header of every request if it exists
@@ -27,6 +28,7 @@ export const getCurrentUser = () => API.get('/auth/me');
 export const searchMovies = (query) => API.get(`/movies/search?query=${query}`);
 export const getMovieDetails = (id) => API.get(`/movies/${id}`);
 export const getPopularMovies = () => API.get('/movies/popular');
+export const getPersonalizedMovies = () => API.get('/movies/personalized');
 
 
 // Reviews
@@ -43,12 +45,14 @@ export const voteReview = (id, value) => API.post(`/reviews/${id}/vote`, { value
 
 // User Actions
 export const getUserProfile = (username) => API.get(`/users/${username}`);
+export const getMyProfile = () => API.get('/auth/me');
 export const searchUsers = (q) => API.get(`/users/search?q=${encodeURIComponent(q)}`);
 export const addToWatchlist = (movieId) => API.post('/users/watchlist', { movieId });
 export const addToWatched = (movieId) => API.post('/users/watched', { movieId });
 export const removeFromWatchlist = (movieId) => API.delete('/users/watchlist', { data: { movieId } });
 export const removeFromWatched = (movieId) => API.delete('/users/watched', { data: { movieId } });
 export const updateMyProfile = (profileData) => API.patch('/users/me', profileData);
+export const saveInterests = (interests) => API.patch('/users/me', { interests });
 export const followUser = (username) => API.post(`/users/${username}/follow`);
 export const unfollowUser = (username) => API.delete(`/users/${username}/follow`);
 export const deleteMyAccount = () => API.delete('/users/me');

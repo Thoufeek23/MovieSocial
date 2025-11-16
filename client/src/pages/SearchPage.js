@@ -21,9 +21,15 @@ const SearchPage = () => {
           const { data } = await api.searchMovies(query);
           setResults(data.results || []);
         } else {
-          // No query: show popular movies on the Explore page
-          const { data } = await api.getPopularMovies();
-          setResults(data.results || data || []);
+          // No query: show personalized or popular movies on the Explore page
+          try {
+            const { data } = await api.getPersonalizedMovies();
+            setResults(data.results || data || []);
+          } catch (error) {
+            // Fallback to popular movies if not logged in or error
+            const { data } = await api.getPopularMovies();
+            setResults(data.results || data || []);
+          }
         }
       } catch (error) {
         console.error("Search failed", error);

@@ -9,16 +9,41 @@ import { X } from 'lucide-react';
 const EditProfileModal = ({ isOpen, onClose, profile, onUpdated }) => {
   const [bio, setBio] = useState(profile?.bio || '');
   const [avatarPreview, setAvatarPreview] = useState(profile?.avatar || '');
+  const [interests, setInterests] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const avatarRef = useRef(null);
+
+  // Available language interests
+  const availableInterests = [
+    { name: 'English', flag: '🇺🇸' },
+    { name: 'Hindi', flag: '🇮🇳' },
+    { name: 'Tamil', flag: '🇮🇳' },
+    { name: 'Malayalam', flag: '🇮🇳' },
+    { name: 'Telugu', flag: '🇮🇳' },
+    { name: 'Kannada', flag: '🇮🇳' },
+    { name: 'Korean', flag: '🇰🇷' },
+    { name: 'French', flag: '🇫🇷' },
+    { name: 'Spanish', flag: '🇪🇸' }
+  ];
 
   // Update local state if the profile prop changes (e.g., after initial load)
   useEffect(() => {
     if (profile) {
       setBio(profile.bio || '');
       setAvatarPreview(profile.avatar || '');
+      setInterests(profile.interests || []);
     }
   }, [profile]);
+
+  const handleInterestToggle = (languageName) => {
+    if (interests.includes(languageName)) {
+      setInterests(interests.filter(interest => interest !== languageName));
+    } else {
+      if (interests.length < 3) {
+        setInterests([...interests, languageName]);
+      }
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -40,6 +65,7 @@ const EditProfileModal = ({ isOpen, onClose, profile, onUpdated }) => {
     try {
       const payload = {
         bio,
+        interests: interests.slice(0, 3), // Ensure only top 3 interests
       };
       // Only include avatar if it's different from the original or a new one was selected
       if (avatarPreview !== profile?.avatar) {
@@ -52,7 +78,6 @@ const EditProfileModal = ({ isOpen, onClose, profile, onUpdated }) => {
       onUpdated?.(data); // Notify parent component
       onClose();
     } catch (err) {
-      console.error(err);
       toast.error(err.response?.data?.msg || 'Failed to update profile');
     } finally {
       setIsLoading(false);
@@ -114,6 +139,44 @@ const EditProfileModal = ({ isOpen, onClose, profile, onUpdated }) => {
                   />
                   <p className="text-xs text-gray-500 mt-1">Max 2MB. PNG, JPG, GIF.</p>
                 </div>
+              </div>
+
+              {/* Interests Section */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-3">Interests</label>
+                <p className="text-xs text-gray-500 mb-3">Select up to 3 movie languages that interest you</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {availableInterests.map((language) => (
+                    <button
+                      key={language.name}
+                      type="button"
+                      onClick={() => handleInterestToggle(language.name)}
+                      className={`
+                        relative p-3 rounded-lg border-2 transition-all duration-200 text-left
+                        ${
+                          interests.includes(language.name)
+                            ? 'bg-green-600/20 border-green-500 text-white'
+                            : 'bg-gray-800/50 border-gray-600 text-gray-300 hover:border-gray-500 hover:bg-gray-700/50'
+                        }
+                        ${interests.length >= 3 && !interests.includes(language.name) ? 'opacity-50 cursor-not-allowed' : ''}
+                      `}
+                      disabled={interests.length >= 3 && !interests.includes(language.name)}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">{language.flag}</span>
+                        <span className="text-sm font-medium">{language.name}</span>
+                      </div>
+                      {interests.includes(language.name) && (
+                        <div className="absolute -top-2 -right-2 bg-green-500 rounded-full p-1">
+                          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">{interests.length}/3 selected</p>
               </div>
 
               {/* Bio Section */}

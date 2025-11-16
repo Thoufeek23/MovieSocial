@@ -239,8 +239,209 @@ const getPopularMovies = async (req, res) => {
 };
 
 
+// @desc    Get personalized movies based on user interests
+// @route   GET /api/movies/personalized
+const getPersonalizedMovies = async (req, res) => {
+    try {
+        // Get user interests
+        const userId = req.user?.id;
+        let userInterests = [];
+        
+        if (userId) {
+            const User = require('../models/User');
+            const user = await User.findById(userId).select('interests username');
+            userInterests = user?.interests || [];
+        }
+        
+        // If no interests, fall back to popular movies
+        if (userInterests.length === 0) {
+            return getPopularMovies(req, res);
+        }
+        
+        // Map interests to language codes for TMDB API
+        const languageMap = {
+            'English': 'en',
+            'Hindi': 'hi',
+            'Tamil': 'ta',
+            'Telugu': 'te',
+            'Kannada': 'kn',
+            'Malayalam': 'ml',
+            'Korean': 'ko',
+            'French': 'fr',
+            'Spanish': 'es'
+        };
+        
+        
+        const languageCodes = userInterests
+            .map(interest => languageMap[interest])
+            .filter(Boolean);
+        
+        
+        let allMovies = [];
+        
+        // Strategy 1: Try to get movies in user's preferred languages
+        if (languageCodes.length > 0) {
+            
+            for (const langCode of languageCodes) {
+                for (let page = 1; page <= 2; page++) {
+                    const params = {
+                        api_key: TMDB_API_KEY,
+                        page: page,
+                        sort_by: 'primary_release_date.desc',
+                        'primary_release_date.lte': new Date().toISOString().split('T')[0],
+                        'vote_count.gte': 5, // Lowered threshold for regional content
+                        with_original_language: langCode
+                    };
+                    
+                    
+                    try {
+                        const { data } = await axios.get(`${TMDB_API_BASE_URL}/discover/movie`, { params });
+                        
+                        if (data.results && data.results.length > 0) {
+                            // Tag movies with their language for debugging
+                            const taggedMovies = data.results.map(movie => ({ 
+                                ...movie, 
+                                _source: `${langCode}_preferred` 
+                            }));
+                            allMovies.push(...taggedMovies);
+                        }
+                    } catch (error) {
+                        logger.warn(`Error fetching ${langCode} movies:`, error.message);
+                    }
+                }
+            }
+        }
+        
+        
+        // Strategy 2: If we don't have enough movies, add some popular Indian cinema
+        if (allMovies.length < 15 && (languageCodes.includes('hi') || languageCodes.includes('ta') || languageCodes.includes('te') || languageCodes.includes('ml') || languageCodes.includes('kn'))) {
+            
+            const indianLanguages = ['hi', 'ta', 'te', 'ml', 'kn'];
+            for (const lang of indianLanguages) {
+                const params = {
+                    api_key: TMDB_API_KEY,
+                    page: 1,
+                    sort_by: 'popularity.desc',
+                    'primary_release_date.gte': '2020-01-01', // Recent movies
+                    'vote_count.gte': 20,
+                    with_original_language: lang
+                };
+                
+                try {
+                    const { data } = await axios.get(`${TMDB_API_BASE_URL}/discover/movie`, { params });
+                    if (data.results && data.results.length > 0) {
+                        const taggedMovies = data.results.slice(0, 3).map(movie => ({ 
+                            ...movie, 
+                            _source: `${lang}_popular` 
+                        }));
+                        allMovies.push(...taggedMovies);
+                    }
+                } catch (error) {
+                    logger.warn(`Error fetching popular ${lang} movies:`, error.message);
+                }
+            }
+        }
+        
+        
+        // Strategy 3: Final fallback - add some recent popular movies if still not enough
+        if (allMovies.length < 10) {
+            logger.warn(`Only got ${allMovies.length} movies, adding recent popular movies as fallback...`);
+            
+            const fallbackParams = {
+                api_key: TMDB_API_KEY,
+                page: 1,
+                sort_by: 'primary_release_date.desc',
+                'primary_release_date.lte': new Date().toISOString().split('T')[0],
+                'vote_count.gte': 100, // Higher threshold for fallback
+                'vote_average.gte': 6.0 // Only good movies
+            };
+            
+            try {
+                const fallbackRes = await axios.get(`${TMDB_API_BASE_URL}/discover/movie`, { params: fallbackParams });
+                if (fallbackRes.data.results) {
+                    const taggedMovies = fallbackRes.data.results.map(movie => ({ 
+                        ...movie, 
+                        _source: 'fallback_popular' 
+                    }));
+                    allMovies.push(...taggedMovies);
+                }
+            } catch (error) {
+                logger.error('Error fetching fallback movies:', error.message);
+            }
+        }
+        
+        // Sort by release date (newest first) and take top 20
+        const sortedMovies = allMovies
+            .sort((a, b) => new Date(b.release_date) - new Date(a.release_date))
+            .slice(0, 20);
+        
+        // Add OMDb ratings if available
+        const OMDB_API_KEY = process.env.OMDB_API_KEY;
+        if (OMDB_ENABLED && OMDB_API_KEY && sortedMovies.length > 0) {
+            const concurrency = Number(process.env.OMDB_CONCURRENCY) || 3;
+            await runWithConcurrency(sortedMovies, concurrency, async (m) => {
+                const title = m.title || m.original_title;
+                const year = m.release_date ? m.release_date.substring(0, 4) : undefined;
+                const key = `omdb:t:${title}|y:${year}`;
+                const cached = cache.get(key);
+                if (cached) {
+                    m.imdbRating = cached.imdbRating;
+                    m.imdbRatingSource = cached.imdbRatingSource;
+                    return;
+                }
+                
+                try {
+                    const omdbRes = await axios.get('http://www.omdbapi.com/', { params: { apikey: OMDB_API_KEY, t: title, y: year } });
+                    if (omdbRes.data && omdbRes.data.imdbRating && omdbRes.data.imdbRating !== 'N/A') {
+                        m.imdbRating = omdbRes.data.imdbRating;
+                        m.imdbRatingSource = 'OMDb';
+                        cache.set(key, { imdbRating: m.imdbRating, imdbRatingSource: m.imdbRatingSource });
+                    } else if (typeof m.vote_average !== 'undefined') {
+                        m.imdbRating = m.vote_average;
+                        m.imdbRatingSource = 'TMDb';
+                    }
+                } catch (e) {
+                    if (typeof m.vote_average !== 'undefined') {
+                        m.imdbRating = m.vote_average;
+                        m.imdbRatingSource = 'TMDb';
+                    }
+                }
+            });
+        } else {
+            sortedMovies.forEach(m => {
+                if (typeof m.vote_average !== 'undefined') {
+                    m.imdbRating = m.vote_average;
+                    m.imdbRatingSource = 'TMDb';
+                }
+            });
+        }
+        
+        // Remove the _source tag before sending to client
+        const cleanMovies = sortedMovies.map(movie => {
+            const { _source, ...cleanMovie } = movie;
+            return cleanMovie;
+        });
+        
+        if (sortedMovies.length > 0) {
+            
+            // Log language distribution
+            const langStats = {};
+            sortedMovies.forEach(m => {
+                langStats[m.original_language] = (langStats[m.original_language] || 0) + 1;
+            });
+        }
+        
+        res.json({ results: cleanMovies });
+    } catch (err) {
+        logger.error('Error fetching personalized movies:', err);
+        // Fallback to popular movies on error
+        return getPopularMovies(req, res);
+    }
+};
+
 module.exports = {
     searchMovies,
     getMovieDetails,
-    getPopularMovies
+    getPopularMovies,
+    getPersonalizedMovies
 };

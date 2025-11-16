@@ -20,19 +20,40 @@ import * as api from '../src/api';
 const EditProfileModal = ({ visible, profile, onClose, onUpdated }) => {
   const [bio, setBio] = useState('');
   const [avatarPreview, setAvatarPreview] = useState('');
-  const [country, setCountry] = useState('');
-  const [stateRegion, setStateRegion] = useState('');
+  const [interests, setInterests] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Available language interests
+  const availableInterests = [
+    { name: 'English', flag: '🇺🇸' },
+    { name: 'Hindi', flag: '🇮🇳' },
+    { name: 'Tamil', flag: '🇮🇳' },
+    { name: 'Malayalam', flag: '🇮🇳' },
+    { name: 'Telugu', flag: '🇮🇳' },
+    { name: 'Kannada', flag: '🇮🇳' },
+    { name: 'Korean', flag: '🇰🇷' },
+    { name: 'French', flag: '🇫🇷' },
+    { name: 'Spanish', flag: '🇪🇸' }
+  ];
 
   // Update local state when profile changes
   useEffect(() => {
     if (profile) {
       setBio(profile.bio || '');
       setAvatarPreview(profile.avatar || '');
-      setCountry(profile.country || '');
-      setStateRegion(profile.state || '');
+      setInterests(profile.interests || []);
     }
   }, [profile]);
+
+  const handleInterestToggle = (languageName) => {
+    if (interests.includes(languageName)) {
+      setInterests(interests.filter(interest => interest !== languageName));
+    } else {
+      if (interests.length < 3) {
+        setInterests([...interests, languageName]);
+      }
+    }
+  };
 
   // Handle avatar selection
   const handleAvatarSelect = async () => {
@@ -61,7 +82,6 @@ const EditProfileModal = ({ visible, profile, onClose, onUpdated }) => {
         setAvatarPreview(base64String);
       }
     } catch (error) {
-      console.error('Image picker error:', error);
       Alert.alert('Error', 'Failed to select image');
     }
   };
@@ -72,8 +92,7 @@ const EditProfileModal = ({ visible, profile, onClose, onUpdated }) => {
     try {
       const payload = {
         bio: bio.trim(),
-        country: country.trim(),
-        state: stateRegion.trim(),
+        interests: interests.slice(0, 3), // Ensure only top 3 interests
       };
 
       // Only include avatar if it's different from the original
@@ -88,8 +107,8 @@ const EditProfileModal = ({ visible, profile, onClose, onUpdated }) => {
       
       Alert.alert('Success', 'Profile updated successfully');
       onUpdated?.(data);
+      onClose(); // Close the modal after successful save
     } catch (error) {
-      console.error('Profile update error:', error);
       Alert.alert(
         'Error', 
         error.response?.data?.msg || 'Failed to update profile'
@@ -173,35 +192,38 @@ const EditProfileModal = ({ visible, profile, onClose, onUpdated }) => {
             </View>
           </View>
 
-          {/* Country Section */}
+          {/* Interests Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Country</Text>
-            <View style={styles.inputContainer}>
-              <TextInput
-                style={styles.input}
-                value={country}
-                onChangeText={setCountry}
-                placeholder="Enter your country"
-                placeholderTextColor="#6b7280"
-                editable={!isLoading}
-              />
+            <Text style={styles.sectionTitle}>Interests</Text>
+            <Text style={styles.hint}>Select up to 3 movie languages that interest you</Text>
+            <View style={styles.interestsGrid}>
+              {availableInterests.map((language) => (
+                <TouchableOpacity
+                  key={language.name}
+                  onPress={() => handleInterestToggle(language.name)}
+                  disabled={interests.length >= 3 && !interests.includes(language.name)}
+                  style={[
+                    styles.interestButton,
+                    interests.includes(language.name) && styles.interestButtonSelected,
+                    interests.length >= 3 && !interests.includes(language.name) && styles.interestButtonDisabled
+                  ]}
+                >
+                  <Text style={styles.interestFlag}>{language.flag}</Text>
+                  <Text style={[
+                    styles.interestName,
+                    interests.includes(language.name) && styles.interestNameSelected
+                  ]}>
+                    {language.name}
+                  </Text>
+                  {interests.includes(language.name) && (
+                    <View style={styles.interestCheckIcon}>
+                      <Ionicons name="checkmark" size={12} color="white" />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
             </View>
-          </View>
-
-          {/* State/Region Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>State / Region</Text>
-            <View style={styles.inputContainer}>
-              <TextInput
-                style={styles.input}
-                value={stateRegion}
-                onChangeText={setStateRegion}
-                placeholder="Enter your state or region"
-                placeholderTextColor="#6b7280"
-                editable={!isLoading}
-              />
-            </View>
-            <Text style={styles.hint}>Used for regional leaderboards.</Text>
+            <Text style={styles.hint}>{interests.length}/3 selected</Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -350,6 +372,53 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6b7280',
     marginTop: 8,
+  },
+  interestsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginVertical: 12,
+  },
+  interestButton: {
+    backgroundColor: '#1f2937',
+    borderWidth: 2,
+    borderColor: '#374151',
+    borderRadius: 12,
+    padding: 12,
+    minWidth: 100,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  interestButtonSelected: {
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    borderColor: '#10b981',
+  },
+  interestButtonDisabled: {
+    opacity: 0.5,
+  },
+  interestFlag: {
+    fontSize: 20,
+    marginBottom: 4,
+  },
+  interestName: {
+    fontSize: 12,
+    color: '#d1d5db',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  interestNameSelected: {
+    color: 'white',
+  },
+  interestCheckIcon: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: '#10b981',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 

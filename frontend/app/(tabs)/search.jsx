@@ -24,7 +24,14 @@ export default function SearchPage() {
 
   const loadPopularMovies = async () => {
     try {
-      const response = await api.getPopularMovies();
+      let response;
+      try {
+        // Try personalized movies first
+        response = await api.getPersonalizedMovies();
+      } catch (error) {
+        // Fallback to popular movies
+        response = await api.getPopularMovies();
+      }
       setPopularMovies(response.data.results || []);
     } catch (error) {
       console.error('Failed to load popular movies:', error);

@@ -9,6 +9,7 @@ const getApiUrl = () => {
   }
   
   // Use hosted backend for production
+  //return "http://192.168.68.64:5001"
   return 'https://moviesocial-backend-khd2.onrender.com';
 };
 
@@ -40,6 +41,7 @@ export const completeSignup = (payload) => API.post('/auth/complete-signup', pay
 export const searchMovies = (query) => API.get(`/movies/search?query=${query}`);
 export const getMovieDetails = (id) => API.get(`/movies/${id}`);
 export const getPopularMovies = () => API.get('/movies/popular');
+export const getPersonalizedMovies = () => API.get('/movies/personalized');
 
 // Reviews
 export const fetchFeed = () => API.get('/reviews/feed');
@@ -61,6 +63,7 @@ export const addToWatched = (movieId) => API.post('/users/watched', { movieId })
 export const removeFromWatchlist = (movieId) => API.delete('/users/watchlist', { data: { movieId } });
 export const removeFromWatched = (movieId) => API.delete('/users/watched', { data: { movieId } });
 export const updateMyProfile = (profileData) => API.patch('/users/me', profileData);
+export const saveInterests = (interests) => API.patch('/users/me', { interests });
 export const followUser = (username) => API.post(`/users/${username}/follow`);
 export const unfollowUser = (username) => API.delete(`/users/${username}/follow`);
 export const deleteMyAccount = () => API.delete('/users/me');

@@ -112,9 +112,13 @@ const updateProfile = async (req, res) => {
         const user = await User.findById(req.user.id);
         if (!user) return res.status(404).json({ msg: 'User not found' });
 
-        const { bio, avatar } = req.body;
+        const { bio, avatar, interests } = req.body;
         if (typeof bio !== 'undefined') user.bio = bio;
         if (typeof avatar !== 'undefined') user.avatar = avatar;
+        if (Array.isArray(interests)) {
+            // Limit to top 3 interests
+            user.interests = interests.slice(0, 3);
+        }
 
         await user.save();
         res.json({ msg: 'Profile updated', user });

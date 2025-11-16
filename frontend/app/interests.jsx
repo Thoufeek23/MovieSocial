@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import { MotiView } from 'moti';
 import { Check } from 'lucide-react-native';
 import { useAuth } from '../src/context/AuthContext';
+import { saveInterests } from '../src/api';
 
 
 
@@ -69,11 +70,22 @@ export default function InterestsSelectionPage() {
     }
   };
 
-  const handleContinue = () => {
-    // Clear the new user flag since they've completed interests
-    setNewUser(false);
-    // Navigate to main app
-    router.replace('/(tabs)');
+  const handleContinue = async () => {
+    try {
+      // Save top 3 interests to user profile
+      if (selectedInterests.length > 0) {
+        const topThreeInterests = selectedInterests.slice(0, 3);
+        await saveInterests(topThreeInterests);
+      }
+      // Clear the new user flag since they've completed interests
+      setNewUser(false);
+      // Navigate to main app
+      router.replace('/(tabs)');
+    } catch (error) {
+      // Still navigate even if saving fails
+      setNewUser(false);
+      router.replace('/(tabs)');
+    }
   };
 
   const handleSkip = () => {
@@ -225,28 +237,132 @@ export default function InterestsSelectionPage() {
 }
 
 const interestsStyles = StyleSheet.create({
-  container: { flex: 1 },
   backgroundImage: { flex: 1, width: '100%', height: '100%' },
   overlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.8)' },
-  safeArea: { flex: 1, paddingHorizontal: 20 },
-  scrollContainer: { flexGrow: 1, justifyContent: 'center', paddingVertical: 40 },
-  header: { alignItems: 'center', marginBottom: 30 },
-  title: { fontSize: 32, fontWeight: 'bold', color: 'white', textAlign: 'center', marginBottom: 10 },
-  subtitle: { fontSize: 18, color: '#d1d5db', textAlign: 'center', lineHeight: 24 },
-  sectionTitle: { fontSize: 24, fontWeight: '600', color: 'white', marginBottom: 15, marginTop: 20 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-  languageButton: { width: (width - 60) / 2, backgroundColor: 'rgba(255, 255, 255, 0.1)', borderRadius: 15, padding: 15, marginBottom: 15, borderWidth: 2, borderColor: 'transparent', alignItems: 'center' },
-  languageButtonSelected: { backgroundColor: 'rgba(16, 185, 129, 0.3)', borderColor: '#10b981' },
-  languageText: { fontSize: 18, fontWeight: '500', color: 'white', marginTop: 5 },
-  languageFlag: { fontSize: 30, marginBottom: 5 },
-  genreButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.1)', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12, marginRight: 10, marginBottom: 10, borderWidth: 2, borderColor: 'transparent' },
-  genreButtonSelected: { backgroundColor: 'rgba(16, 185, 129, 0.3)', borderColor: '#10b981' },
-  genreText: { fontSize: 16, fontWeight: '500', color: 'white', marginLeft: 8 },
-  checkIcon: { marginRight: 5 },
-  buttonContainer: { marginTop: 40 },
-  saveButton: { backgroundColor: '#10b981', paddingVertical: 16, borderRadius: 15, alignItems: 'center', marginBottom: 15, shadowColor: '#10b981', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 10 },
-  saveButtonDisabled: { backgroundColor: '#6b7280', shadowOpacity: 0 },
-  saveButtonText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
-  skipButton: { paddingVertical: 12, alignItems: 'center' },
-  skipButtonText: { color: '#d1d5db', fontSize: 16, fontWeight: '500' }
+  safeArea: { flex: 1 },
+  scrollContent: { 
+    flexGrow: 1, 
+    justifyContent: 'center', 
+    paddingHorizontal: 20,
+    paddingVertical: 40 
+  },
+  headerSection: { 
+    alignItems: 'center', 
+    marginBottom: 48 
+  },
+  title: { 
+    fontSize: 32, 
+    fontWeight: 'bold', 
+    color: 'white', 
+    textAlign: 'center', 
+    marginBottom: 16 
+  },
+  subtitle: { 
+    fontSize: 18, 
+    color: '#d1d5db', 
+    textAlign: 'center', 
+    lineHeight: 26,
+    maxWidth: 320,
+    marginHorizontal: 'auto'
+  },
+  languagesContainer: { 
+    marginBottom: 32 
+  },
+  languagesGrid: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    justifyContent: 'center',
+    gap: 12 
+  },
+  languageCardContainer: { 
+    width: (width - 60) / 3,
+    marginBottom: 12 
+  },
+  languageCard: { 
+    backgroundColor: 'rgba(255, 255, 255, 0.1)', 
+    borderRadius: 16, 
+    padding: 16, 
+    borderWidth: 2, 
+    borderColor: 'transparent', 
+    alignItems: 'center',
+    position: 'relative',
+    minHeight: 100
+  },
+  languageCardSelected: { 
+    backgroundColor: 'rgba(16, 185, 129, 0.3)', 
+    borderColor: '#10b981' 
+  },
+  languageContent: { 
+    alignItems: 'center' 
+  },
+  languageFlag: { 
+    fontSize: 32, 
+    marginBottom: 8 
+  },
+  languageName: { 
+    fontSize: 14, 
+    fontWeight: '600', 
+    color: '#e5e7eb',
+    textAlign: 'center' 
+  },
+  languageNameSelected: { 
+    color: 'white' 
+  },
+  checkIcon: { 
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#10b981',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  counterContainer: { 
+    alignItems: 'center', 
+    marginBottom: 32 
+  },
+  counterText: { 
+    fontSize: 18, 
+    color: '#d1d5db',
+    fontWeight: '500' 
+  },
+  maxReachedText: { 
+    color: '#10b981', 
+    fontWeight: '600',
+    marginTop: 8 
+  },
+  actionsContainer: { 
+    alignItems: 'center',
+    gap: 16 
+  },
+  continueButton: { 
+    paddingVertical: 16, 
+    paddingHorizontal: 32,
+    borderRadius: 16, 
+    alignItems: 'center',
+    minWidth: 280,
+    shadowColor: '#10b981', 
+    shadowOffset: { width: 0, height: 4 }, 
+    shadowOpacity: 0.3, 
+    shadowRadius: 8, 
+    elevation: 8 
+  },
+  continueButtonText: { 
+    color: 'white', 
+    fontSize: 16, 
+    fontWeight: 'bold' 
+  },
+  skipButton: { 
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    alignItems: 'center' 
+  },
+  skipButtonText: { 
+    color: '#9ca3af', 
+    fontSize: 16, 
+    fontWeight: '500',
+    textDecorationLine: 'underline' 
+  }
 });

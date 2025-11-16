@@ -58,9 +58,20 @@ const HomePage = () => {
           setWatchlistMovies(watchlistDetails.map(r => r.data));
 
         } else {
-          // Fetch popular movies and feed when not in mine mode
-          const popularRes = await api.getPopularMovies();
-          setPopularMovies(popularRes.data.results);
+          // Fetch personalized or popular movies and feed when not in mine mode
+          let popularRes;
+          try {
+            // Try to get personalized movies first if user is logged in
+            if (user) {
+              popularRes = await api.getPersonalizedMovies();
+            } else {
+              popularRes = await api.getPopularMovies();
+            }
+          } catch (error) {
+            // Fallback to popular movies if personalized fails
+            popularRes = await api.getPopularMovies();
+          }
+          setPopularMovies(popularRes.data.results || popularRes.data || []);
           const feedRes = await api.fetchFeed();
           setReviews(feedRes.data);
           // load discussions
@@ -191,7 +202,7 @@ const HomePage = () => {
             </div>
           </div>
         ) : (
-          <MovieCarousel title="Popular This Week" movies={popularMovies} showRating={true} />
+          <MovieCarousel title={user ? "Recommended For You" : "Popular This Week"} movies={popularMovies} showRating={true} />
         )
       )}
       

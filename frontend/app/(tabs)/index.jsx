@@ -36,7 +36,7 @@ export default function HomePage() {
     try {
       setLoading(true);
       const [moviesRes, reviewsRes, discussionsRes] = await Promise.allSettled([
-        api.getPopularMovies(),
+        user ? api.getPersonalizedMovies().catch(() => api.getPopularMovies()) : api.getPopularMovies(),
         api.fetchFeed(),
         api.fetchDiscussions({ sortBy: 'comments' })
       ]);
@@ -104,7 +104,7 @@ export default function HomePage() {
 
         {/* Popular Movies Carousel */}
         <MovieCarousel
-          title="Popular Movies"
+          title={user ? "Recommended For You" : "Popular Movies"}
           movies={popularMovies}
           loading={loading}
         />
