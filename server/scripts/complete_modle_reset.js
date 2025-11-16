@@ -19,13 +19,13 @@ async function main() {
   const limit = limitArg ? Number(limitArg.split('=')[1]) : null;
 
   // languages supported by the client; we'll initialize these
-  const languages = ['English', 'Hindi', 'Tamil', 'Telugu', 'Kannada', 'Malayalam'];
+  const languages = ['English', 'Hindi', 'Tamil', 'Telugu', 'Kannada', 'Malayalam', '_global'];
 
   console.log(`Connecting to MongoDB... (dry-run=${!apply})`);
   await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 10000 });
 
   try {
-    // Iterate all users (we will create modle object for users missing it)
+    // Iterate all users and completely reset their modle data
     const cursor = User.find({}).select('modle').lean().cursor();
 
     let usersExamined = 0;
@@ -39,24 +39,22 @@ async function main() {
       const current = doc.modle || {};
       const updates = {};
 
-      // Ensure top-level modle exists and each language entry exists with streak 0
+      // Reset each language completely: streak 0, history empty, lastPlayed null
       languages.forEach(lang => {
-        const langObj = current[lang] || {};
-        // If streak missing or non-zero, plan to set to 0 and ensure lastPlayed/history exist
-        if (typeof langObj.streak !== 'number' || langObj.streak !== 0 || !langObj.history || typeof langObj.lastPlayed === 'undefined') {
-          updates[`modle.${lang}`] = { lastPlayed: langObj.lastPlayed || null, streak: 0, history: langObj.history || {} };
-        }
+        updates[`modle.${lang}`] = { 
+          lastPlayed: null, 
+          streak: 0, 
+          history: {} // CLEAR ALL HISTORY
+        };
       });
 
-      if (Object.keys(updates).length > 0) {
-        usersToUpdate++;
-        if (sampleUpdates.length < 5) sampleUpdates.push({ _id: doc._id, updates });
+      usersToUpdate++;
+      if (sampleUpdates.length < 5) sampleUpdates.push({ _id: doc._id, updates });
 
-        if (apply) {
-          // perform a single $set with all language objects (safe: won't touch other top-level fields)
-          // eslint-disable-next-line no-await-in-loop
-          await User.updateOne({ _id: doc._id }, { $set: updates });
-        }
+      if (apply) {
+        // perform a single $set with all language objects (completely resets modle data)
+        // eslint-disable-next-line no-await-in-loop
+        await User.updateOne({ _id: doc._id }, { $set: updates });
       }
     }
 
@@ -68,12 +66,13 @@ async function main() {
     }
 
     if (!apply) {
-      console.log('\nDry-run complete. To actually apply the changes, re-run with the --apply flag.');
+      console.log('\nDry-run complete. This will COMPLETELY RESET all modle data (streaks AND history).');
+      console.log('To actually apply the changes, re-run with the --apply flag.');
     } else {
-      console.log('\nApply complete. All modle language streaks have been initialized to 0.');
+      console.log('\nApply complete. All modle data has been completely reset (streaks=0, history={}).');
     }
   } catch (err) {
-    console.error('Error while resetting modle streaks:', err && err.stack ? err.stack : err);
+    console.error('Error while resetting modle data:', err && err.stack ? err.stack : err);
     process.exitCode = 2;
   } finally {
     await mongoose.disconnect();

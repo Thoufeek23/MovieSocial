@@ -84,50 +84,51 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
     const load = async () => {
       try {
         if (user && localStorage.getItem('token')) {
-          // First check global status to see if user has played today
-          const globalRes = await api.getModleStatus('global');
-          if (globalRes && globalRes.data) {
-            const globalServer = globalRes.data;
-            const today = effectiveDate;
-            
-            // Check if user has played ANY language today
-            if (globalServer.history && globalServer.history[today]) {
-              // User has already played today - block all languages
-              setTodayPlayed({ 
-                correct: true, 
-                globalDaily: true, 
-                date: today,
-                msg: 'Already played today\'s Modle! One puzzle per day across all languages.' 
-              });
-              setStreak(globalServer.streak || 0);
-              setGuesses([]);
-              setRevealedHints(1);
-              return;
-            }
-          }
-          
-          // If not played globally, get language-specific data
+          // Get status from the updated backend API
           const res = await api.getModleStatus(language);
           if (res && res.data) {
-            const server = res.data;
+            const data = res.data;
             const today = effectiveDate;
-            if (server.history && server.history[today]) {
-              setTodayPlayed(server.history[today]);
-              setGuesses(server.history[today].guesses || []);
-              const prevGuesses = (server.history[today].guesses || []).length;
+            
+            // Server now determines if user can play or has already played
+            if (!data.canPlay) {
+              const message = data.dailyLimitReached 
+                ? 'Already played today\'s Modle! One puzzle per day across all languages. Come back tomorrow!'
+                : (data.completedToday ? 'You already solved today\'s puzzle.' : 'Cannot play today.');
+                
+              setTodayPlayed({ 
+                correct: data.completedToday, 
+                globalDaily: data.dailyLimitReached, 
+                date: today,
+                msg: message,
+                guesses: data.language?.history?.[today]?.guesses || []
+              });
+              
+              setGuesses(data.language?.history?.[today]?.guesses || []);
+              const prevGuesses = (data.language?.history?.[today]?.guesses || []).length;
               setRevealedHints(Math.min(maxReveal, Math.max(1, prevGuesses + 1)));
             } else {
-              setTodayPlayed(null);
-              setGuesses([]);
-              setRevealedHints(1);
+              // User can play - check if they have partial progress
+              if (data.language?.history?.[today] && !data.language.history[today].correct) {
+                setTodayPlayed(data.language.history[today]);
+                setGuesses(data.language.history[today].guesses || []);
+                const prevGuesses = (data.language.history[today].guesses || []).length;
+                setRevealedHints(Math.min(maxReveal, Math.max(1, prevGuesses + 1)));
+              } else {
+                // Fresh start
+                setTodayPlayed(null);
+                setGuesses([]);
+                setRevealedHints(1);
+              }
             }
-            // Use global streak for display (cross-language streak)
-            setStreak(server.globalStreak || server.streak || 0);
+            
+            // Use primary streak from server
+            setStreak(data.primaryStreak || 0);
             return;
           }
         }
       } catch (e) {
-        // server fetch failed; fall back to localStorage below
+        // server fetch failed; fall back below
       }
 
       // No persistent localStorage fallback: for unauthenticated users or if server fetch fails
@@ -150,26 +151,20 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
     e.preventDefault();
     const normalized = (guess || '').toString().trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (!normalized) return;
-    if (todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily)) {
-      const message = todayPlayed.globalDaily 
-        ? 'Already played today\'s Modle! One puzzle per day across all languages. Come back tomorrow!' 
-        : 'You already solved today\'s puzzle.';
-      toast.error(message);
-      return;
-    }
 
     // Enforce one guess per revealed hint until the player has seen maxReveal hints.
-    // If revealedHints < maxReveal, player may only submit up to revealedHints guesses.
     if (!(revealedHints >= maxReveal || guesses.length < revealedHints)) {
-      toast('Submit a guess to reveal the next hint.'); // Simplified message
+      toast('Submit a guess to reveal the next hint.');
       return;
     }
 
+    // Update guesses and reveal next hint immediately
     const newGuesses = [...guesses, normalized];
     setGuesses(newGuesses);
-
+    
     // Reveal another hint after each submitted guess, up to the configured cap (maxReveal)
-    setRevealedHints(prev => Math.min(maxReveal, prev + 1));
+    const newRevealedHints = Math.min(maxReveal, newGuesses.length + 1);
+    setRevealedHints(newRevealedHints);
 
     // Fuzzy matching: allow small typos. Normalize and compute Levenshtein distance.
     const normAnswer = normalizeTitle(puzzle.answer);
@@ -180,181 +175,83 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
     const isCorrect = dist <= threshold;
     const today = effectiveDate;
 
-  // Build an in-memory history entry for the UI. For authenticated users we will persist
-  // immediately to the server and update the UI from the server response.
-  const newHistory = {};
-  newHistory[today] = { date: today, correct: isCorrect, guesses: newGuesses };
-
-  // Update UI immediately (in-memory) - streak will be updated from server response
-  setTodayPlayed(newHistory[today]);
-  setGuesses(newGuesses);
-
-    if (isCorrect) {
-      const note = dist > 0 ? ' (accepted with minor typo)' : '';
-      toast.success(`Correct! The movie was ${puzzle.answer}.${note}`);
-      // Sync result to server if user is authenticated. Update UI from server response (authoritative).
-      (async () => {
-        try {
-            // prepare holders so we can dispatch an event after sync
-            let langObj = null;
-            let globalObj = null;
-            if (user && localStorage.getItem('token')) {
-            const res = await api.postModleResult({ date: today, language, correct: true, guesses: newGuesses });
-            console.debug('POST /api/users/modle/result response:', res && res.data ? res.data : res);
-            if (res && res.data) {
-              const server = res.data;
-              // server may return either the legacy language object or a { language, global } shape
-              langObj = server.language || server; // prefer server.language when present
-              globalObj = server.global;
-              if (langObj && langObj.history && langObj.history[today]) {
-                setTodayPlayed(langObj.history[today]);
-                setGuesses(langObj.history[today].guesses || []);
-                setRevealedHints(Math.min(maxReveal, Math.max(1, (langObj.history[today].guesses || []).length + 1)));
-              }
-              // Always use primary/global streak for display
-              const primaryStreak = server.primaryStreak || (globalObj && globalObj.streak) || (server.globalStreak) || 0;
-              setStreak(primaryStreak);
-            }
-
-            // Extra safety: re-fetch authoritative server state after POST to avoid any visibility/race issues
-            try {
-              const check = await api.getModleStatus(language);
-              console.debug('GET after POST /api/users/modle/status:', check && check.data ? check.data : check);
-              if (check && check.data) {
-                const s = check.data;
-                // update holders from authoritative GET
-                langObj = s.language || s;
-                globalObj = s.global;
-                if (langObj && langObj.history && langObj.history[today]) {
-                  setTodayPlayed(langObj.history[today]);
-                  setGuesses(langObj.history[today].guesses || []);
-                  setRevealedHints(Math.min(maxReveal, Math.max(1, (langObj.history[today].guesses || []).length + 1)));
-                }
-                // Use primary/global streak for display
-                const primaryStreak = check.data.primaryStreak || (globalObj && globalObj.streak) || check.data.globalStreak || 0;
-                setStreak(primaryStreak);
-              }
-            } catch (err) {
-              console.debug('GET after POST failed:', err);
-            }
+  // Send guess to server for validation - server handles all game logic
+  (async () => {
+    try {
+      const res = await api.postModleResult({ date: today, language, guess: normalized });
+      
+      if (res && res.data) {
+        const server = res.data;
+        const langObj = server.language || server;
+        const globalObj = server.global;
+        
+        // Server determines correctness - update UI accordingly
+        if (langObj && langObj.history && langObj.history[today]) {
+          const serverResult = langObj.history[today];
+          setTodayPlayed(serverResult);
+          
+          // Only update guesses if server has more than we currently have
+          // This prevents overriding the immediate UI update we did above
+          if ((serverResult.guesses || []).length > newGuesses.length) {
+            setGuesses(serverResult.guesses || []);
+            // Recalculate hints based on server data
+            const serverHints = Math.min(maxReveal, Math.max(1, (serverResult.guesses || []).length + 1));
+            setRevealedHints(serverHints);
           }
-            // Notify other UI parts (navbar, profile) that modle state changed
+          // Don't override revealed hints if we already revealed them above
+          
+          // Show success/failure message based on server validation
+          if (serverResult.correct) {
+            toast.success(`Correct! The movie was ${puzzle.answer}.`);
+            
+            // Trigger global Modle context refresh after successful solve
+            if (refreshGlobal) {
+              refreshGlobal();
+            }
+            
+            // Notify other UI components
             try {
-              const eventDetail = { language: langObj || null, global: globalObj || null };
-              console.debug('Dispatching modleUpdated event from ModleGame:', eventDetail);
+              const eventDetail = { language: langObj, global: globalObj };
               window.dispatchEvent(new CustomEvent('modleUpdated', { detail: eventDetail }));
-              // Also update centralized ModleContext so components read consistent state
-              try { updateFromServerPayload(eventDetail); } catch (e) { /* ignore */ }
-              // Fetch authoritative global state from server and update context/UI
-              try {
-                const g = await refreshGlobal();
-                if (g) {
-                  // If the GET returned authoritative language history for today, prefer that
-                  if (g.history && g.history[today]) {
-                    setTodayPlayed(g.history[today]);
-                    setGuesses(g.history[today].guesses || []);
-                    setRevealedHints(Math.min(maxReveal, Math.max(1, (g.history[today].guesses || []).length + 1)));
-                  }
-                  if (typeof g.streak === 'number') setStreak(g.streak || 0);
-                  // notify listeners with the full global payload
-                  try { window.dispatchEvent(new CustomEvent('modleUpdated', { detail: { global: g } })); } catch (e) {}
-                }
-              } catch (e) {
-                // ignore
-              }
+              updateFromServerPayload(eventDetail);
             } catch (e) {
               // ignore event dispatch failures
             }
-        } catch (e) {
-          // non-fatal: server sync failed, local state remains
-          console.debug('POST /api/users/modle/result error:', e);
-          
-          // Handle daily limit reached
-          if (e.response && e.response.status === 409) {
-            const errorMsg = e.response.data?.msg || 'You have already played today.';
-            const isGlobalLimit = e.response?.data?.dailyLimitReached;
-            toast.error(errorMsg);
-            
-            // If global daily limit, set appropriate state
-            if (isGlobalLimit) {
-              setTodayPlayed({ 
-                correct: true, 
-                globalDaily: true, 
-                date: today,
-                msg: errorMsg 
-              });
-            }
+          } else {
+            toast.error('Incorrect guess. Try again!');
           }
         }
-      })();
-    } else {
-      // For incorrect guesses, also optionally send to server to keep history (non-blocking)
-      (async () => {
-        try {
-            if (user && localStorage.getItem('token')) {
-            const res = await api.postModleResult({ date: today, language, correct: false, guesses: newGuesses });
-            console.debug('POST /api/users/modle/result (incorrect) response:', res && res.data ? res.data : res);
-            if (res && res.data) {
-              const server = res.data;
-              const langObj = server.language || server;
-              const globalObj = server.global;
-              if (langObj && langObj.history && langObj.history[today]) {
-                setTodayPlayed(langObj.history[today]);
-                setGuesses(langObj.history[today].guesses || []);
-                setRevealedHints(Math.min(maxReveal, Math.max(1, (langObj.history[today].guesses || []).length + 1)));
-              }
-              // Always use primary/global streak for display
-              const primaryStreak = server.primaryStreak || (globalObj && globalObj.streak) || (server.globalStreak) || 0;
-              setStreak(primaryStreak);
-            }
+        
+        // Use primary/global streak for display
+        const primaryStreak = server.primaryStreak || (globalObj && globalObj.streak) || 0;
+        setStreak(primaryStreak);
+      }
 
-            // Extra safety: re-fetch authoritative server state after POST
-            try {
-              const check = await api.getModleStatus(language);
-              console.debug('GET after POST (incorrect) /api/users/modle/status:', check && check.data ? check.data : check);
-              if (check && check.data) {
-                const s = check.data;
-                const langObj = s.language || s;
-                const globalObj = s.global;
-                if (langObj && langObj.history && langObj.history[today]) {
-                  setTodayPlayed(langObj.history[today]);
-                  setGuesses(langObj.history[today].guesses || []);
-                  setRevealedHints(Math.min(maxReveal, Math.max(1, (langObj.history[today].guesses || []).length + 1)));
-                }
-                // Use primary/global streak for display
-                const primaryStreak = check.data.primaryStreak || (globalObj && globalObj.streak) || check.data.globalStreak || 0;
-                setStreak(primaryStreak);
-              }
-            } catch (err) {
-              console.debug('GET after POST (incorrect) failed:', err);
-            }
-          }
-        } catch (e) {
-          // ignore
-          console.debug('POST /api/users/modle/result (incorrect) error:', e);
-          
-          // Handle daily limit reached
-          if (e.response && e.response.status === 409) {
-            const errorMsg = e.response.data?.msg || 'You have already played today.';
-            const isGlobalLimit = e.response?.data?.dailyLimitReached;
-            
-            // If global daily limit, set appropriate state and show error
-            if (isGlobalLimit) {
-              toast.error(errorMsg);
-              setTodayPlayed({ 
-                correct: true, 
-                globalDaily: true, 
-                date: today,
-                msg: errorMsg 
-              });
-            }
-          }
+    } catch (e) {
+      
+      // Handle server responses (daily limit, etc.)
+      if (e.response && e.response.status === 409) {
+        const errorMsg = e.response.data?.msg || 'You have already played today.';
+        toast.error(errorMsg);
+        
+        // Set appropriate state based on server response
+        const responseData = e.response.data;
+        if (responseData) {
+          setTodayPlayed({ 
+            correct: responseData.dailyLimitReached || false, 
+            globalDaily: responseData.dailyLimitReached || false, 
+            date: today,
+            msg: errorMsg 
+          });
         }
-      })();
-      toast.error('Not correct. Try again!');
+      } else {
+        // For network errors, show generic message
+        toast.error('Unable to submit guess. Please check your connection.');
+      }
     }
+  })();
 
-    setGuess('');
+  setGuess('');
   };
 
   // reset helper removed (dev/testing-only)

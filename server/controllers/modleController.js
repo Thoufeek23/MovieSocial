@@ -1,5 +1,37 @@
 const User = require('../models/User');
+const Puzzle = require('../models/Puzzle');
 const logger = require('../utils/logger');
+
+// Fuzzy matching utilities (same as client-side)
+function normalizeTitle(s) {
+  if (!s) return '';
+  return String(s).toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function levenshtein(a, b) {
+  if (a === b) return 0;
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+
+  let prev = new Array(b.length + 1);
+  let curr = new Array(b.length + 1);
+  for (let j = 0; j <= b.length; j++) prev[j] = j;
+
+  for (let i = 1; i <= a.length; i++) {
+    curr[0] = i;
+    const ai = a.charAt(i - 1);
+    for (let j = 1; j <= b.length; j++) {
+      const cost = ai === b.charAt(j - 1) ? 0 : 1;
+      const deletion = prev[j] + 1;
+      const insertion = curr[j - 1] + 1;
+      const substitution = prev[j - 1] + cost;
+      curr[j] = Math.min(deletion, insertion, substitution);
+    }
+    // swap
+    const tmp = prev; prev = curr; curr = tmp;
+  }
+  return prev[b.length];
+}
 
 // Helper to ensure nested objects
 function ensure(obj, key, defaultVal) {
@@ -74,7 +106,7 @@ function calculateStreakFromHistory(history, today) {
 }
 
 // GET /api/users/modle/status?language=English
-// Returns authoritative modle status. Streaks are evaluated server-side using UTC days.
+// Returns authoritative modle status including whether user can play today
 const getModleStatus = async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('modle');
@@ -83,27 +115,57 @@ const getModleStatus = async (req, res) => {
 
     if (lang && String(lang).toLowerCase() === 'global') {
       const g = modleGet(user, '_global') || { lastPlayed: null, streak: 0, history: {} };
-      // Convert Map to plain object for consistent handling
       const historyObj = (typeof g.history?.keys === 'function') ? Object.fromEntries(g.history) : (g.history || {});
       const actualStreak = calculateStreakFromHistory(historyObj, today);
-      return res.json({ ...g, history: historyObj, streak: actualStreak });
+      const todayEntry = historyObj[today];
+      
+      return res.json({ 
+        ...g, 
+        history: historyObj, 
+        streak: actualStreak,
+        canPlay: !todayEntry, // Can play if no entry for today
+        playedToday: !!todayEntry,
+        completedToday: todayEntry?.correct || false
+      });
     }
 
     const modle = modleGet(user, lang) || { lastPlayed: null, streak: 0, history: {} };
-    // Convert Map to plain object for consistent handling
     const historyObj = (typeof modle.history?.keys === 'function') ? Object.fromEntries(modle.history) : (modle.history || {});
     const actualStreak = calculateStreakFromHistory(historyObj, today);
     
-    // Also include global streak for reference
+    // Check global daily limit (one puzzle per day across all languages)
     const globalData = modleGet(user, '_global') || { lastPlayed: null, streak: 0, history: {} };
     const globalHistoryObj = (typeof globalData.history?.keys === 'function') ? Object.fromEntries(globalData.history) : (globalData.history || {});
     const globalStreak = calculateStreakFromHistory(globalHistoryObj, today);
+    const globalTodayEntry = globalHistoryObj[today];
+    
+    // Check specific language status
+    const todayEntry = historyObj[today];
+    
+    // Determine if user can play:
+    // 1. If they have a global entry for today, they can't play any language
+    // 2. If they completed this specific language today, they can't play this language
+    const canPlay = !globalTodayEntry && !todayEntry?.correct;
+    const playedToday = !!todayEntry || !!globalTodayEntry;
+    const completedToday = todayEntry?.correct || false;
+    const dailyLimitReached = !!globalTodayEntry;
     
     res.json({ 
-      ...modle, 
-      history: historyObj, 
-      streak: actualStreak,
-      globalStreak: globalStreak // Include global streak for display
+      language: {
+        ...modle, 
+        history: historyObj, 
+        streak: actualStreak
+      },
+      global: {
+        ...globalData,
+        history: globalHistoryObj,
+        streak: globalStreak
+      },
+      canPlay,
+      playedToday,
+      completedToday,
+      dailyLimitReached,
+      primaryStreak: globalStreak // Use global streak as primary
     });
   } catch (err) {
     logger.error('getModleStatus error', err);
@@ -112,15 +174,29 @@ const getModleStatus = async (req, res) => {
 };
 
 // POST /api/users/modle/result
-// body: { date: 'YYYY-MM-DD', language: 'English', correct: boolean, guesses: [] }
+// body: { date: 'YYYY-MM-DD', language: 'English', guess: 'USER_GUESS' }
+// Note: Server validates the answer, doesn't trust client's 'correct' determination
 const postModleResult = async (req, res) => {
   try {
     // Use server-side UTC date to prevent client-side tampering/refresh replay.
     const today = getTodayUTC();
-    const { language = 'English', correct = false, guesses = [] } = req.body;
+    const { language = 'English', guess = '' } = req.body;
 
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ msg: 'User not found' });
+
+    // Get today's puzzle to validate against
+    const puzzle = await Puzzle.getPuzzleForDate(today, language);
+    if (!puzzle) {
+      return res.status(404).json({ msg: 'No puzzle found for today' });
+    }
+
+    // Validate the guess server-side (NEVER trust client)
+    const normalizedGuess = normalizeTitle(guess.trim());
+    const normalizedAnswer = normalizeTitle(puzzle.answer);
+    const distance = levenshtein(normalizedGuess, normalizedAnswer);
+    const threshold = Math.max(2, Math.ceil(normalizedAnswer.length * 0.2));
+    const isCorrect = distance <= threshold;
 
     // Ensure we handle both plain object and Mongoose Map for user.modle
     let langObj = modleGet(user, language) || { lastPlayed: null, streak: 0, history: {} };
@@ -128,13 +204,14 @@ const postModleResult = async (req, res) => {
     // Ensure history container
     langObj.history = langObj.history || ({});
 
-    // CRITICAL: Check if user already played ANY language today (one per day globally)
+    // CRITICAL: Check if user already CORRECTLY SOLVED ANY language today (one per day globally)
     const globalObj = modleGet(user, '_global') || { lastPlayed: null, streak: 0, history: {} };
     const globalHistoryObj = (typeof globalObj.history?.keys === 'function') ? Object.fromEntries(globalObj.history) : (globalObj.history || {});
     const globalTodayEntry = globalHistoryObj[today];
     
-    if (globalTodayEntry) {
-      // User has already played today in ANY language - block all further attempts
+    // Only block if they have a CORRECT entry for today (not just any entry)
+    if (globalTodayEntry && globalTodayEntry.correct) {
+      // User has already SOLVED today's puzzle in ANY language - block all further attempts
       return res.status(409).json({ 
         msg: 'Already played today\'s Modle! One puzzle per day across all languages. Come back tomorrow!', 
         language: langObj, 
@@ -154,12 +231,11 @@ const postModleResult = async (req, res) => {
       
       // If they haven't solved it yet, allow them to continue with more guesses
       // But merge the guesses to preserve their attempt history
-      const mergedGuesses = Array.from(new Set([...(existing.guesses || []), ...(guesses || [])]));
-      const newCorrect = !!correct; // Only mark correct if this specific guess is correct
-      historySet(langObj.history, today, { date: today, correct: newCorrect, guesses: mergedGuesses });
+      const mergedGuesses = Array.from(new Set([...(existing.guesses || []), normalizedGuess]));
+      historySet(langObj.history, today, { date: today, correct: isCorrect, guesses: mergedGuesses });
     } else {
       // First attempt today - create new entry
-      historySet(langObj.history, today, { date: today, correct: !!correct, guesses: guesses || [] });
+      historySet(langObj.history, today, { date: today, correct: isCorrect, guesses: [normalizedGuess] });
     }
 
     // Recompute streak based on history (this handles upgrades from incorrect->correct correctly)
@@ -186,9 +262,10 @@ const postModleResult = async (req, res) => {
         Object.keys(historyObj).forEach(d => {
           try {
             const entry = historyObj[d];
-            if (entry && entry.date) {
-              // Preserve whether the entry was a correct solve so global streaks count correctly
-              union[d] = union[d] || { date: d, played: true, guesses: entry.guesses || [], correct: !!entry.correct };
+            // Only add to global history if the puzzle was actually solved correctly
+            // This prevents incorrect guesses from blocking play across all languages
+            if (entry && entry.date && entry.correct) {
+              union[d] = union[d] || { date: d, played: true, guesses: entry.guesses || [], correct: true };
             }
           } catch (e) {
             // ignore malformed entries

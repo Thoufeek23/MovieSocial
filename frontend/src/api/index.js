@@ -9,8 +9,8 @@ const getApiUrl = () => {
   }
   
   // Use hosted backend for production
-  //return "http://192.168.68.70:5001"
-  return 'https://moviesocial-backend-khd2.onrender.com';
+  return "http://192.168.68.70:5001"
+  //return 'https://moviesocial-backend-khd2.onrender.com';
 };
 
 const API = axios.create({ 

@@ -9,6 +9,9 @@ import {
   ActivityIndicator,
   ScrollView,
   Animated,
+  KeyboardAvoidingView,
+  Platform,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../src/context/AuthContext';
@@ -125,8 +128,8 @@ const ModleGame = ({ language = 'English' }) => {
               setRevealedHints(1);
             }
             
-            // Use global streak for display (this is the cross-language streak)
-            setStreak(server.globalStreak || 0);
+            // Use primary streak from server response
+            setStreak(server.primaryStreak || server.globalStreak || server.streak || 0);
             return;
           }
         }
@@ -178,13 +181,7 @@ const ModleGame = ({ language = 'English' }) => {
       return;
     }
     
-    if (todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily)) {
-      const message = todayPlayed.globalDaily 
-        ? 'Already played today\'s Modle! One puzzle per day across all languages. Come back tomorrow!' 
-        : 'You have already solved today\'s puzzle! Come back tomorrow for a new challenge.';
-      Alert.alert('Daily Limit Reached', message);
-      return;
-    }
+
 
     // Enforce one guess per revealed hint until the player has seen maxReveal hints.
     if (!(revealedHints >= maxReveal || guesses.length < revealedHints)) {
@@ -192,151 +189,83 @@ const ModleGame = ({ language = 'English' }) => {
       return;
     }
 
+    // Update guesses and reveal next hint immediately
     const newGuesses = [...guesses, normalized];
     setGuesses(newGuesses);
-
+    
     // Reveal another hint after each submitted guess, up to the configured cap (maxReveal)
-    setRevealedHints(prev => Math.min(maxReveal, prev + 1));
+    const newRevealedHints = Math.min(maxReveal, newGuesses.length + 1);
+    setRevealedHints(newRevealedHints);
 
-    // Fuzzy matching: allow small typos. Normalize and compute Levenshtein distance.
-    const normAnswer = normalizeTitle(puzzle.answer);
-    const guessNorm = normalized;
-    const dist = levenshtein(guessNorm, normAnswer);
-    // threshold rules: allow distance up to 2 or 20% of answer length (whichever is larger)
-    const threshold = Math.max(2, Math.ceil(normAnswer.length * 0.2));
-    const isCorrect = dist <= threshold;
     const today = effectiveDate;
 
-    // Build an in-memory history entry for the UI
-    const newHistory = {};
-    newHistory[today] = { date: today, correct: isCorrect, guesses: newGuesses };
-
-    // Update UI immediately (in-memory) - streak will be updated from server response
-    setTodayPlayed(newHistory[today]);
-    setGuesses(newGuesses);
-
-    if (isCorrect) {
-      const note = dist > 0 ? ' (accepted with minor typo)' : '';
-      Alert.alert('Correct!', `The movie was ${puzzle.answer}.${note}`);
-      
-      // Sync result to server if user is authenticated
-      if (user) {
-        try {
-          const res = await api.postModleResult({ 
-            date: today, 
-            language, 
-            correct: true, 
-            guesses: newGuesses 
-          });
+    // Send guess to server for validation - server handles all game logic
+    if (user) {
+      try {
+        const res = await api.postModleResult({ 
+          date: today, 
+          language, 
+          guess: normalized 
+        });
+        
+        if (res && res.data) {
+          const server = res.data;
+          const langObj = server.language || server;
+          const globalObj = server.global;
           
-            if (res && res.data) {
-            const server = res.data;
-            const langObj = server.language || server;
-            const globalObj = server.global;
+          // Server determines correctness - update UI accordingly
+          if (langObj && langObj.history && langObj.history[today]) {
+            const serverResult = langObj.history[today];
+            setTodayPlayed(serverResult);
+            setGuesses(serverResult.guesses || []);
+            // Don't override revealed hints - we already revealed the next hint above
             
-            if (langObj && langObj.history && langObj.history[today]) {
-              setTodayPlayed(langObj.history[today]);
-              setGuesses(langObj.history[today].guesses || []);
-              setRevealedHints(Math.min(maxReveal, Math.max(1, (langObj.history[today].guesses || []).length + 1)));
-            }
-            
-            // Always use primary/global streak for display
-            const primaryStreak = server.primaryStreak || (globalObj && globalObj.streak) || 0;
-            setStreak(primaryStreak);            // Update context
-            updateFromServerPayload({ language: langObj, global: globalObj });
-            
-            // Refresh global state
-            try {
-              await refreshGlobal();
-            } catch (e) {
-              console.debug('Failed to refresh global state:', e);
-            }
-          }
-        } catch (e) {
-          console.debug('POST /api/users/modle/result error:', e);
-          if (e.response && e.response.status === 409) {
-            const errorMsg = e.response.data?.msg || 'You have already played today.';
-            const isGlobalLimit = e.response?.data?.dailyLimitReached;
-            const title = isGlobalLimit ? 'Daily Limit Reached' : 'Already Played';
-            Alert.alert(title, errorMsg);
-            
-            // If global daily limit, set appropriate state
-            if (isGlobalLimit) {
-              setTodayPlayed({ 
-                correct: true, 
-                globalDaily: true, 
-                date: effectiveDate,
-                msg: errorMsg 
-              });
+            // Show success/failure message based on server validation
+            if (serverResult.correct) {
+              Alert.alert('Correct!', `The movie was ${puzzle.answer}.`);
+              
+              // Update context
+              updateFromServerPayload({ language: langObj, global: globalObj });
+              
+              // Refresh global state
+              try {
+                await refreshGlobal();
+              } catch (e) {
+                // ignore refresh errors
+              }
+            } else {
+              Alert.alert('Incorrect', 'Try again!');
             }
           }
+          
+          // Use primary/global streak for display
+          const primaryStreak = server.primaryStreak || (globalObj && globalObj.streak) || 0;
+          setStreak(primaryStreak);
+        }
+      } catch (e) {
+        // Handle server responses (daily limit, etc.)
+        if (e.response && e.response.status === 409) {
+          const errorMsg = e.response.data?.msg || 'You have already played today.';
+          Alert.alert('Daily Limit', errorMsg);
+          
+          // Set appropriate state based on server response
+          const responseData = e.response.data;
+          if (responseData) {
+            setTodayPlayed({ 
+              correct: responseData.dailyLimitReached || false, 
+              globalDaily: responseData.dailyLimitReached || false, 
+              date: today,
+              msg: errorMsg 
+            });
+          }
+        } else {
+          // For network errors, show generic message
+          Alert.alert('Error', 'Unable to submit guess. Please check your connection.');
         }
       }
     } else {
-      // For incorrect guesses, also send to server to keep history
-      if (user) {
-        try {
-          const res = await api.postModleResult({ 
-            date: today, 
-            language, 
-            correct: false, 
-            guesses: newGuesses 
-          });
-          
-          if (res && res.data) {
-            const server = res.data;
-            const langObj = server.language || server;
-            const globalObj = server.global;
-            
-            if (langObj && langObj.history && langObj.history[today]) {
-              setTodayPlayed(langObj.history[today]);
-              setGuesses(langObj.history[today].guesses || []);
-              setRevealedHints(Math.min(maxReveal, Math.max(1, (langObj.history[today].guesses || []).length + 1)));
-            }
-            
-            // Always use primary/global streak for display
-            const primaryStreak = server.primaryStreak || (globalObj && globalObj.streak) || 0;
-            setStreak(primaryStreak);
-          }
-        } catch (e) {
-          console.debug('POST incorrect guess error:', e);
-          if (e.response && e.response.status === 409) {
-            const errorMsg = e.response.data?.msg || 'You have already played today.';
-            const isGlobalLimit = e.response?.data?.dailyLimitReached;
-            const title = isGlobalLimit ? 'Daily Limit Reached' : 'Already Played';
-            Alert.alert(title, errorMsg);
-            
-            // If global daily limit, set appropriate state
-            if (isGlobalLimit) {
-              setTodayPlayed({ 
-                correct: true, 
-                globalDaily: true, 
-                date: effectiveDate,
-                msg: errorMsg 
-              });
-            }
-            // Reload the current status to sync with server
-            try {
-              const res = await api.getModleStatus(language);
-              if (res && res.data) {
-                const server = res.data;
-                const today = effectiveDate;
-                if (server.history && server.history[today]) {
-                  setTodayPlayed(server.history[today]);
-                  setGuesses(server.history[today].guesses || []);
-                }
-                // Use primary streak from response or global streak
-                const primaryStreak = server.primaryStreak || (server.global && server.global.streak) || server.streak || 0;
-                setStreak(primaryStreak);
-              }
-            } catch (syncError) {
-              console.debug('Failed to sync status:', syncError);
-            }
-            return;
-          }
-        }
-      }
-      Alert.alert('Incorrect', 'Not correct. Try again!');
+      // For unauthenticated users, show local validation message
+      Alert.alert('Error', 'Please log in to play Modle.');
     }
 
     setGuess('');
@@ -382,9 +311,12 @@ const ModleGame = ({ language = 'English' }) => {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      {/* Header Stats */}
-      <View style={styles.header}>
+    <KeyboardAvoidingView 
+      style={styles.container} 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      {/* Fixed Header Stats */}
+      <View style={styles.fixedHeader}>
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
             <Text style={styles.statLabel}>Date</Text>
@@ -414,114 +346,138 @@ const ModleGame = ({ language = 'English' }) => {
           </View>
         ) : (
           <View style={styles.playingBadge}>
-            <Ionicons name="time-outline" size={16} color="#f59e0b" />
-            <Text style={styles.playingText}>One puzzle per day - keep your streak alive!</Text>
+            <Ionicons name="game-controller" size={16} color="#f59e0b" />
+            <Text style={styles.playingText}>Hints: {revealedHints}/{maxReveal}</Text>
           </View>
         )}
       </View>
 
-      {/* Win Animation */}
-      {todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily) && (
-        <Animated.View 
-          style={[
-            styles.winContainer,
-            {
-              opacity: fadeAnim,
-              transform: [{ scale: scaleAnim }]
-            }
-          ]}
-        >
-          <Text style={styles.winText}>🎉 Correct! 🎉</Text>
-          <Text style={styles.winSubtext}>The movie was {puzzle.answer}</Text>
-        </Animated.View>
-      )}
-
-      {/* Hints Section */}
-      <View style={styles.hintsSection}>
-        <Text style={styles.sectionTitle}>
-          Hints ({revealedHints}/{maxReveal})
-        </Text>
-        <View style={styles.hintsList}>
-          {(puzzle.hints || []).slice(0, revealedHints).map((hint, index) => (
-            <View key={index} style={styles.hintCard}>
-              <View style={styles.hintNumber}>
-                <Text style={styles.hintNumberText}>{index + 1}</Text>
-              </View>
-              <Text style={styles.hintText}>{hint}</Text>
-            </View>
-          ))}
-        </View>
-        {revealedHints < maxReveal && !(todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily)) && (
-          <Text style={styles.hintNote}>Submit a guess to reveal the next hint.</Text>
-        )}
-      </View>
-
-      {/* Input Section */}
-      <View style={styles.inputSection}>
-        <View style={styles.inputRow}>
-          <TextInput
-            style={styles.input}
-            value={guess}
-            onChangeText={setGuess}
-            placeholder="Enter movie title"
-            placeholderTextColor="#6b7280"
-            autoCapitalize="words"
-            autoCorrect={false}
-            editable={!(todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily))}
-          />
-          <TouchableOpacity
+      {/* Scrollable Main Content */}
+      <ScrollView 
+        style={styles.mainContent} 
+        contentContainerStyle={styles.mainContentContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Win Animation */}
+        {todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily) && (
+          <Animated.View 
             style={[
-              styles.guessButton,
-              (todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily)) && styles.guessButtonDisabled
+              styles.winContainer,
+              {
+                opacity: fadeAnim,
+                transform: [{ scale: scaleAnim }]
+              }
             ]}
-            onPress={handleSubmitGuess}
-            disabled={todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily)}
           >
-            <Text style={styles.guessButtonText}>Guess</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+            <Text style={styles.winText}>🎉 Correct! 🎉</Text>
+            <Text style={styles.winSubtext}>The movie was {puzzle.answer}</Text>
+          </Animated.View>
+        )}
 
-      {/* Previous Guesses */}
-      <View style={styles.guessesSection}>
-        <Text style={styles.sectionTitle}>Previous Guesses</Text>
-        {guesses.length === 0 ? (
-          <Text style={styles.noGuessesText}>No guesses yet.</Text>
-        ) : (
-          <View style={styles.guessesList}>
-            {guesses.slice().reverse().map((g, index) => {
-              const isCorrect = (() => {
-                try {
-                  const d = levenshtein(g, normAnswer);
-                  return d <= fuzzyThreshold;
-                } catch (e) { 
-                  return false; 
-                }
-              })();
-              
+        {/* Enhanced Hints Section */}
+        <View style={styles.hintsSection}>
+          <Text style={styles.sectionTitle}>Movie Clues</Text>
+          <View style={styles.hintsList}>
+            {(puzzle.hints || []).slice(0, revealedHints).reverse().map((hint, index) => {
+              const actualIndex = revealedHints - index - 1;
               return (
-                <View key={guesses.length - 1 - index} style={styles.guessCard}>
-                  <Text style={styles.guessText}>{g}</Text>
-                  <View style={styles.guessResult}>
-                    <Ionicons 
-                      name={isCorrect ? "checkmark-circle" : "close-circle"} 
-                      size={20} 
-                      color={isCorrect ? "#10b981" : "#dc2626"} 
-                    />
-                    <Text style={[
-                      styles.guessResultText,
-                      { color: isCorrect ? "#10b981" : "#dc2626" }
-                    ]}>
-                      {isCorrect ? 'Correct' : 'Incorrect'}
-                    </Text>
+                <View key={actualIndex} style={styles.hintCard}>
+                  <View style={styles.hintNumber}>
+                    <Text style={styles.hintNumberText}>{actualIndex + 1}</Text>
                   </View>
+                  <Text style={styles.hintText}>{hint}</Text>
                 </View>
               );
             })}
           </View>
-        )}
+          {revealedHints < maxReveal && !(todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily)) && (
+            <View style={styles.hintNote}>
+              <Ionicons name="lightbulb" size={14} color="#f59e0b" />
+              <Text style={styles.hintNoteText}>Submit a guess to reveal the next clue</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Previous Guesses */}
+        <View style={styles.guessesSection}>
+          <Text style={styles.sectionTitle}>Your Guesses</Text>
+          {guesses.length === 0 ? (
+            <View style={styles.emptyGuesses}>
+              <Ionicons name="help-circle-outline" size={40} color="#6b7280" />
+              <Text style={styles.noGuessesText}>No guesses yet</Text>
+              <Text style={styles.noGuessesSubtext}>Start typing your guess below</Text>
+            </View>
+          ) : (
+            <View style={styles.guessesList}>
+              {guesses.slice().reverse().map((g, index) => {
+                const isCorrect = (() => {
+                  try {
+                    const d = levenshtein(g, normAnswer);
+                    return d <= fuzzyThreshold;
+                  } catch (e) { 
+                    return false; 
+                  }
+                })();
+                
+                return (
+                  <View key={guesses.length - 1 - index} style={styles.guessCard}>
+                    <View style={styles.guessContent}>
+                      <Text style={styles.guessText}>{g}</Text>
+                      <View style={styles.guessResult}>
+                        <Ionicons 
+                          name={isCorrect ? "checkmark-circle" : "close-circle"} 
+                          size={18} 
+                          color={isCorrect ? "#10b981" : "#dc2626"} 
+                        />
+                        <Text style={[
+                          styles.guessResultText,
+                          { color: isCorrect ? "#10b981" : "#dc2626" }
+                        ]}>
+                          {isCorrect ? 'Correct' : 'Incorrect'}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </View>
+      </ScrollView>
+
+      {/* Fixed Input Section at Bottom */}
+      <View style={styles.fixedInputSection}>
+        <View style={styles.inputContainer}>
+          <View style={styles.inputRow}>
+            <TextInput
+              style={[
+                styles.input,
+                (todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily)) && styles.inputDisabled
+              ]}
+              value={guess}
+              onChangeText={setGuess}
+              placeholder="Type your movie guess..."
+              placeholderTextColor="#6b7280"
+              autoCapitalize="words"
+              autoCorrect={false}
+              editable={!(todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily))}
+              returnKeyType="send"
+              onSubmitEditing={handleSubmitGuess}
+            />
+            <TouchableOpacity
+              style={[
+                styles.guessButton,
+                (todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily)) && styles.guessButtonDisabled
+              ]}
+              onPress={handleSubmitGuess}
+              disabled={todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily)}
+            >
+              <Ionicons name="send" size={20} color="white" />
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
-    </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -532,6 +488,51 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 16,
+  },
+  
+  // Fixed header styles
+  fixedHeader: {
+    backgroundColor: '#0f172a',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    paddingTop: Platform.OS === 'ios' ? 55 : 25,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+  },
+  
+  // Main scrollable content
+  mainContent: {
+    flex: 1,
+    backgroundColor: '#09090b',
+  },
+  
+  mainContentContainer: {
+    padding: 20,
+    paddingBottom: 20,
+  },
+  
+  // Fixed input section at bottom
+  fixedInputSection: {
+    backgroundColor: '#0f172a',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    borderTopWidth: 1,
+    borderTopColor: '#1e293b',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+  },
+  
+  inputContainer: {
+    backgroundColor: 'transparent',
   },
   loadingContainer: {
     flex: 1,
@@ -579,49 +580,66 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 20,
+    backgroundColor: '#1e293b',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   statItem: {
     alignItems: 'center',
+    flex: 1,
   },
   statLabel: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginBottom: 4,
+    fontSize: 11,
+    color: '#64748b',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
   statValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: 'white',
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#f1f5f9',
   },
   solvedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#10b981/20',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    gap: 6,
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 25,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#10b981',
   },
   solvedText: {
     color: '#10b981',
     fontWeight: '600',
+    fontSize: 13,
   },
   playingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f59e0b/20',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    gap: 6,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 25,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#f59e0b',
   },
   playingText: {
     color: '#f59e0b',
     fontWeight: '600',
-    fontSize: 12,
+    fontSize: 13,
   },
   winContainer: {
     backgroundColor: '#10b981/20',
@@ -644,10 +662,11 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: 'white',
-    marginBottom: 12,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#f1f5f9',
+    marginBottom: 16,
+    letterSpacing: 0.3,
   },
   hintsList: {
     gap: 12,
@@ -659,12 +678,15 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     gap: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#374151',
   },
   hintNumber: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#10b981/20',
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -675,9 +697,55 @@ const styles = StyleSheet.create({
   },
   hintText: {
     flex: 1,
+    fontSize: 15,
+    color: '#10b981',
+    lineHeight: 22,
+    fontWeight: '500',
+  },
+  
+  // Enhanced hint note styles
+  hintNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#1f2937',
+    borderRadius: 8,
+    gap: 8,
+  },
+  
+  hintNoteText: {
+    fontSize: 13,
+    color: '#9ca3af',
+    fontStyle: 'italic',
+  },
+  
+  // Empty guesses state
+  emptyGuesses: {
+    alignItems: 'center',
+    paddingVertical: 50,
+    paddingHorizontal: 30,
+    backgroundColor: 'rgba(30, 41, 59, 0.3)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#334155',
+    borderStyle: 'dashed',
+  },
+  noGuessesSubtext: {
     fontSize: 14,
-    color: '#d1d5db',
-    lineHeight: 20,
+    color: '#64748b',
+    marginTop: 8,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  
+  // Enhanced guess card
+  guessContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
   },
   hintNote: {
     fontSize: 12,
@@ -690,28 +758,49 @@ const styles = StyleSheet.create({
   },
   inputRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
   },
   input: {
     flex: 1,
-    backgroundColor: '#1f2937',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    backgroundColor: '#1e293b',
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
     fontSize: 16,
-    color: 'white',
-    borderWidth: 1,
-    borderColor: '#374151',
+    color: '#f1f5f9',
+    borderWidth: 2,
+    borderColor: '#334155',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
+  
+  inputDisabled: {
+    backgroundColor: '#111827',
+    borderColor: '#1f2937',
+    color: '#6b7280',
+  },
+  
   guessButton: {
     backgroundColor: '#10b981',
     paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingVertical: 18,
+    borderRadius: 16,
     justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 60,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   guessButtonDisabled: {
-    backgroundColor: '#6b7280',
+    backgroundColor: '#475569',
+    shadowOpacity: 0.1,
   },
   guessButtonText: {
     color: 'white',
@@ -722,24 +811,32 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   noGuessesText: {
-    color: '#6b7280',
-    fontStyle: 'italic',
+    fontSize: 18,
+    color: '#94a3b8',
+    textAlign: 'center',
+    fontWeight: '600',
+    marginTop: 12,
   },
   guessesList: {
     gap: 8,
   },
   guessCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#1f2937',
-    padding: 12,
-    borderRadius: 8,
+    backgroundColor: '#1e293b',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   guessText: {
-    fontSize: 14,
-    color: 'white',
-    fontFamily: 'monospace',
+    fontSize: 16,
+    color: '#f1f5f9',
+    fontWeight: '500',
   },
   guessResult: {
     flexDirection: 'row',
