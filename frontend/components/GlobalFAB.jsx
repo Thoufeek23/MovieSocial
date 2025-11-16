@@ -93,7 +93,7 @@ const GlobalFAB = () => {
       </Modal>
 
       {/* FAB Container */}
-      <View style={[styles.fabContainer, { bottom: insets.bottom + 100 }]}>
+      <View style={[styles.fabContainer, { bottom: Math.max(insets.bottom + 100, 120) }]}>
         {/* Options Menu */}
         {isExpanded && (
           <View style={styles.optionsContainer}>

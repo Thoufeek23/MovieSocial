@@ -1,5 +1,6 @@
 const BADGE_MAP = {
-  first_review: { id: 'first_review', title: 'New User', short: 'New User', description: 'Awarded when a user posts their first review.', color: 'bg-green-600', icon: '⭐' },
+  new_user: { id: 'new_user', title: 'Welcome to MovieSocial!', short: 'New User', description: 'Welcome to MovieSocial! This badge marks your first step into our movie community.', color: 'bg-green-600', icon: '🎬' },
+  first_review: { id: 'first_review', title: 'First Reviewer', short: 'First Review', description: 'Awarded when a user posts their first review.', color: 'bg-yellow-500', icon: '⭐' },
   diamond_i: { id: 'diamond_i', title: 'Diamond I', short: 'Diamond I', description: 'Top reviewer: outstanding community agreement and high contribution.', color: 'bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500', icon: '💎' },
   gold_i: { id: 'gold_i', title: 'Gold I', short: 'Gold I', description: 'Top reviewer: excellent community agreement.', color: 'bg-yellow-400', icon: '🥇' },
   silver_i: { id: 'silver_i', title: 'Silver I', short: 'Silver I', description: 'Top reviewer: strong community agreement.', color: 'bg-gray-400', icon: '🥈' },

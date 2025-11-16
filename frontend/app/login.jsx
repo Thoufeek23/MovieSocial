@@ -193,13 +193,14 @@ export default function LoginPage() {
 
                   {/* Forgot Password Link */}
                   <View style={loginStyles.forgotPasswordContainer}>
-                    <Link href="/forgot-password" asChild>
-                      <TouchableOpacity style={loginStyles.forgotPasswordButton}>
-                        <Text style={loginStyles.forgotPasswordText}>
-                          Forgot password?
-                        </Text>
-                      </TouchableOpacity>
-                    </Link>
+                    <TouchableOpacity 
+                      style={loginStyles.forgotPasswordButton}
+                      onPress={() => router.push('/forgot-password')}
+                    >
+                      <Text style={loginStyles.forgotPasswordText}>
+                        Forgot password?
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                 </MotiView>
 

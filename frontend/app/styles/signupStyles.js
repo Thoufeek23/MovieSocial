@@ -122,7 +122,8 @@ const signupStyles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   otpContainer: {
-    marginTop: 10,
+    marginTop: 15,
+    alignItems: 'center',
   },
   otpText: {
     fontSize: 14,

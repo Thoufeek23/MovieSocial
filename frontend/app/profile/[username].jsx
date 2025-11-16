@@ -9,7 +9,7 @@ import {
   TouchableOpacity
 } from 'react-native';
 import { useLocalSearchParams, useRouter, usePathname } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Home, Search, BookOpen, Puzzle, FileText, User } from 'lucide-react-native';
 import { useAuth } from '../../src/context/AuthContext';
 import * as api from '../../src/api';
@@ -20,6 +20,63 @@ import MovieListSection from '../../components/MovieListSection';
 import DiscussionListSection from '../../components/DiscussionListSection';
 import EditProfileModal from '../../components/EditProfileModal';
 import FollowListModal from '../../components/FollowListModal';
+
+// Custom bottom navigation component moved outside to avoid hooks issues
+const CustomBottomNavigation = ({ currentUser }) => {
+  const pathname = usePathname();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  
+  const tabs = [
+    { name: 'index', icon: Home, route: '/(tabs)/', title: 'Home' },
+    { name: 'search', icon: Search, route: '/(tabs)/search', title: 'Search' },
+    { name: 'discussions', icon: BookOpen, route: '/(tabs)/discussions', title: 'Discussions' },
+    { name: 'modle', icon: Puzzle, route: '/(tabs)/modle', title: 'Modle' },
+    { name: 'reviews', icon: FileText, route: '/(tabs)/reviews', title: 'Reviews' },
+    { name: 'profile', icon: User, route: '/(tabs)/profile', title: 'Profile' },
+  ];
+
+  const isProfileActive = pathname.includes('/profile');
+
+  return (
+    <View style={[styles.bottomNavigation, { bottom: Math.max(20, insets.bottom + 10) }]}>
+      {tabs.map((tab) => {
+        const isActive = tab.name === 'profile' ? isProfileActive : pathname === tab.route;
+        const IconComponent = tab.icon;
+        
+        return (
+          <TouchableOpacity
+            key={tab.name}
+            style={styles.tabItem}
+            onPress={() => {
+              if (tab.name === 'profile' && currentUser?.username) {
+                // If we're already on this user's profile, don't navigate
+                if (pathname.includes(`/profile/${currentUser.username}`)) {
+                  return;
+                }
+                router.push(`/profile/${currentUser.username}`);
+              } else {
+                router.push(tab.route);
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={[
+              styles.tabIconContainer,
+              isActive && styles.tabIconContainerActive
+            ]}>
+              <IconComponent
+                color={isActive ? '#10b981' : '#6b7280'}
+                size={isActive ? 26 : 24}
+                strokeWidth={isActive ? 2.5 : 2}
+              />
+            </View>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+};
 
 const ProfilePage = () => {
   const { username } = useLocalSearchParams();
@@ -229,62 +286,6 @@ const ProfilePage = () => {
     fetchProfile(true);
   };
 
-  // Custom bottom navigation component
-  const CustomBottomNavigation = () => {
-    const pathname = usePathname();
-    const router = useRouter();
-    
-    const tabs = [
-      { name: 'index', icon: Home, route: '/(tabs)/', title: 'Home' },
-      { name: 'search', icon: Search, route: '/(tabs)/search', title: 'Search' },
-      { name: 'discussions', icon: BookOpen, route: '/(tabs)/discussions', title: 'Discussions' },
-      { name: 'modle', icon: Puzzle, route: '/(tabs)/modle', title: 'Modle' },
-      { name: 'reviews', icon: FileText, route: '/(tabs)/reviews', title: 'Reviews' },
-      { name: 'profile', icon: User, route: '/(tabs)/profile', title: 'Profile' },
-    ];
-
-    const isProfileActive = pathname.includes('/profile');
-
-    return (
-      <View style={styles.bottomNavigation}>
-        {tabs.map((tab) => {
-          const isActive = tab.name === 'profile' ? isProfileActive : pathname === tab.route;
-          const IconComponent = tab.icon;
-          
-          return (
-            <TouchableOpacity
-              key={tab.name}
-              style={styles.tabItem}
-              onPress={() => {
-                if (tab.name === 'profile' && currentUser?.username) {
-                  // If we're already on this user's profile, don't navigate
-                  if (pathname.includes(`/profile/${currentUser.username}`)) {
-                    return;
-                  }
-                  router.push(`/profile/${currentUser.username}`);
-                } else {
-                  router.push(tab.route);
-                }
-              }}
-              activeOpacity={0.7}
-            >
-              <View style={[
-                styles.tabIconContainer,
-                isActive && styles.tabIconContainerActive
-              ]}>
-                <IconComponent
-                  color={isActive ? '#10b981' : '#6b7280'}
-                  size={isActive ? 26 : 24}
-                  strokeWidth={isActive ? 2.5 : 2}
-                />
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    );
-  };
-
   if (loading) {
     return (
       <View style={styles.container}>
@@ -410,7 +411,7 @@ const ProfilePage = () => {
       />
 
       {/* Custom Bottom Navigation */}
-      <CustomBottomNavigation />
+      <CustomBottomNavigation currentUser={currentUser} />
     </View>
   );
 };
@@ -426,7 +427,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingTop: 120, // Account for CustomHeader height
     paddingHorizontal: 16,
-    paddingBottom: 100, // Account for bottom tab bar
+    paddingBottom: 120, // Increased padding for better Samsung navigation compatibility
   },
   errorContainer: {
     flex: 1,
@@ -442,7 +443,6 @@ const styles = StyleSheet.create({
   },
   bottomNavigation: {
     position: 'absolute',
-    bottom: 20,
     left: 15,
     right: 15,
     height: 65,

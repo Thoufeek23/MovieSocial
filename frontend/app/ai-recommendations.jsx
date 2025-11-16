@@ -714,7 +714,7 @@ const styles = {
   navigationContainer: {
     paddingHorizontal: 20,
     paddingVertical: 16,
-    paddingBottom: 100, // Account for tab bar
+    paddingBottom: 120, // Increased padding for better Samsung navigation compatibility
   },
   leftNavButtons: {
     flexDirection: 'row',
@@ -867,7 +867,7 @@ const styles = {
   },
   actionsContainer: {
     paddingHorizontal: 20,
-    paddingBottom: 100, // Account for tab bar
+    paddingBottom: 120, // Increased padding for better Samsung navigation compatibility
   },
   actionButton: {
     flexDirection: 'row',

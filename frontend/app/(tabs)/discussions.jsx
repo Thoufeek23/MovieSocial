@@ -180,6 +180,6 @@ const styles = StyleSheet.create({
   listContainer: {
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 20,
+    paddingBottom: 120, // Increased padding for Samsung navigation compatibility
   },
 });

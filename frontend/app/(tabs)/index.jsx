@@ -100,7 +100,7 @@ export default function HomePage() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#09090b' }}>
-      <ScrollView ref={scrollViewRef} style={{ flex: 1 }} contentContainerStyle={{ paddingTop: 120 }} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollViewRef} style={{ flex: 1 }} contentContainerStyle={{ paddingTop: 120, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
 
         {/* Welcome Section 
         <View style={{ paddingHorizontal: 20, paddingVertical: 24 }}>

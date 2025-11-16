@@ -30,12 +30,12 @@ export const FloatingLabelInput = ({
           secureTextEntry={isPassword && !showPassword}
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize}
-          style={[
+            style={[
             inputStyles.textInput,
             {
-              paddingTop: isLabelFloating ? 24 : 18,
-              paddingBottom: isLabelFloating ? 12 : 18,
-              paddingRight: isPassword ? 55 : 18,
+              paddingTop: isLabelFloating ? 28 : 22,
+              paddingBottom: isLabelFloating ? 12 : 22,
+              paddingRight: isPassword ? 65 : 18, // Increased padding for better password toggle spacing
             }
           ]}
           placeholderTextColor="rgba(255,255,255,0.5)"
@@ -45,9 +45,9 @@ export const FloatingLabelInput = ({
         {/* Floating Label */}
         <MotiView
           animate={{
-            translateY: isLabelFloating ? -22 : 18,
-            translateX: 18,
-            scale: isLabelFloating ? 0.85 : 1,
+            translateY: isLabelFloating ? -32 : 22,
+            translateX: isLabelFloating ? 12 : 18,
+            scale: isLabelFloating ? 0.75 : 1,
           }}
           transition={{
             type: 'timing',
@@ -56,10 +56,11 @@ export const FloatingLabelInput = ({
           style={[
             inputStyles.labelContainer,
             {
-              backgroundColor: isLabelFloating ? 'rgba(0,0,0,0.85)' : 'transparent',
+              backgroundColor: isLabelFloating ? '#1f2937' : 'transparent',
               paddingHorizontal: isLabelFloating ? 8 : 0,
               paddingVertical: isLabelFloating ? 2 : 0,
               borderRadius: isLabelFloating ? 6 : 0,
+              zIndex: 10,
             }
           ]}
           pointerEvents="none"
@@ -108,17 +109,20 @@ export const FloatingLabelInput = ({
 
 const inputStyles = StyleSheet.create({
   container: {
-    marginBottom: 18,
+    marginBottom: 20,
+    marginTop: 8,
   },
   inputContainer: {
     position: 'relative',
-    backgroundColor: 'transparent',
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+    minHeight: 64,
+    marginTop: 8,
   },
   textInput: {
-    height: 60,
+    height: 64,
     width: '100%',
     color: 'white',
     backgroundColor: 'transparent',
@@ -137,22 +141,31 @@ const inputStyles = StyleSheet.create({
   },
   focusBorder: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: -1.5,
+    left: -1.5,
+    right: -1.5,
+    bottom: -1.5,
     borderWidth: 2,
     borderColor: '#10b981',
     borderRadius: 15,
     pointerEvents: 'none',
+    shadowColor: '#10b981',
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   passwordToggle: {
     position: 'absolute',
-    right: 18,
+    right: 15,
     top: 0,
-    height: 60,
-    width: 35,
+    height: 64,
+    width: 40,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 8,
   },
 });

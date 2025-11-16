@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     paddingTop: 8,
-    paddingBottom: 20,
+    paddingBottom: 120, // Increased padding for Samsung navigation compatibility
   },
   row: {
     justifyContent: 'space-between',

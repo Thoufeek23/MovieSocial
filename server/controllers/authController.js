@@ -48,6 +48,9 @@ const registerUser = async (req, res) => {
         });
 
         if (user) {
+            // Award new user badge
+            await handleNewUser(user._id);
+            
             res.status(201).json({
                 token: generateToken(user._id, user.username, user.isAdmin),
             });
@@ -374,6 +377,9 @@ const completeSignup = async (req, res) => {
             state: stateVal || undefined,
             region: regionVal || undefined,
         });
+
+        // Award new user badge
+        await handleNewUser(user._id);
 
         // Cleanup intent
         await SignupIntent.deleteMany({ email });

@@ -19,6 +19,7 @@ import { MotiView } from 'moti';
 import { useAuth } from '../src/context/AuthContext';
 import * as api from '../src/api';
 import { FloatingLabelInput } from '../components/FloatingLabelInput';
+import { OTPInput } from '../components/OTPInput';
 
 import COUNTRIES from '../src/data/countries';
 
@@ -354,12 +355,17 @@ export default function SignupPage() {
                     <Text style={signupStyles.otpText}>
                       We've sent an OTP to <Text style={signupStyles.emailText}>{formData.email}</Text>. Enter it below to verify your email.
                     </Text>
-                    <FloatingLabelInput
-                      label="Enter OTP"
+                    <OTPInput
+                      length={6}
                       value={otp}
                       onChangeText={setOtp}
-                      keyboardType="numeric"
-                      maxLength={6}
+                      onComplete={(code) => {
+                        setOtp(code);
+                        // Auto-submit when OTP is complete
+                        if (code.length === 6) {
+                          setTimeout(() => handleVerifyOtp(), 500);
+                        }
+                      }}
                     />
                     <View style={signupStyles.otpButtons}>
                       <Pressable
@@ -477,7 +483,7 @@ const signupStyles = StyleSheet.create({
   otpContainer: { alignItems: 'center', marginBottom: 20 },
   otpTitle: { fontSize: 24, fontWeight: 'bold', color: 'white', marginBottom: 8 },
   otpSubtitle: { fontSize: 16, color: '#d1d5db', textAlign: 'center', marginBottom: 20 },
-  otpInput: { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderRadius: 12, padding: 15, fontSize: 18, color: 'white', textAlign: 'center', letterSpacing: 8, marginBottom: 15, width: '100%' },
+
   resendContainer: { marginTop: 15, alignItems: 'center' },
   resendText: { color: '#d1d5db' },
   resendButton: { color: '#10b981', fontWeight: 'bold' },

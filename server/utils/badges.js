@@ -3,7 +3,8 @@ const User = require('../models/User');
 
 // Badge definitions — add new badges here. id should be stable.
 const BADGES = {
-  FIRST_REVIEW: { id: 'first_review', name: 'New User' },
+  NEW_USER: { id: 'new_user', name: 'Welcome to MovieSocial!' },
+  FIRST_REVIEW: { id: 'first_review', name: 'First Reviewer' },
   REVIEW_STREAK_3: { id: 'streak_3', name: '3-day Streak' },
   REVIEW_STREAK_7: { id: 'streak_7', name: '7-day Streak' },
   TOP_REVIEWER_MONTH: { id: 'top_reviewer_month', name: 'Top Reviewer (Month)' },
@@ -64,6 +65,15 @@ async function removeMonthlyTierBadges(userId) {
   }
 }
 
+// Award new user badge (called during signup)
+async function handleNewUser(userId) {
+  try {
+    await awardBadge(userId, BADGES.NEW_USER);
+  } catch (err) {
+    logger.error('handleNewUser error', err);
+  }
+}
+
 // Badge checks (examples)
 // Called after a user posts a review
 async function handlePostReview(userId) {
@@ -87,6 +97,7 @@ module.exports = {
   BADGES,
   hasBadge,
   awardBadge,
+  handleNewUser,
   handlePostReview,
 };
 

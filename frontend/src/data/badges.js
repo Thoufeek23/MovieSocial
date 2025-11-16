@@ -1,10 +1,18 @@
 const BADGE_MAP = {
+  new_user: { 
+    id: 'new_user', 
+    title: 'Welcome to MovieSocial!', 
+    short: 'New User', 
+    description: 'Welcome to MovieSocial! This badge marks your first step into our movie community.', 
+    color: '#10b981', 
+    icon: '🎬' 
+  },
   first_review: { 
     id: 'first_review', 
-    title: 'New User', 
-    short: 'New User', 
+    title: 'First Reviewer', 
+    short: 'First Review', 
     description: 'Awarded when a user posts their first review.', 
-    color: '#10b981', 
+    color: '#f59e0b', 
     icon: '⭐' 
   },
   diamond_i: { 

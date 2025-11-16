@@ -2,6 +2,7 @@ import React, { createContext, useContext, useRef } from 'react';
 import { Tabs, useRouter } from 'expo-router';
 import { Home, Search, BookOpen, Puzzle, FileText, User } from 'lucide-react-native';
 import { View, Platform, TouchableOpacity } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CustomHeader from '../../components/CustomHeader';
 import { usePathname } from 'expo-router';
 
@@ -16,6 +17,7 @@ export const useScrollToTop = () => {
 export default function TabsLayout() {
   const pathname = usePathname();
   const scrollRefs = useRef({});
+  const insets = useSafeAreaInsets();
   
   const scrollToTop = (tabName) => {
     const scrollRef = scrollRefs.current[tabName];
@@ -111,7 +113,7 @@ export default function TabsLayout() {
           paddingHorizontal: 20,
           borderRadius: 25,
           position: 'absolute',
-          bottom: 20, // Float above bottom
+          bottom: Math.max(20, insets.bottom + 10), // Dynamic bottom margin for Samsung navigation
           left: 0,
           right: 0,
           marginHorizontal: 15,
