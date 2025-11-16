@@ -22,11 +22,113 @@ async function runWithConcurrency(items, concurrency, fn) {
     await Promise.all(workers);
 }
 
+// Exponential backoff retry function for OMDb API calls with circuit breaker
+async function omdbApiCall(params, maxRetries = 3) {
+    // Check circuit breaker first
+    if (omdbCircuitBreaker.shouldSkip()) {
+        const error = new Error('OMDb API temporarily unavailable (circuit breaker open)');
+        error.circuitBreakerOpen = true;
+        throw error;
+    }
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            const response = await axios.get('http://www.omdbapi.com/', { 
+                params,
+                timeout: 15000, // 15 second timeout
+                headers: {
+                    'User-Agent': 'MovieSocial-App/1.0'
+                }
+            });
+            
+            // Record success and reset circuit breaker
+            omdbCircuitBreaker.recordSuccess();
+            return response;
+        } catch (error) {
+            const status = error.response?.status;
+            const retryAfter = error.response?.headers?.['retry-after'];
+            
+            // Don't retry on 401 (bad API key) or 403 (forbidden)
+            if (status === 401 || status === 403) {
+                OMDB_ENABLED = false;
+                logger.warn('OMDb API key invalid, disabling OMDb calls');
+                throw error;
+            }
+            
+            // For 522, 520-529 (Cloudflare errors) or timeout errors, use exponential backoff
+            const isRetryableError = status === 522 || status === 524 || (status >= 520 && status <= 529) || 
+                                   error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT' || 
+                                   error.code === 'ENOTFOUND' || error.code === 'ECONNRESET';
+            
+            if (attempt < maxRetries && isRetryableError) {
+                const baseDelay = 1000; // 1 second base delay
+                const exponentialDelay = Math.min(baseDelay * Math.pow(2, attempt - 1), 10000); // Max 10 seconds
+                const retryDelay = retryAfter ? parseInt(retryAfter) * 1000 : exponentialDelay;
+                
+                logger.warn(`OMDb API call failed (attempt ${attempt}/${maxRetries}), retrying in ${retryDelay}ms`, {
+                    status,
+                    retryAfter,
+                    errorCode: error.code,
+                    params: { ...params, apikey: '[REDACTED]' }
+                });
+                
+                await new Promise(resolve => setTimeout(resolve, retryDelay));
+                continue;
+            }
+            
+            // Record failure for circuit breaker
+            omdbCircuitBreaker.recordFailure();
+            
+            // If all retries exhausted or non-retryable error, throw
+            throw error;
+        }
+    }
+}
+
 const TMDB_API_BASE_URL = 'https://api.themoviedb.org/3';
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const cache = require('../utils/cache');
 // Toggle to avoid repeated OMDb calls after a known-bad key
 let OMDB_ENABLED = !!process.env.OMDB_API_KEY;
+
+// Circuit breaker for OMDb API
+let omdbCircuitBreaker = {
+    failures: 0,
+    lastFailureTime: null,
+    isOpen: false,
+    threshold: parseInt(process.env.OMDB_CIRCUIT_BREAKER_THRESHOLD) || 5, // Open circuit after N failures
+    timeout: (parseInt(process.env.OMDB_CIRCUIT_BREAKER_TIMEOUT) || 5) * 60 * 1000, // Convert minutes to milliseconds
+    
+    shouldSkip() {
+        if (!this.isOpen) return false;
+        
+        const now = Date.now();
+        if (now - this.lastFailureTime > this.timeout) {
+            // Reset circuit breaker after timeout
+            this.failures = 0;
+            this.isOpen = false;
+            logger.info('OMDb circuit breaker reset - attempting calls again');
+            return false;
+        }
+        
+        return true;
+    },
+    
+    recordFailure() {
+        this.failures++;
+        this.lastFailureTime = Date.now();
+        
+        if (this.failures >= this.threshold) {
+            this.isOpen = true;
+            logger.warn(`OMDb circuit breaker opened - too many failures (${this.failures}). Will retry after ${this.timeout/1000/60} minutes`);
+        }
+    },
+    
+    recordSuccess() {
+        this.failures = 0;
+        this.isOpen = false;
+    }
+};
 
 // @desc    Search for movies on TMDb
 // @route   GET /api/movies/search
@@ -57,7 +159,7 @@ const searchMovies = async (req, res) => {
                 }
 
                 try {
-                    const omdbRes = await axios.get('http://www.omdbapi.com/', { params: { apikey: OMDB_API_KEY, t: title, y: year } });
+                    const omdbRes = await omdbApiCall({ apikey: OMDB_API_KEY, t: title, y: year });
                     if (omdbRes.data && omdbRes.data.imdbRating && omdbRes.data.imdbRating !== 'N/A') {
                         m.imdbRating = omdbRes.data.imdbRating;
                         m.imdbRatingSource = 'OMDb';
@@ -67,20 +169,23 @@ const searchMovies = async (req, res) => {
                         m.imdbRatingSource = 'TMDb';
                     }
                 } catch (e) {
-                    // Log OMDb errors to help debugging (include status, Retry-After and body if present)
-                    try {
+                    // Handle circuit breaker errors quietly
+                    if (e.circuitBreakerOpen) {
+                        // Circuit breaker is open, don't log as an error
+                    } else {
+                        // Log other OMDb errors to help debugging
                         const status = e.response?.status;
                         const retryAfter = e.response?.headers?.['retry-after'];
-                        logger.warn('OMDb item fetch failed', status, 'Retry-After:', retryAfter, e.response?.data || e.message);
-                        // If 401, disable OMDb enrichment for process lifetime
-                        if (status === 401 || (e.response?.data && typeof e.response.data.Error === 'string' && e.response.data.Error.toLowerCase().includes('invalid api key'))) {
-                            OMDB_ENABLED = false;
-                            logger.warn('OMDb appears to be disabled due to invalid API key. Further OMDb calls will be skipped until server restart.');
-                        }
-                    } catch (logErr) {
-                        logger.warn('OMDb item fetch failed (logging error)', e.message || e);
+                        logger.warn('OMDb item fetch failed after retries', {
+                            status,
+                            retryAfter,
+                            errorCode: e.code,
+                            message: e.message,
+                            title: m.title || m.original_title
+                        });
                     }
-                    // ignore per-item failures and fallback
+                    
+                    // Always fall back to TMDb rating
                     if (typeof m.vote_average !== 'undefined') {
                         m.imdbRating = m.vote_average;
                         m.imdbRatingSource = 'TMDb';
@@ -131,7 +236,7 @@ const getMovieDetails = async (req, res) => {
                     imdbRating = cached.imdbRating;
                     imdbRatingSource = cached.imdbRatingSource;
                 } else {
-                    const omdbRes = await axios.get('http://www.omdbapi.com/', { params: { apikey: OMDB_API_KEY, i: imdbId } });
+                    const omdbRes = await omdbApiCall({ apikey: OMDB_API_KEY, i: imdbId });
                     if (omdbRes.data && omdbRes.data.imdbRating && omdbRes.data.imdbRating !== 'N/A') {
                         imdbRating = omdbRes.data.imdbRating;
                         imdbRatingSource = 'OMDb';
@@ -140,16 +245,16 @@ const getMovieDetails = async (req, res) => {
                 }
             } catch (err) {
                 // If OMDb fails, we'll fall back to TMDb vote_average below
-                try {
+                if (!err.circuitBreakerOpen) {
                     const status = err.response?.status;
                     const retryAfter = err.response?.headers?.['retry-after'];
-                    logger.warn('OMDb fetch failed', status, 'Retry-After:', retryAfter, err.response?.data || err.message);
-                    if (status === 401 || (err.response?.data && typeof err.response.data.Error === 'string' && err.response.data.Error.toLowerCase().includes('invalid api key'))) {
-                        OMDB_ENABLED = false;
-                        logger.warn('OMDb appears to be disabled due to invalid API key. Further OMDb calls will be skipped until server restart.');
-                    }
-                } catch (logErr) {
-                    logger.warn('OMDb fetch failed (logging error)', err.message || err);
+                    logger.warn('OMDb movie details fetch failed after retries', {
+                        status,
+                        retryAfter,
+                        errorCode: err.code,
+                        message: err.message,
+                        imdbId
+                    });
                 }
             }
         }
@@ -194,7 +299,7 @@ const getPopularMovies = async (req, res) => {
                     return;
                 }
                 try {
-                    const omdbRes = await axios.get('http://www.omdbapi.com/', { params: { apikey: OMDB_API_KEY, t: title, y: year } });
+                    const omdbRes = await omdbApiCall({ apikey: OMDB_API_KEY, t: title, y: year });
                     if (omdbRes.data && omdbRes.data.imdbRating && omdbRes.data.imdbRating !== 'N/A') {
                         m.imdbRating = omdbRes.data.imdbRating;
                         m.imdbRatingSource = 'OMDb';
@@ -204,17 +309,20 @@ const getPopularMovies = async (req, res) => {
                         m.imdbRatingSource = 'TMDb';
                     }
                 } catch (e) {
-                    try {
+                    // Handle circuit breaker errors quietly
+                    if (!e.circuitBreakerOpen) {
                         const status = e.response?.status;
                         const retryAfter = e.response?.headers?.['retry-after'];
-                        logger.warn('OMDb item fetch failed', status, 'Retry-After:', retryAfter, e.response?.data || e.message);
-                        if (status === 401 || (e.response?.data && typeof e.response.data.Error === 'string' && e.response.data.Error.toLowerCase().includes('invalid api key'))) {
-                            OMDB_ENABLED = false;
-                            logger.warn('OMDb appears to be disabled due to invalid API key. Further OMDb calls will be skipped until server restart.');
-                        }
-                    } catch (logErr) {
-                        logger.warn('OMDb item fetch failed (logging error)', e.message || e);
+                        logger.warn('OMDb popular movies fetch failed after retries', {
+                            status,
+                            retryAfter,
+                            errorCode: e.code,
+                            message: e.message,
+                            title: m.title || m.original_title
+                        });
                     }
+                    
+                    // Always fall back to TMDb rating
                     if (typeof m.vote_average !== 'undefined') {
                         m.imdbRating = m.vote_average;
                         m.imdbRatingSource = 'TMDb';
@@ -447,7 +555,7 @@ const getPersonalizedMovies = async (req, res) => {
                 }
                 
                 try {
-                    const omdbRes = await axios.get('http://www.omdbapi.com/', { params: { apikey: OMDB_API_KEY, t: title, y: year } });
+                    const omdbRes = await omdbApiCall({ apikey: OMDB_API_KEY, t: title, y: year });
                     if (omdbRes.data && omdbRes.data.imdbRating && omdbRes.data.imdbRating !== 'N/A') {
                         m.imdbRating = omdbRes.data.imdbRating;
                         m.imdbRatingSource = 'OMDb';
@@ -457,6 +565,17 @@ const getPersonalizedMovies = async (req, res) => {
                         m.imdbRatingSource = 'TMDb';
                     }
                 } catch (e) {
+                    // Log the error with more details for debugging
+                    const status = e.response?.status;
+                    const retryAfter = e.response?.headers?.['retry-after'];
+                    logger.warn('OMDb personalized fetch failed after retries', {
+                        status,
+                        retryAfter,
+                        errorCode: e.code,
+                        title,
+                        year
+                    });
+                    
                     if (typeof m.vote_average !== 'undefined') {
                         m.imdbRating = m.vote_average;
                         m.imdbRatingSource = 'TMDb';
