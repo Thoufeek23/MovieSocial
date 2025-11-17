@@ -38,8 +38,6 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
   const [revealedHints, setRevealedHints] = useState(1);
 
   // Calculate values that depend on puzzle being loaded
-  const normAnswer = puzzle ? normalizeTitle(puzzle.answer || '') : '';
-  const fuzzyThreshold = Math.max(2, Math.ceil((normAnswer.length || 0) * 0.2));
   const maxReveal = puzzle ? Math.min(5, (puzzle.hints && puzzle.hints.length) || 5) : 5;
 
   // Load puzzle from backend
@@ -166,13 +164,7 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
     const newRevealedHints = Math.min(maxReveal, newGuesses.length + 1);
     setRevealedHints(newRevealedHints);
 
-    // Fuzzy matching: allow small typos. Normalize and compute Levenshtein distance.
-    const normAnswer = normalizeTitle(puzzle.answer);
-    const guessNorm = normalized;
-    const dist = levenshtein(guessNorm, normAnswer);
-    // threshold rules: allow distance up to 2 or 20% of answer length (whichever is larger)
-    const threshold = Math.max(2, Math.ceil(normAnswer.length * 0.2));
-    const isCorrect = dist <= threshold;
+    // All correctness and streak logic is handled by the server only
     const today = effectiveDate;
 
   // Send guess to server for validation - server handles all game logic
@@ -213,7 +205,7 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
             try {
               const eventDetail = { language: langObj, global: globalObj };
               window.dispatchEvent(new CustomEvent('modleUpdated', { detail: eventDetail }));
-              updateFromServerPayload(eventDetail);
+              updateFromServerPayload(eventDetail, language);
             } catch (e) {
               // ignore event dispatch failures
             }
@@ -270,6 +262,19 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
     );
   }
 
+  // Block all languages if daily limit is reached
+  if (todayPlayed && todayPlayed.globalDaily) {
+    return (
+      <div className="bg-card p-4 rounded-md max-w-2xl mx-auto">
+        <div className="text-center py-8">
+          <div className="text-yellow-400 text-lg font-semibold mb-2">Daily Limit Reached</div>
+          <div className="text-gray-400 mb-2">You have already played today's Modle in another language.<br />Only one puzzle per day is allowed across all languages.</div>
+          <div className="text-xs text-gray-500">Come back tomorrow for a new puzzle!</div>
+        </div>
+      </div>
+    );
+  }
+
   // Show error state
   if (puzzleError && (!puzzle || puzzle.answer === 'LOADING')) {
     return (
@@ -319,7 +324,7 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
       </div>
 
       {/* --- Win Animation --- */}
-      {todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily) && (
+      {todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily) && puzzle.answer && (
         <motion.div
           initial={{ scale: 0.5, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -332,7 +337,6 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
 
       <div className="mb-4">
         <h3 className="font-semibold mb-3">Hints <span className="text-sm text-gray-400">({revealedHints}/{maxReveal})</span></h3>
-        {/* --- Improved Hint Styling --- */}
         <div className="flex flex-col gap-2">
           <AnimatePresence>
             {(puzzle.hints || []).slice(0, revealedHints).map((h, i) => (
@@ -352,30 +356,27 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
             ))}
           </AnimatePresence>
         </div>
-        {/* --- Reduced Hint Explanation Text --- */}
         {revealedHints < maxReveal && !(todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily)) && (
           <div className="text-xs text-gray-500 mt-2">Submit a guess to reveal the next hint.</div>
         )}
       </div>
 
       <form onSubmit={handleSubmitGuess} className="flex gap-2">
-        {/* --- Styled Input Textbox --- */}
         <input
           value={guess}
           onChange={e => setGuess(e.target.value)}
           placeholder="Enter movie title"
-          className="input input-bordered flex-1 px-3 py-2 rounded-md border border-gray-600 bg-gray-700 text-white placeholder-gray-400 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none" // Updated styles
+          className="input input-bordered flex-1 px-3 py-2 rounded-md border border-gray-600 bg-gray-700 text-white placeholder-gray-400 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none"
           spellCheck={false}
           autoComplete="off"
-          disabled={todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily)} // Disable input if solved or daily limit reached
+          disabled={todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily)}
         />
-        {/* --- Button Animation --- */}
         <motion.button
           type="submit"
-          className="btn btn-primary" // Uses existing button style from index.css
+          className="btn btn-primary"
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          disabled={todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily)} // Disable button if solved or daily limit reached
+          disabled={todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily)}
         >
           Guess
         </motion.button>
@@ -385,35 +386,35 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
         <h4 className="font-semibold mb-2">Previous guesses</h4>
         <div className="flex flex-col gap-2">
           {guesses.length === 0 && <div className="text-gray-400">No guesses yet.</div>}
-          {/* --- Reversed Guess List Animation --- */}
           <AnimatePresence>
-            {guesses.slice().reverse().map((g, i) => (
-              <motion.div
-                key={guesses.length - 1 - i} // Use stable original index as key
-                layout
-                initial={{ opacity: 0, y: -10 }} // Animate from top
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 5 }}
-                transition={{ duration: 0.3, type: 'spring', stiffness: 100 }}
-                className="p-2 bg-background/10 rounded flex items-center justify-between"
-              >
-                <div className="font-mono">{g}</div>
-                <div className="text-sm text-gray-400">
-                  {(() => {
-                    try {
-                      const d = levenshtein(g, normAnswer);
-                      return d <= fuzzyThreshold ? '✅ Correct' : '❌ Incorrect';
-                    } catch (e) { return '❌ Incorrect'; }
-                  })()}
-                </div>
-              </motion.div>
-            ))}
+            {guesses.slice().reverse().map((g, i) => {
+              const guessIdx = guesses.length - 1 - i;
+              const isCorrect = todayPlayed && todayPlayed.guessesStatus && todayPlayed.guessesStatus[guessIdx] === true;
+              const isIncorrect = todayPlayed && todayPlayed.guessesStatus && todayPlayed.guessesStatus[guessIdx] === false;
+              return (
+                <motion.div
+                  key={guessIdx}
+                  layout
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 5 }}
+                  transition={{ duration: 0.3, type: 'spring', stiffness: 100 }}
+                  className="p-2 bg-background/10 rounded flex items-center justify-between"
+                >
+                  <div className="font-mono flex items-center gap-2">
+                    {g}
+                    {isCorrect && <span className="text-green-400 text-lg" title="Correct">✔️</span>}
+                    {isIncorrect && <span className="text-red-400 text-lg" title="Incorrect">❌</span>}
+                  </div>
+                </motion.div>
+              );
+            })}
           </AnimatePresence>
         </div>
       </div>
 
       <div className="mt-4 flex items-center gap-2">
-        <div className="text-xs text-gray-500">Note: Puzzles are placeholders in source.</div>
+        <div className="text-xs text-gray-500">Note: All game logic is server-driven.</div>
       </div>
     </div>
   );

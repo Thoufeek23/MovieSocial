@@ -30,10 +30,11 @@ const getDailyPuzzle = async (req, res) => {
       return res.status(404).json({ msg: `No puzzles found for language: ${language}` });
     }
 
-    // Return puzzle without revealing the answer index for security
+    // --- FIX ---
+    // Return puzzle without revealing the answer
     res.json({
       id: puzzle._id,
-      answer: puzzle.answer,
+      // answer: puzzle.answer, // <-- THIS LINE HAS BEEN REMOVED
       hints: puzzle.hints,
       language: puzzle.language,
       meta: puzzle.meta || {},

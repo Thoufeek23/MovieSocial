@@ -43,23 +43,18 @@ const ModleProvider = ({ children }) => {
     return null;
   }, [user]);
 
-  // Accept a server payload (the shape returned by POST or GET) and merge into context
-  const updateFromServerPayload = useCallback((payload) => {
+  const updateFromServerPayload = useCallback((payload, lang) => {
     if (!payload) return;
     if (payload.global) setGlobal(payload.global);
     if (payload.language) {
-      // payload.language may be a language object; we don't know which language key it came from.
-      // If it includes a language name, use it; otherwise leave as-is and merge by 'English'.
-      // Best-effort: try to detect a language by comparing to existing data keys.
-      const langKeys = Object.keys(languageData || {});
-      if (langKeys.length === 1) {
-        setLanguageData(prev => ({ ...prev, [langKeys[0]]: payload.language }));
-      } else {
-        // fallback: set under 'English'
-        setLanguageData(prev => ({ ...prev, English: payload.language }));
-      }
+      
+      // --- FIX 2 ---: Removed the old logic that guessed the language key
+      // We now explicitly use the 'lang' passed into the function.
+      const langToUpdate = lang || 'English'; // Fallback just in case
+      setLanguageData(prev => ({ ...prev, [langToUpdate]: payload.language }));
+      
     }
-  }, [languageData]);
+  }, []);
 
   // When user logs in/out, refresh global state
   useEffect(() => {
