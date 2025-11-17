@@ -1,14 +1,13 @@
 import React, { useEffect, useState, useContext } from 'react';
+import Confetti from 'react-confetti'; // <-- ADDED: For win animation
 import { AuthContext } from '../context/AuthContext';
 import toast from 'react-hot-toast';
-import { normalizeTitle, levenshtein } from '../utils/fuzzy';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as api from '../api';
 import { ModleContext } from '../context/ModleContext';
 
 // API wrapper (centralized in client/src/api/index.js)
 
-// Note: localStorage usage for modle state removed. Server is the source-of-truth for authenticated users.
 // Local date helper (YYYY-MM-DD) using the user's local timezone
 function localYYYYMMDD(date = new Date()) {
   const y = date.getFullYear();
@@ -16,13 +15,28 @@ function localYYYYMMDD(date = new Date()) {
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
-// no localStorage key helpers — we no longer persist modle state in localStorage
 
+// --- ADDED: Helper hook for window dimensions ---
+const useWindowSize = () => {
+  const [size, setSize] = useState([0, 0]);
+  useEffect(() => {
+    function updateSize() {
+      setSize([window.innerWidth, window.innerHeight]);
+    }
+    window.addEventListener('resize', updateSize);
+    updateSize(); // Initial size
+    return () => window.removeEventListener('resize', updateSize);
+  }, []);
+  return { width: size[0], height: size[1] };
+};
+// -------------------------------------------------
 
 
 const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
   const { user } = useContext(AuthContext);
   const { updateFromServerPayload, refreshGlobal } = useContext(ModleContext);
+  const { width, height } = useWindowSize(); // <-- ADDED: Get window size for confetti
+  
   // determine today's date string in YYYY-MM-DD
   const todayStr = localYYYYMMDD();
   const effectiveDate = todayStr;
@@ -99,7 +113,8 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
                 globalDaily: data.dailyLimitReached, 
                 date: today,
                 msg: message,
-                guesses: data.language?.history?.[today]?.guesses || []
+                guesses: data.language?.history?.[today]?.guesses || [],
+                guessesStatus: data.language?.history?.[today]?.guessesStatus || [] // <-- Make sure to load this
               });
               
               setGuesses(data.language?.history?.[today]?.guesses || []);
@@ -129,8 +144,7 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
         // server fetch failed; fall back below
       }
 
-      // No persistent localStorage fallback: for unauthenticated users or if server fetch fails
-      // we keep in-memory defaults so the UI remains functional but not persisted across reloads.
+      // No persistent localStorage fallback
       setTodayPlayed(null);
       setGuesses([]);
       setRevealedHints(1);
@@ -143,14 +157,13 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
     }
   }, [puzzle, user, maxReveal, language, effectiveDate, puzzleLoading]);
 
-  // No persistent saveState: persistence happens on the server for authenticated users.
 
   const handleSubmitGuess = (e) => {
     e.preventDefault();
     const normalized = (guess || '').toString().trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (!normalized) return;
 
-    // Enforce one guess per revealed hint until the player has seen maxReveal hints.
+    // Enforce one guess per revealed hint
     if (!(revealedHints >= maxReveal || guesses.length < revealedHints)) {
       toast('Submit a guess to reveal the next hint.');
       return;
@@ -160,73 +173,67 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
     const newGuesses = [...guesses, normalized];
     setGuesses(newGuesses);
     
-    // Reveal another hint after each submitted guess, up to the configured cap (maxReveal)
     const newRevealedHints = Math.min(maxReveal, newGuesses.length + 1);
     setRevealedHints(newRevealedHints);
 
-    // All correctness and streak logic is handled by the server only
     const today = effectiveDate;
 
-  // Send guess to server for validation - server handles all game logic
+  // Send guess to server for validation
   (async () => {
     try {
       const res = await api.postModleResult({ date: today, language, guess: normalized });
       
       if (res && res.data) {
-        const server = res.data;
+        const server = res.data; // <-- 'server' is defined here
         const langObj = server.language || server;
         const globalObj = server.global;
         
-        // Server determines correctness - update UI accordingly
+        // Server determines correctness
         if (langObj && langObj.history && langObj.history[today]) {
-          const serverResult = langObj.history[today];
+          const serverResult = langObj.history[today]; // <-- 'serverResult' is defined here
           setTodayPlayed(serverResult);
           
-          // Only update guesses if server has more than we currently have
-          // This prevents overriding the immediate UI update we did above
           if ((serverResult.guesses || []).length > newGuesses.length) {
             setGuesses(serverResult.guesses || []);
-            // Recalculate hints based on server data
             const serverHints = Math.min(maxReveal, Math.max(1, (serverResult.guesses || []).length + 1));
             setRevealedHints(serverHints);
           }
-          // Don't override revealed hints if we already revealed them above
           
-          // Show success/failure message based on server validation
           if (serverResult.correct) {
-            toast.success(`Correct! The movie was ${puzzle.answer}.`);
+            // --- FIX for blank answer ---
+            const answer = puzzle.answer || server.solvedAnswer;
+            if (server.solvedAnswer && !puzzle.answer) {
+              setPuzzle(prev => ({ ...prev, answer: server.solvedAnswer }));
+            }
+            // -----------------------------
+
+            toast.success(`Correct! The movie was ${answer}.`);
             
-            // Trigger global Modle context refresh after successful solve
             if (refreshGlobal) {
               refreshGlobal();
             }
             
-            // Notify other UI components
             try {
               const eventDetail = { language: langObj, global: globalObj };
               window.dispatchEvent(new CustomEvent('modleUpdated', { detail: eventDetail }));
               updateFromServerPayload(eventDetail, language);
             } catch (e) {
-              // ignore event dispatch failures
+              // ignore
             }
           } else {
             toast.error('Incorrect guess. Try again!');
           }
         }
         
-        // Use primary/global streak for display
         const primaryStreak = server.primaryStreak || (globalObj && globalObj.streak) || 0;
         setStreak(primaryStreak);
       }
 
     } catch (e) {
-      
-      // Handle server responses (daily limit, etc.)
       if (e.response && e.response.status === 409) {
         const errorMsg = e.response.data?.msg || 'You have already played today.';
         toast.error(errorMsg);
         
-        // Set appropriate state based on server response
         const responseData = e.response.data;
         if (responseData) {
           setTodayPlayed({ 
@@ -237,7 +244,6 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
           });
         }
       } else {
-        // For network errors, show generic message
         toast.error('Unable to submit guess. Please check your connection.');
       }
     }
@@ -245,8 +251,6 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
 
   setGuess('');
   };
-
-  // reset helper removed (dev/testing-only)
 
   // Show loading state
   if (puzzleLoading) {
@@ -262,18 +266,8 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
     );
   }
 
-  // Block all languages if daily limit is reached
-  if (todayPlayed && todayPlayed.globalDaily) {
-    return (
-      <div className="bg-card p-4 rounded-md max-w-2xl mx-auto">
-        <div className="text-center py-8">
-          <div className="text-yellow-400 text-lg font-semibold mb-2">Daily Limit Reached</div>
-          <div className="text-gray-400 mb-2">You have already played today's Modle in another language.<br />Only one puzzle per day is allowed across all languages.</div>
-          <div className="text-xs text-gray-500">Come back tomorrow for a new puzzle!</div>
-        </div>
-      </div>
-    );
-  }
+  // --- REMOVED: "Daily Limit Reached" block ---
+  // if (todayPlayed && todayPlayed.globalDaily) { ... }
 
   // Show error state
   if (puzzleError && (!puzzle || puzzle.answer === 'LOADING')) {
@@ -306,6 +300,18 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
 
   return (
     <div className="bg-card p-4 rounded-md max-w-2xl mx-auto">
+      {/* --- ADDED: Confetti Win Animation --- */}
+      <Confetti
+        width={width}
+        height={height}
+        run={todayPlayed && todayPlayed.correct} // Only run when 'correct' is true
+        recycle={false} // Run once and stop
+        numberOfPieces={500}
+        gravity={0.2}
+        tweenDuration={7000}
+      />
+      {/* ------------------------------------- */}
+
       <div className="mb-4">
         <div className="flex items-center justify-between">
           <div>
@@ -389,6 +395,7 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
           <AnimatePresence>
             {guesses.slice().reverse().map((g, i) => {
               const guessIdx = guesses.length - 1 - i;
+              // This logic shows feedback for each guess:
               const isCorrect = todayPlayed && todayPlayed.guessesStatus && todayPlayed.guessesStatus[guessIdx] === true;
               const isIncorrect = todayPlayed && todayPlayed.guessesStatus && todayPlayed.guessesStatus[guessIdx] === false;
               return (

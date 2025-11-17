@@ -280,6 +280,11 @@ const postModleResult = async (req, res) => {
 
     // 5. Update language-specific history
     const existing = historyGet(langObj.history, today);
+    
+    // --- ADDED: Helper function for checking guesses ---
+    const checkGuess = (g) => levenshtein(g, normalizedAnswer) <= threshold;
+    // ---------------------------------------------------
+
     if (existing) {
       // User is continuing guesses for this language
       if (existing.correct) {
@@ -289,10 +294,29 @@ const postModleResult = async (req, res) => {
       
       // Merge guesses to preserve attempt history
       const mergedGuesses = Array.from(new Set([...(existing.guesses || []), normalizedGuess]));
-      historySet(langObj.history, today, { date: today, correct: isCorrect, guesses: mergedGuesses });
+      
+      // --- ADDED: Create guessesStatus array ---
+      const guessesStatus = mergedGuesses.map(g => checkGuess(g));
+      // -----------------------------------------
+
+      historySet(langObj.history, today, { 
+        date: today, 
+        correct: isCorrect, 
+        guesses: mergedGuesses, 
+        guessesStatus: guessesStatus // --- ADDED ---
+      });
     } else {
       // First attempt today for this language
-      historySet(langObj.history, today, { date: today, correct: isCorrect, guesses: [normalizedGuess] });
+      // --- ADDED: Create guessesStatus array ---
+      const guessesStatus = [isCorrect];
+      // -----------------------------------------
+      
+      historySet(langObj.history, today, { 
+        date: today, 
+        correct: isCorrect, 
+        guesses: [normalizedGuess], 
+        guessesStatus: guessesStatus // --- ADDED ---
+      });
     }
 
     // 6. Recompute language-specific streak
