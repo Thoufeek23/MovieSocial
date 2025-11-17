@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const { sendEmail } = require('../utils/email');
 const SignupIntent = require('../models/SignupIntent');
+const { handleNewUser } = require('../utils/badges');
 const logger = require('../utils/logger');
 
 // Helper function to generate JWT
@@ -59,6 +60,17 @@ const registerUser = async (req, res) => {
         }
     } catch (error) {
         logger.error(error);
+        
+        // Handle MongoDB duplicate key errors specifically
+        if (error.code === 11000) {
+            if (error.keyPattern?.username) {
+                return res.status(400).json({ msg: 'Username already taken' });
+            } else if (error.keyPattern?.email) {
+                return res.status(400).json({ msg: 'Email already registered' });
+            }
+            return res.status(400).json({ msg: 'Account already exists' });
+        }
+        
         res.status(500).json({ msg: 'Server error' });
     }
 };
@@ -367,6 +379,20 @@ const completeSignup = async (req, res) => {
         const stateVal = titleCase(intent.state || '');
         const regionVal = stateVal || countryVal;
 
+        // Double-check for duplicate username/email just before creation (race condition protection)
+        const existingUser = await User.findOne({
+            $or: [
+                { email: intent.email },
+                { username: intent.username }
+            ]
+        });
+        
+        if (existingUser) {
+            const field = existingUser.email === intent.email ? 'email' : 'username';
+            const message = field === 'email' ? 'Email already registered' : 'Username already taken';
+            return res.status(400).json({ msg: message });
+        }
+
         const user = await User.create({
             username: intent.username,
             email: intent.email,
@@ -389,6 +415,17 @@ const completeSignup = async (req, res) => {
         return res.status(201).json({ token: generateToken(user._id, user.username, user.isAdmin) });
     } catch (err) {
         logger.error(err);
+        
+        // Handle MongoDB duplicate key errors specifically
+        if (err.code === 11000) {
+            if (err.keyPattern?.username) {
+                return res.status(400).json({ msg: 'Username already taken' });
+            } else if (err.keyPattern?.email) {
+                return res.status(400).json({ msg: 'Email already registered' });
+            }
+            return res.status(400).json({ msg: 'Account already exists' });
+        }
+        
         return res.status(500).json({ msg: 'Server error' });
     }
 };
