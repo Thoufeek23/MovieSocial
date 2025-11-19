@@ -8,12 +8,9 @@ import { ModleContext } from '../context/ModleContext';
 
 // API wrapper (centralized in client/src/api/index.js)
 
-// Local date helper (YYYY-MM-DD) using the user's local timezone
-function localYYYYMMDD(date = new Date()) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+// UTC date helper (YYYY-MM-DD) to match server
+function utcYYYYMMDD(date = new Date()) {
+  return date.toISOString().slice(0, 10);
 }
 
 // --- ADDED: Helper hook for window dimensions ---
@@ -37,8 +34,8 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
   const { updateFromServerPayload, refreshGlobal } = useContext(ModleContext);
   const { width, height } = useWindowSize(); // <-- ADDED: Get window size for confetti
   
-  // determine today's date string in YYYY-MM-DD
-  const todayStr = localYYYYMMDD();
+  // determine today's date string in YYYY-MM-DD (UTC)
+  const todayStr = utcYYYYMMDD();
   const effectiveDate = todayStr;
   
   // State for puzzle - now loaded from backend
