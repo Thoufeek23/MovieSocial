@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { 
     createReview, 
+    importLetterboxdReviews,
     getMyReviews,
     getFeedReviews,
     getPersonalizedFeedReviews,
@@ -15,6 +16,10 @@ const { protect } = require('../middleware/authMiddleware');
 
 router.route('/')
     .post(protect, createReview);
+
+// Import reviews from Letterboxd
+router.route('/import/letterboxd')
+    .post(protect, importLetterboxdReviews);
 
 router.route('/feed')
     .get(protect, getFeedReviews);

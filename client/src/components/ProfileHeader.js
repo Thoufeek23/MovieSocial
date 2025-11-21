@@ -1,4 +1,3 @@
-// src/components/ProfileHeader.js
 import React, { useState, useRef, useEffect, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -8,7 +7,7 @@ import Avatar from './Avatar';
 import ModleSummary from './ModleSummary';
 import * as api from '../api'; // Need api for delete
 
-const ProfileHeader = ({ profile, isFollowing, onFollowToggle, onEditClick, onUserListClick }) => {
+const ProfileHeader = ({ profile, isFollowing, onFollowToggle, onEditClick, onUserListClick, onImportClick }) => {
     const { user, logout } = useContext(AuthContext);
     const [showDropdown, setShowDropdown] = useState(false);
     const dropdownRef = useRef(null);
@@ -70,7 +69,7 @@ const ProfileHeader = ({ profile, isFollowing, onFollowToggle, onEditClick, onUs
                                 </button>
                                 
                                 {showDropdown && (
-                                    <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-card ring-1 ring-black ring-opacity-5 z-50">
+                                    <div className="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-card ring-1 ring-black ring-opacity-5 z-50">
                                         <div className="py-1" role="menu">
                                             <button
                                                 onClick={() => { 
@@ -93,13 +92,22 @@ const ProfileHeader = ({ profile, isFollowing, onFollowToggle, onEditClick, onUs
                                             </button>
                                             <button
                                                 onClick={() => {
+                                                    if (onImportClick) onImportClick();
+                                                    setShowDropdown(false);
+                                                }}
+                                                className="w-full text-left px-4 py-2 text-sm hover:bg-gray-700 transition-colors"
+                                            >
+                                                Import from Letterboxd
+                                            </button>
+                                            <button
+                                                onClick={() => {
                                                     if (typeof logout === 'function') {
                                                         logout();
                                                         window.location.href = '/login';
                                                     }
                                                     setShowDropdown(false);
                                                 }}
-                                                className="w-full text-left px-4 py-2 text-sm hover:bg-gray-700 transition-colors"
+                                                className="w-full text-left px-4 py-2 text-sm hover:bg-gray-700 transition-colors border-t border-gray-700"
                                             >
                                                 Logout
                                             </button>

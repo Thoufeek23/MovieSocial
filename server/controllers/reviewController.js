@@ -1,10 +1,26 @@
 const Review = require('../models/Review');
 const logger = require('../utils/logger');
 const badges = require('../utils/badges');
+const Parser = require('rss-parser');
+const axios = require('axios');
 
 // Simple in-memory TTL cache for movie stats to reduce aggregation load
 const statsCache = new Map(); // movieId -> { value: { movieSocialRating, reviewCount }, expires: Number }
 const STATS_TTL_MS = 30 * 1000; // 30 seconds
+
+// Initialize RSS Parser with custom fields for Letterboxd
+const parser = new Parser({
+    customFields: {
+        item: [
+            ['tmdb:movieId', 'tmdbId'],
+            ['letterboxd:filmTitle', 'filmTitle'],
+            ['letterboxd:filmYear', 'filmYear'],
+            ['letterboxd:memberRating', 'memberRating'],
+            ['letterboxd:watchedDate', 'watchedDate'],
+            ['letterboxd:rewatch', 'isRewatch']
+        ]
+    }
+});
 
 // @desc    Create a new review
 // @route   POST /api/reviews
@@ -34,7 +50,7 @@ const createReview = async (req, res) => {
             rating,
         });
         const savedReview = await newReview.save();
-    await savedReview.populate('user', 'username avatar _id badges');
+        await savedReview.populate('user', 'username avatar _id badges');
 
         // Invalidate cached stats for this movieId
         try { statsCache.delete(String(movieId)); } catch (e) {}
@@ -68,6 +84,165 @@ const createReview = async (req, res) => {
         res.status(201).json(savedReview);
     } catch (error) {
         res.status(500).json({ msg: 'Server Error' });
+    }
+};
+
+// @desc    Import reviews from Letterboxd RSS
+// @route   POST /api/reviews/import/letterboxd
+const importLetterboxdReviews = async (req, res) => {
+    const { username } = req.body;
+    
+    if (!username) {
+        return res.status(400).json({ msg: 'Letterboxd username is required' });
+    }
+
+    try {
+        // UPDATED: Use the main RSS feed URL
+        const feedUrl = `https://letterboxd.com/${username}/rss/`;
+        let feed;
+        
+        try {
+            feed = await parser.parseURL(feedUrl);
+        } catch (error) {
+            logger.error(`Failed to fetch Letterboxd feed for ${username}:`, error);
+            return res.status(404).json({ msg: 'Could not fetch Letterboxd feed. Please check the username.' });
+        }
+
+        if (!feed.items || feed.items.length === 0) {
+            return res.json({ count: 0, msg: 'No entries found in public feed' });
+        }
+
+        const User = require('../models/User');
+        const tmdbApiKey = process.env.TMDB_API_KEY;
+        let importedCount = 0;
+        let skippedCount = 0;
+
+        // Process items sequentially to avoid overwhelming APIs
+        for (const item of feed.items) {
+            try {
+                // 1. Determine Rating
+                // Letterboxd uses 0.5-5 scale in memberRating
+                let rating = item.memberRating ? parseFloat(item.memberRating) : null;
+                
+                // If no rating, skip (MovieSocial requires rating)
+                if (!rating) {
+                    skippedCount++;
+                    continue;
+                }
+
+                // 2. Determine Movie Details (ID and Poster)
+                let movieId = item.tmdbId;
+                let movieTitle = item.filmTitle;
+                let moviePoster = null;
+
+                // If TMDb ID is missing (sometimes happens), search for it
+                if (!movieId && movieTitle) {
+                    try {
+                        const searchUrl = `https://api.themoviedb.org/3/search/movie`;
+                        const searchRes = await axios.get(searchUrl, {
+                            params: {
+                                api_key: tmdbApiKey,
+                                query: movieTitle,
+                                year: item.filmYear
+                            }
+                        });
+                        
+                        if (searchRes.data.results && searchRes.data.results.length > 0) {
+                            movieId = searchRes.data.results[0].id;
+                            moviePoster = searchRes.data.results[0].poster_path;
+                            // Update title to official TMDb title
+                            movieTitle = searchRes.data.results[0].title; 
+                        }
+                    } catch (searchErr) {
+                        logger.warn(`Failed to search movie ${movieTitle}:`, searchErr.message);
+                    }
+                } else if (movieId) {
+                    // We have ID, let's fetch poster if possible
+                    try {
+                        const detailRes = await axios.get(`https://api.themoviedb.org/3/movie/${movieId}`, {
+                            params: { api_key: tmdbApiKey }
+                        });
+                        moviePoster = detailRes.data.poster_path;
+                        movieTitle = detailRes.data.title;
+                    } catch (detailErr) {
+                        logger.warn(`Failed to fetch details for movie ${movieId}:`, detailErr.message);
+                    }
+                }
+
+                if (!movieId || !moviePoster) {
+                    skippedCount++;
+                    continue; // Couldn't identify movie
+                }
+
+                // 3. Check duplicates
+                const existing = await Review.findOne({ user: req.user.id, movieId: String(movieId) });
+                if (existing) {
+                    skippedCount++;
+                    continue;
+                }
+
+                // 4. Create Review
+                // Clean up the description/review text
+                let reviewText = item.contentSnippet || item.content || "";
+                
+                // Letterboxd RSS content usually starts with the poster image in HTML.
+                // We want to strip that and just get the text.
+                // Regex to remove HTML tags
+                reviewText = reviewText.replace(/<[^>]+>/g, '').trim();
+                
+                // If text is empty (user just rated without review), add generic text
+                if (!reviewText) {
+                   reviewText = `Rated ${rating} stars on Letterboxd`;
+                }
+
+                const newReview = new Review({
+                    user: req.user.id,
+                    movieId: String(movieId),
+                    movieTitle,
+                    moviePoster,
+                    text: reviewText,
+                    rating,
+                    createdAt: item.isoDate ? new Date(item.isoDate) : Date.now() // Use original review date
+                });
+
+                await newReview.save();
+                importedCount++;
+
+                // 5. Update User Watched List
+                const user = await User.findById(req.user.id);
+                if (user) {
+                    const mid = String(movieId);
+                    // remove from watchlist
+                    user.watchlist = (user.watchlist || []).filter((id) => String(id) !== mid);
+                    // add to watched
+                    if (!((user.watched || []).map(String).includes(mid))) {
+                        user.watched = user.watched || [];
+                        user.watched.push(mid);
+                    }
+                    await user.save();
+                }
+
+            } catch (itemError) {
+                logger.error('Error importing individual Letterboxd item:', itemError);
+                skippedCount++;
+            }
+        }
+        
+        // Trigger badges after import
+        if (importedCount > 0) {
+            try { badges.handlePostReview(req.user.id).catch(() => {}); } catch (e) {}
+        }
+
+        res.json({ 
+            msg: `Import successful`, 
+            imported: importedCount, 
+            skipped: skippedCount,
+            note: "Note: Only the latest rated films from your public RSS feed were imported."
+        });
+
+    } catch (error) {
+        logger.error('Import Letterboxd Error:', error);
+        res.status(500).json({ msg: 'Server Error during import' });
     }
 };
 
@@ -388,6 +563,7 @@ const voteReview = async (req, res) => {
 
 module.exports = {
     createReview,
+    importLetterboxdReviews,
     getMyReviews,
     getFeedReviews,
     getPersonalizedFeedReviews,

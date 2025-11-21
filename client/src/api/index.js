@@ -1,8 +1,8 @@
 import axios from 'axios';
 
 // In production the client should be built with REACT_APP_API_URL set to your API root 
-const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'https://moviesocial-backend-khd2.onrender.com';
-//const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://localhost:5001';
+//const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'https://moviesocial-backend-khd2.onrender.com';
+const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://localhost:5001';
 const API = axios.create({ baseURL: `${apiRoot}/api` });
 
 // Add the JWT to the header of every request if it exists
@@ -37,9 +37,10 @@ export const fetchPersonalizedFeed = () => API.get('/reviews/personalized');
 export const postReview = (reviewData) => API.post('/reviews', reviewData);
 export const getReviewsForMovie = (movieId) => API.get(`/reviews/movie/${movieId}`);
 export const getMovieStats = (movieId) => API.get(`/reviews/movie/${movieId}/stats`);
-export const updateReview = (id, reviewData) => API.put(`/reviews/${id}`, reviewData); // <-- Add this
-export const deleteReview = (id) => API.delete(`/reviews/${id}`); // <-- Add this
+export const updateReview = (id, reviewData) => API.put(`/reviews/${id}`, reviewData);
+export const deleteReview = (id) => API.delete(`/reviews/${id}`);
 export const fetchMyReviews = () => API.get('/reviews/mine');
+export const importLetterboxd = (username) => API.post('/reviews/import/letterboxd', { username }); // <-- Added this
 
 // Vote on a review: { value: 1 | 0.5 | 0 }
 export const voteReview = (id, value) => API.post(`/reviews/${id}/vote`, { value });

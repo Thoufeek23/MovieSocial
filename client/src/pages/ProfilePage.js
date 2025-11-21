@@ -1,11 +1,11 @@
-// src/pages/ProfilePage.js
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import * as api from '../api';
 import { AuthContext } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import FollowListModal from '../components/FollowListModal';
 import EditProfileModal from '../components/EditProfileModal';
+import LetterboxdImportModal from '../components/LetterboxdImportModal';
 import ProfilePageSkeleton from '../components/ProfilePageSkeleton';
 
 // Import the new components
@@ -24,66 +24,70 @@ const ProfilePage = () => {
     const [userDiscussions, setUserDiscussions] = useState([]);
     const [bookmarkedDiscussions, setBookmarkedDiscussions] = useState([]);
     const [editProfileOpen, setEditProfileOpen] = useState(false);
+    const [importModalOpen, setImportModalOpen] = useState(false);
     const [userListOpen, setUserListOpen] = useState(false);
     const [userListTitle, setUserListTitle] = useState('Users');
     const [userList, setUserList] = useState([]);
     const navigate = useNavigate();
 
-    // --- DATA FETCHING (Unchanged) ---
-    useEffect(() => {
-        const fetchProfile = async () => {
-            setLoading(true);
+    // --- DATA FETCHING ---
+    const fetchProfile = useCallback(async () => {
+        // Only set loading on initial load, not refresh
+        if (!profile) setLoading(true);
+        
+        try {
+            const { data } = await api.getUserProfile(username);
+            setProfile(data);
+            setIsFollowing(!!data.isFollowedByCurrentUser);
+
+            const watchedDetails = await Promise.all(data.watched.map(id => api.getMovieDetails(id)));
+            const watchlistDetails = await Promise.all(data.watchlist.map(id => api.getMovieDetails(id)));
+            setWatchedMovies(watchedDetails.map(res => res.data));
+            setWatchlistMovies(watchlistDetails.map(res => res.data));
+
             try {
-                const { data } = await api.getUserProfile(username);
-                setProfile(data);
-                setIsFollowing(!!data.isFollowedByCurrentUser);
-
-                const watchedDetails = await Promise.all(data.watched.map(id => api.getMovieDetails(id)));
-                const watchlistDetails = await Promise.all(data.watchlist.map(id => api.getMovieDetails(id)));
-                setWatchedMovies(watchedDetails.map(res => res.data));
-                setWatchlistMovies(watchlistDetails.map(res => res.data));
-
-                try {
-                    const discRes = await api.fetchDiscussionsByUser(username);
-                    const withPosters = await Promise.all(discRes.data.map(async (d) => {
-                        if (d && !d.poster_path && d.movieId) {
-                            try {
-                                const m = await api.getMovieDetails(d.movieId);
-                                d.poster_path = m.data.poster_path;
-                            } catch (e) {}
-                        }
-                        return d;
-                    }));
-                    setUserDiscussions(withPosters);
-                } catch (err) { console.error('Failed to load user discussions', err); }
-
-                try {
-                    if (user && user.username === username) {
-                        const raw = localStorage.getItem('bookmarked_discussions_v1');
-                        const map = raw ? JSON.parse(raw) : {};
-                        const ids = Object.keys(map || {});
-                        if (ids.length > 0) {
-                            const details = await Promise.all(ids.map(async id => {
-                                try {
-                                    const res = await api.getDiscussion(id);
-                                    const d = res.data;
-                                    if (d && !d.poster_path && d.movieId) {
-                                        try {
-                                            const m = await api.getMovieDetails(d.movieId);
-                                            d.poster_path = m.data.poster_path;
-                                        } catch (e) {}
-                                    }
-                                    return d;
-                                } catch (e) { return null; }
-                            }));
-                            setBookmarkedDiscussions(details.filter(Boolean));
-                        } else { setBookmarkedDiscussions([]); }
+                const discRes = await api.fetchDiscussionsByUser(username);
+                const withPosters = await Promise.all(discRes.data.map(async (d) => {
+                    if (d && !d.poster_path && d.movieId) {
+                        try {
+                            const m = await api.getMovieDetails(d.movieId);
+                            d.poster_path = m.data.poster_path;
+                        } catch (e) {}
                     }
-                } catch (err) { console.error('Failed to load bookmarked discussions', err); setBookmarkedDiscussions([]); }
+                    return d;
+                }));
+                setUserDiscussions(withPosters);
+            } catch (err) { console.error('Failed to load user discussions', err); }
 
-            } catch (error) { console.error("Failed to fetch profile", error); } 
-            finally { setLoading(false); }
-        };
+            try {
+                if (user && user.username === username) {
+                    const raw = localStorage.getItem('bookmarked_discussions_v1');
+                    const map = raw ? JSON.parse(raw) : {};
+                    const ids = Object.keys(map || {});
+                    if (ids.length > 0) {
+                        const details = await Promise.all(ids.map(async id => {
+                            try {
+                                const res = await api.getDiscussion(id);
+                                const d = res.data;
+                                if (d && !d.poster_path && d.movieId) {
+                                    try {
+                                        const m = await api.getMovieDetails(d.movieId);
+                                        d.poster_path = m.data.poster_path;
+                                    } catch (e) {}
+                                }
+                                return d;
+                            } catch (e) { return null; }
+                        }));
+                        setBookmarkedDiscussions(details.filter(Boolean));
+                    } else { setBookmarkedDiscussions([]); }
+                }
+            } catch (err) { console.error('Failed to load bookmarked discussions', err); setBookmarkedDiscussions([]); }
+
+        } catch (error) { console.error("Failed to fetch profile", error); } 
+        finally { setLoading(false); }
+    }, [username, user]);
+
+    useEffect(() => {
         fetchProfile();
 
         const onBookmarksUpdated = async (e) => {
@@ -91,7 +95,7 @@ const ProfilePage = () => {
         };
         window.addEventListener('bookmarksUpdated', onBookmarksUpdated);
         return () => window.removeEventListener('bookmarksUpdated', onBookmarksUpdated);
-    }, [username, user]);
+    }, [fetchProfile]);
 
 
     // --- HANDLER FUNCTIONS ---
@@ -177,7 +181,7 @@ const ProfilePage = () => {
 
     // --- RENDER ---
 
-    if (loading) return <ProfilePageSkeleton />;
+    if (loading && !profile) return <ProfilePageSkeleton />;
     if (!profile) return <p className="text-center mt-8">User not found.</p>;
 
     return (
@@ -189,6 +193,7 @@ const ProfilePage = () => {
                 onFollowToggle={handleFollowToggle}
                 onEditClick={() => setEditProfileOpen(true)}
                 onUserListClick={openUserListModal}
+                onImportClick={() => setImportModalOpen(true)}
             />
 
             <MovieListSection
@@ -246,6 +251,11 @@ const ProfilePage = () => {
                 onClose={() => setEditProfileOpen(false)} 
                 profile={profile} 
                 onUpdated={(data) => setProfile(data)} 
+            />
+            <LetterboxdImportModal 
+                isOpen={importModalOpen} 
+                onClose={() => setImportModalOpen(false)} 
+                onImportComplete={() => fetchProfile()} 
             />
         </div>
     );
