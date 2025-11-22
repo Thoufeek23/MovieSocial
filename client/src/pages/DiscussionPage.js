@@ -471,6 +471,7 @@ const DiscussionPage = () => {
       onClose={() => setShowShare(false)} 
       defaultMessage={shareText}
       title="Share Discussion"
+      discussion={discussion}
     />
 
     {confirmState.open && (

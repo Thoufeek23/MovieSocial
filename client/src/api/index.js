@@ -11,6 +11,7 @@ API.interceptors.request.use((req) => {
   return req;
 });
 
+// ... [Keep other exports the same until sendMessage] ...
 // Authentication
 export const login = (formData) => API.post('/auth/login', formData);
 export const register = (formData) => API.post('/auth/register', formData);
@@ -28,7 +29,6 @@ export const getMovieDetails = (id) => API.get(`/movies/${id}`);
 export const getPopularMovies = () => API.get('/movies/popular');
 export const getPersonalizedMovies = () => API.get('/movies/personalized');
 
-
 // Reviews
 export const fetchFeed = () => API.get('/reviews/feed');
 export const fetchPersonalizedFeed = () => API.get('/reviews/personalized');
@@ -39,8 +39,6 @@ export const updateReview = (id, reviewData) => API.put(`/reviews/${id}`, review
 export const deleteReview = (id) => API.delete(`/reviews/${id}`);
 export const fetchMyReviews = () => API.get('/reviews/mine');
 export const importLetterboxd = (username) => API.post('/reviews/import/letterboxd', { username });
-
-// Vote on a review: { value: 1 | 0.5 | 0 }
 export const voteReview = (id, value) => API.post(`/reviews/${id}/vote`, { value });
 
 // User Actions
@@ -73,35 +71,36 @@ export const fetchDiscussionsForMovie = (movieId) => fetchDiscussions({ movieId 
 export const deleteDiscussion = (id) => API.delete(`/discussions/${id}`);
 export const updateDiscussion = (id, data) => API.put(`/discussions/${id}`, data);
 export const fetchDiscussionsByUser = (username) => API.get(`/discussions/user/${username}`);
+
 // Leaderboard
 export const getLeaderboardGlobal = () => API.get('/stats/top-reviewers');
 export const getLeaderboardRegion = (region) => API.get(`/stats/top-reviewers/region/${encodeURIComponent(region)}`);
 
-// Modle (daily puzzle) endpoints
+// Modle
 export const getModleStatus = (language = 'English') => API.get(`/users/modle/status?language=${encodeURIComponent(language)}`);
 export const postModleResult = (payload) => API.post('/users/modle/result', payload);
 
-// AI Recommendations
+// AI
 export const getAIMovieRecommendations = (preferences) => API.post('/ai/movie-recommendations', preferences);
 export const testAIConnection = () => API.get('/ai/test');
 
-// Puzzle endpoints
+// Puzzles
 export const getDailyPuzzle = (language = 'English', date = null) => {
   const params = new URLSearchParams({ language });
   if (date) params.append('date', date);
   return API.get(`/puzzles/daily?${params.toString()}`);
 };
 export const getPuzzleStats = () => API.get('/puzzles/stats');
-
-// Admin puzzle management endpoints
 export const getAllPuzzles = (language = 'English') => API.get(`/puzzles?language=${encodeURIComponent(language)}`);
 export const createPuzzle = (puzzleData) => API.post('/puzzles', puzzleData);
 export const updatePuzzle = (id, puzzleData) => API.put(`/puzzles/${id}`, puzzleData);
 export const deletePuzzle = (id) => API.delete(`/puzzles/${id}`);
 
-// Messages
+// Messages - Updated
 export const getConversations = () => API.get('/messages/conversations');
 export const getMessages = (userId) => API.get(`/messages/${userId}`);
-export const sendMessage = (recipientId, content) => API.post('/messages', { recipientId, content });
+// Updated to accept attachments
+export const sendMessage = (recipientId, content, attachments = {}) => 
+    API.post('/messages', { recipientId, content, ...attachments });
 export const markMessagesRead = (username) => API.put(`/messages/${username}/read`);
-export const deleteMessage = (messageId) => API.delete(`/messages/${messageId}`); // New API Call
+export const deleteMessage = (messageId) => API.delete(`/messages/${messageId}`);

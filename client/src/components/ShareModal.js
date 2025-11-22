@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Search, Send, User } from 'lucide-react';
+import { X, Search, Send } from 'lucide-react';
 import * as api from '../api';
 import toast from 'react-hot-toast';
 import Avatar from './Avatar';
 
-const ShareModal = ({ isOpen, onClose, defaultMessage, title }) => {
+const ShareModal = ({ isOpen, onClose, defaultMessage, title, review, discussion }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
@@ -18,9 +18,14 @@ const ShareModal = ({ isOpen, onClose, defaultMessage, title }) => {
       setQuery('');
       setResults([]);
       setSelectedUser(null);
-      setMessage(defaultMessage);
+      // If we have a rich attachment, default message can be simpler or empty
+      if ((review || discussion) && defaultMessage.includes('http')) {
+          setMessage(''); // Let the card speak for itself, or user types their own
+      } else {
+          setMessage(defaultMessage || '');
+      }
     }
-  }, [isOpen, defaultMessage]);
+  }, [isOpen, defaultMessage, review, discussion]);
 
   const handleSearch = (text) => {
     setQuery(text);
@@ -45,11 +50,16 @@ const ShareModal = ({ isOpen, onClose, defaultMessage, title }) => {
   };
 
   const handleSend = async () => {
-    if (!selectedUser || !message.trim()) return;
+    // Allow empty message if we are sharing content (review or discussion)
+    if (!selectedUser || (!message.trim() && !review && !discussion)) return;
     
     setSending(true);
     try {
-      await api.sendMessage(selectedUser.username, message);
+      const attachments = {};
+      if (review) attachments.reviewId = review._id;
+      if (discussion) attachments.discussionId = discussion._id;
+
+      await api.sendMessage(selectedUser.username, message, attachments);
       toast.success(`Shared with ${selectedUser.username}`);
       onClose();
     } catch (error) {
@@ -131,18 +141,37 @@ const ShareModal = ({ isOpen, onClose, defaultMessage, title }) => {
                 </button>
               </div>
 
+              {/* Content Preview */}
+              {(review || discussion) && (
+                <div className="bg-gray-800/30 border border-gray-700 rounded-lg p-3">
+                    <div className="text-xs text-gray-400 mb-1 uppercase font-semibold">Sharing {review ? 'Review' : 'Discussion'}</div>
+                    <div className="flex gap-3 items-center">
+                        <img 
+                            src={review ? `https://image.tmdb.org/t/p/w92${review.moviePoster}` : (discussion?.poster_path ? `https://image.tmdb.org/t/p/w92${discussion.poster_path}` : '/default_dp.png')} 
+                            alt="poster" 
+                            className="w-10 h-14 object-cover rounded"
+                        />
+                        <div className="flex-1 min-w-0">
+                            <div className="text-sm font-bold text-white truncate">{review ? review.movieTitle : discussion?.title}</div>
+                            {review && <div className="text-xs text-gray-400 italic truncate">"{review.text}"</div>}
+                        </div>
+                    </div>
+                </div>
+              )}
+
               <div className="space-y-2">
-                <label className="text-sm text-gray-400 font-medium">Message</label>
+                <label className="text-sm text-gray-400 font-medium">Message (Optional)</label>
                 <textarea
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
+                  placeholder="Write something..."
                   className="w-full h-24 bg-gray-950 border border-gray-700 rounded-lg p-3 text-gray-100 text-sm focus:outline-none focus:ring-1 focus:ring-green-500 resize-none"
                 />
               </div>
 
               <button
                 onClick={handleSend}
-                disabled={sending || !message.trim()}
+                disabled={sending || (!message.trim() && !review && !discussion)}
                 className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {sending ? (

@@ -1,14 +1,43 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
-import { useLocation, useNavigate, Link } from 'react-router-dom';
-import { Send, MoreVertical, ArrowLeft, Trash2 } from 'lucide-react'; 
+import { useLocation, Link } from 'react-router-dom';
+import { Send, MoreVertical, ArrowLeft, Trash2, MessageSquare } from 'lucide-react'; 
 import { AuthContext } from '../context/AuthContext';
 import Avatar from '../components/Avatar';
+import ReviewCard from '../components/ReviewCard';
 import * as api from '../api';
 import toast from 'react-hot-toast';
 
+// Simple Discussion Card for Chat
+const ChatDiscussionCard = ({ discussion }) => {
+    if (!discussion) return null;
+    return (
+        <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden mt-2 max-w-sm shadow-lg">
+            <Link to={`/discussion/${discussion._id}`} className="flex p-3 gap-3 hover:bg-gray-750 transition-colors">
+                <img 
+                    src={discussion.poster_path ? `https://image.tmdb.org/t/p/w154${discussion.poster_path}` : '/default_dp.png'} 
+                    alt="poster"
+                    className="w-16 h-24 object-cover rounded"
+                />
+                <div className="flex-1 min-w-0">
+                    <h4 className="font-bold text-white text-sm leading-tight mb-1 line-clamp-2">{discussion.title}</h4>
+                    <div className="text-xs text-green-400 mb-2">{discussion.movieTitle}</div>
+                    
+                    <div className="flex items-center gap-2 mt-auto">
+                        <Avatar username={discussion.starter?.username} avatar={discussion.starter?.avatar} sizeClass="w-5 h-5" />
+                        <span className="text-xs text-gray-400">{discussion.starter?.username}</span>
+                        <span className="text-xs text-gray-500 ml-auto flex items-center gap-1">
+                            <MessageSquare size={10} /> {discussion.comments?.length || 0}
+                        </span>
+                    </div>
+                </div>
+            </Link>
+        </div>
+    );
+};
+
 const MessagesPage = () => {
     const { user } = useContext(AuthContext);
-    const navigate = useNavigate();
+    //const navigate = useNavigate();
     const location = useLocation();
     
     // State
@@ -86,10 +115,6 @@ const MessagesPage = () => {
 
     const handleSelectChat = async (chatUser) => {
         setCurrentChat(chatUser);
-        // Don't set global loading to true here to prevent sidebar flicker, 
-        // just clear messages or show a local loader if needed.
-        // We keep loading=true only for the initial page load usually, 
-        // but here we want to show the chat loading state.
         
         setConversations(prev => prev.map(c => {
             if (c.otherUser.username === chatUser.username) {
@@ -99,7 +124,7 @@ const MessagesPage = () => {
         }));
 
         try {
-            const [msgsRes, readRes] = await Promise.all([
+            const [msgsRes] = await Promise.all([
                 api.getMessages(chatUser.username),
                 api.markMessagesRead(chatUser.username)
             ]);
@@ -107,7 +132,6 @@ const MessagesPage = () => {
         } catch (error) {
             toast.error('Failed to load conversation');
         } finally {
-            // setLoading(false); // Managed by initial load or local state
             setTimeout(() => inputRef.current?.focus(), 100);
         }
     };
@@ -290,45 +314,63 @@ const MessagesPage = () => {
                                                 key={msg._id || index} 
                                                 className={`flex w-full ${isOwn ? 'justify-end' : 'justify-start'} group`}
                                             >
-                                                <div className={`flex items-end max-w-[80%] md:max-w-[60%] gap-2 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
-                                                    {!isOwn && (
-                                                        <Link to={`/profile/${msg.sender?.username}`} className="flex-shrink-0 mb-1">
-                                                            <Avatar 
-                                                                username={msg.sender?.username} 
-                                                                avatar={msg.sender?.avatar} 
-                                                                sizeClass="w-8 h-8" 
-                                                                className="hover:ring-2 ring-green-500 transition-all"
-                                                            />
-                                                        </Link>
-                                                    )}
+                                                <div className={`flex flex-col items-end max-w-[90%] md:max-w-[70%] gap-1 ${isOwn ? 'items-end' : 'items-start'}`}>
+                                                    <div className={`flex gap-2 items-end ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
+                                                        {!isOwn && (
+                                                            <Link to={`/profile/${msg.sender?.username}`} className="flex-shrink-0 mb-1">
+                                                                <Avatar 
+                                                                    username={msg.sender?.username} 
+                                                                    avatar={msg.sender?.avatar} 
+                                                                    sizeClass="w-8 h-8" 
+                                                                    className="hover:ring-2 ring-green-500 transition-all"
+                                                                />
+                                                            </Link>
+                                                        )}
 
-                                                    {/* Delete Button */}
-                                                    {isOwn && !isOptimistic && (
-                                                        <button 
-                                                            onClick={() => handleDeleteMessage(msg._id)}
-                                                            className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-500 hover:text-red-500 transition-all self-center"
-                                                            title="Delete for everyone"
-                                                        >
-                                                            <Trash2 size={14} />
-                                                        </button>
-                                                    )}
-
-                                                    <div 
-                                                        className={`
-                                                            relative px-4 py-2 shadow-md text-sm md:text-base break-words
-                                                            ${isOwn 
-                                                                ? 'bg-green-600 text-white rounded-2xl rounded-br-sm' 
-                                                                : 'bg-gray-700 text-gray-100 rounded-2xl rounded-bl-sm'
-                                                            }
-                                                            ${isOptimistic ? 'opacity-70' : 'opacity-100'}
-                                                        `}
-                                                    >
-                                                        {msg.content}
-                                                        <div className={`text-[10px] mt-1 flex items-center gap-1 ${isOwn ? 'text-green-200 justify-end' : 'text-gray-400'}`}>
-                                                            {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                            {isOwn && (
-                                                                <span>{isOptimistic ? '🕒' : (msg.read ? '✓✓' : '✓')}</span>
+                                                        {/* Message Bubble */}
+                                                        <div className="flex flex-col">
+                                                            {/* Text Content */}
+                                                            {msg.content && (
+                                                                <div 
+                                                                    className={`
+                                                                        relative px-4 py-2 shadow-md text-sm md:text-base break-words
+                                                                        ${isOwn 
+                                                                            ? 'bg-green-600 text-white rounded-2xl rounded-br-sm' 
+                                                                            : 'bg-gray-700 text-gray-100 rounded-2xl rounded-bl-sm'
+                                                                        }
+                                                                        ${isOptimistic ? 'opacity-70' : 'opacity-100'}
+                                                                    `}
+                                                                >
+                                                                    {msg.content}
+                                                                </div>
                                                             )}
+
+                                                            {/* Shared Cards */}
+                                                            {msg.sharedReview && (
+                                                                <div className={`mt-1 transform scale-95 origin-${isOwn ? 'right' : 'left'}`}>
+                                                                    <ReviewCard review={msg.sharedReview} />
+                                                                </div>
+                                                            )}
+                                                            {msg.sharedDiscussion && (
+                                                                <ChatDiscussionCard discussion={msg.sharedDiscussion} />
+                                                            )}
+
+                                                            {/* Timestamp & Status */}
+                                                            <div className={`text-[10px] mt-1 flex items-center gap-1 ${isOwn ? 'text-gray-400 justify-end' : 'text-gray-400'}`}>
+                                                                {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                                {isOwn && !isOptimistic && (
+                                                                    <button 
+                                                                        onClick={() => handleDeleteMessage(msg._id)}
+                                                                        className="opacity-0 group-hover:opacity-100 hover:text-red-500 ml-2"
+                                                                        title="Delete"
+                                                                    >
+                                                                        <Trash2 size={12} />
+                                                                    </button>
+                                                                )}
+                                                                {isOwn && (
+                                                                    <span>{isOptimistic ? '🕒' : (msg.read ? '✓✓' : '✓')}</span>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>

@@ -199,6 +199,7 @@ const ReviewCard = ({ review, onEdit, onDelete }) => {
         onClose={() => setShowShare(false)} 
         defaultMessage={shareText}
         title="Share Review"
+        review={review} // <--- Added this prop
       />
     </>
   );

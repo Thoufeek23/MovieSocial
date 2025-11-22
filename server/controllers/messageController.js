@@ -12,11 +12,11 @@ const findUserByIdOrUsername = async (identifier) => {
 
 exports.sendMessage = async (req, res) => {
   try {
-    const { recipientId, content } = req.body;
+    const { recipientId, content, reviewId, discussionId } = req.body;
     const senderId = req.user.id;
 
-    if (!content || !recipientId) {
-      return res.status(400).json({ msg: 'Recipient and content are required' });
+    if (!content && !reviewId && !discussionId && !recipientId) {
+      return res.status(400).json({ msg: 'Recipient and content/attachment are required' });
     }
 
     const recipient = await findUserByIdOrUsername(recipientId);
@@ -27,12 +27,26 @@ exports.sendMessage = async (req, res) => {
     const newMessage = new Message({
       sender: senderId,
       recipient: recipient._id,
-      content,
+      content: content || '',
+      sharedReview: reviewId || null,
+      sharedDiscussion: discussionId || null,
       read: false
     });
 
     const savedMessage = await newMessage.save();
-    await savedMessage.populate('sender', 'username avatar');
+    
+    // Populate all necessary fields for the frontend cards
+    await savedMessage.populate([
+      { path: 'sender', select: 'username avatar' },
+      { 
+        path: 'sharedReview',
+        populate: { path: 'user', select: 'username avatar badges' }
+      },
+      { 
+        path: 'sharedDiscussion',
+        populate: { path: 'starter', select: 'username avatar' }
+      }
+    ]);
     
     res.status(201).json(savedMessage);
   } catch (err) {
@@ -59,7 +73,15 @@ exports.getConversation = async (req, res) => {
     })
     .sort({ createdAt: 1 })
     .populate('sender', 'username avatar')
-    .populate('recipient', 'username avatar');
+    .populate('recipient', 'username avatar')
+    .populate({
+      path: 'sharedReview',
+      populate: { path: 'user', select: 'username avatar badges' }
+    })
+    .populate({
+      path: 'sharedDiscussion',
+      populate: { path: 'starter', select: 'username avatar' }
+    });
 
     res.json(messages);
   } catch (err) {
@@ -91,6 +113,14 @@ exports.getConversationsList = async (req, res) => {
       const otherUserId = otherUser._id.toString();
 
       if (!conversationsMap.has(otherUserId)) {
+        // Determine preview text
+        let previewText = msg.content;
+        if (!previewText) {
+            if (msg.sharedReview) previewText = 'Shared a review';
+            else if (msg.sharedDiscussion) previewText = 'Shared a discussion';
+            else previewText = 'Sent an attachment';
+        }
+
         conversationsMap.set(otherUserId, {
           otherUser: {
             _id: otherUser._id,
@@ -98,8 +128,8 @@ exports.getConversationsList = async (req, res) => {
             avatar: otherUser.avatar
           },
           lastMessage: {
-            _id: msg._id, // Added _id here
-            content: msg.content,
+            _id: msg._id,
+            content: previewText,
             createdAt: msg.createdAt,
             isMine: msg.sender._id.toString() === currentUserId,
             read: msg.read
@@ -146,8 +176,6 @@ exports.markMessagesRead = async (req, res) => {
   }
 };
 
-// --- NEW FUNCTION ---
-// Delete a message (Delete for everyone)
 exports.deleteMessage = async (req, res) => {
   try {
     const messageId = req.params.messageId;
@@ -159,7 +187,6 @@ exports.deleteMessage = async (req, res) => {
       return res.status(404).json({ msg: 'Message not found' });
     }
 
-    // Ensure only the sender can delete the message
     if (message.sender.toString() !== userId) {
       return res.status(403).json({ msg: 'Not authorized to delete this message' });
     }
