@@ -1,7 +1,8 @@
 import axios from 'axios';
 
 // In production the client should be built with REACT_APP_API_URL set to your API root 
-const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://localhost:5001';
+//const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://localhost:5001';
+const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'https://moviesocial-backend-khd2.onrender.com';
 const API = axios.create({ baseURL: `${apiRoot}/api` });
 
 API.interceptors.request.use((req) => {
