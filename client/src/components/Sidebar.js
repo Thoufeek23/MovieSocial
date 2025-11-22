@@ -1,7 +1,7 @@
 import React, { useContext, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import { Home, Search, User, FileText, BookOpen, Puzzle, Database } from 'lucide-react';
+import { Home, Search, User, FileText, BookOpen, Puzzle, Database, MessageCircle } from 'lucide-react';
 import { Award } from 'lucide-react';
 import * as api from '../api';
 
@@ -54,6 +54,7 @@ const Sidebar = () => {
           <NavItem to="/discussions" icon={BookOpen} label="Discussions" />
           <NavItem to="/modle" icon={Puzzle} label="Modle" />
           <NavItem to="/reviews" icon={FileText} label="Reviews" />
+          <NavItem to="/messages" icon={MessageCircle} label="Messages" />
           <NavItem to="/leaderboard" icon={Award} label="Leaderboard" />
           <NavItem to={profileLink} icon={User} label="Profile" />
           

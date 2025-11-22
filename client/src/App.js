@@ -25,6 +25,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import Curtain from './components/Curtain';
 import React, { useContext } from 'react';
 import { AuthContext } from './context/AuthContext';
+import MessagesPage from './pages/MessagesPage';
 
 const PageWrapper = ({ children }) => {
   const location = useLocation();
@@ -78,6 +79,11 @@ const AppRoutes = () => {
             <Route path="/ai-recommendations" element={
               <ProtectedRoute>
                 <PageWrapper><AIMovieRecommendationPage /></PageWrapper>
+              </ProtectedRoute>
+            } />
+            <Route path="/messages" element={
+              <ProtectedRoute>
+                <PageWrapper><MessagesPage /></PageWrapper>
               </ProtectedRoute>
             } />
             <Route 

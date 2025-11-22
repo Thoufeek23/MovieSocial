@@ -2,10 +2,11 @@ import React, { useState, useRef, useEffect, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { BsThreeDotsVertical } from 'react-icons/bs';
+import { MessageCircle } from 'lucide-react'; // Import the icon
 import { AuthContext } from '../context/AuthContext';
 import Avatar from './Avatar';
 import ModleSummary from './ModleSummary';
-import * as api from '../api'; // Need api for delete
+import * as api from '../api';
 
 const ProfileHeader = ({ profile, isFollowing, onFollowToggle, onEditClick, onUserListClick, onImportClick }) => {
     const { user, logout } = useContext(AuthContext);
@@ -163,19 +164,32 @@ const ProfileHeader = ({ profile, isFollowing, onFollowToggle, onEditClick, onUs
                         )}
                     </div>
 
-                    {/* Bio and Follow Button Row */}
+                    {/* Bio and Action Buttons Row */}
                     <div className="w-full flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                         <p className="text-gray-400 text-center sm:text-left text-sm flex-1">{profile.bio || "This user has not set a bio."}</p>
                         
                         <div className="flex-shrink-0 self-center sm:self-auto">
                             {user ? (
                                 user.username === profile.username ? null : (
-                                    <button 
-                                        onClick={onFollowToggle} 
-                                        className={`btn ${isFollowing ? 'btn-ghost text-red-500 border border-gray-700' : 'btn-primary'} px-3 py-1 text-sm`}
-                                    >
-                                        {isFollowing ? 'Unfollow' : 'Follow'}
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        {/* New Message Button */}
+                                        <button 
+                                            onClick={() => navigate(`/messages?user=${profile.username}`)}
+                                            className="btn btn-ghost border border-gray-600 px-3 py-1 text-sm flex items-center gap-2 hover:bg-gray-700 transition-colors"
+                                            title={`Message ${profile.username}`}
+                                        >
+                                            <MessageCircle className="w-4 h-4" />
+                                            <span className="hidden sm:inline">Message</span>
+                                        </button>
+
+                                        {/* Existing Follow/Unfollow Button */}
+                                        <button 
+                                            onClick={onFollowToggle} 
+                                            className={`btn ${isFollowing ? 'btn-ghost text-red-500 border border-gray-700' : 'btn-primary'} px-3 py-1 text-sm`}
+                                        >
+                                            {isFollowing ? 'Unfollow' : 'Follow'}
+                                        </button>
+                                    </div>
                                 )
                             ) : (
                                 <button onClick={() => navigate('/login')} className="btn btn-ghost px-3 py-1 text-sm">Log in to follow</button>

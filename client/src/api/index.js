@@ -100,3 +100,8 @@ export const getAllPuzzles = (language = 'English') => API.get(`/puzzles?languag
 export const createPuzzle = (puzzleData) => API.post('/puzzles', puzzleData);
 export const updatePuzzle = (id, puzzleData) => API.put(`/puzzles/${id}`, puzzleData);
 export const deletePuzzle = (id) => API.delete(`/puzzles/${id}`);
+
+// Messages
+export const getConversations = () => API.get('/messages/conversations');
+export const getMessages = (userId) => API.get(`/messages/${userId}`);
+export const sendMessage = (recipientId, content) => API.post('/messages', { recipientId, content });
