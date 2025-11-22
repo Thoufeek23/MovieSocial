@@ -104,3 +104,4 @@ export const sendMessage = (recipientId, content, attachments = {}) =>
     API.post('/messages', { recipientId, content, ...attachments });
 export const markMessagesRead = (username) => API.put(`/messages/${username}/read`);
 export const deleteMessage = (messageId) => API.delete(`/messages/${messageId}`);
+export const getUnreadMessageCount = () => API.get('/messages/unread-count');

@@ -199,3 +199,16 @@ exports.deleteMessage = async (req, res) => {
     res.status(500).json({ msg: 'Server error' });
   }
 };
+
+exports.getUnreadCount = async (req, res) => {
+  try {
+    const count = await Message.countDocuments({ 
+      recipient: req.user.id, 
+      read: false 
+    });
+    res.json({ count });
+  } catch (err) {
+    console.error('Error fetching unread count:', err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+};
