@@ -4,7 +4,8 @@ import * as api from '../api';
 import { AuthContext } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import Avatar from '../components/Avatar';
-import { Edit, Trash2 } from 'lucide-react';
+import { Edit, Trash2, Share2 } from 'lucide-react'; // Added Share2
+import ShareModal from '../components/ShareModal'; // Added Import
 
 const DiscussionPage = () => {
   const { id } = useParams();
@@ -15,14 +16,17 @@ const DiscussionPage = () => {
   const textareaRef = useRef(null);
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [mentionRange, setMentionRange] = useState(null); // { start, end }
+  const [mentionRange, setMentionRange] = useState(null); 
   const debounceRef = useRef(null);
   const [selectedSuggestion, setSelectedSuggestion] = useState(-1);
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editingCommentText, setEditingCommentText] = useState('');
   const [commentProcessing, setCommentProcessing] = useState(false);
-  const [replyBoxes, setReplyBoxes] = useState({}); // { commentId: text }
+  const [replyBoxes, setReplyBoxes] = useState({}); 
   const [confirmState, setConfirmState] = useState({ open: false, title: '', onConfirm: null, loading: false, preview: '' });
+  
+  // New Share State
+  const [showShare, setShowShare] = useState(false);
 
   const showConfirm = (title, onConfirm, preview = '') => {
     setConfirmState({ open: true, title, onConfirm, loading: false, preview });
@@ -226,6 +230,11 @@ const DiscussionPage = () => {
 
   if (!discussion) return <p>Loading discussion...</p>;
 
+  // Share content construction
+  const shareUrl = `${window.location.origin}/discussion/${id}`;
+  const shareText = `Check out this discussion on MovieSocial:\n\n"${discussion.title}"\n\n${shareUrl}`;
+
+
   return (
     <>
     <div className="space-y-6">
@@ -246,7 +255,13 @@ const DiscussionPage = () => {
               <div className="text-sm text-gray-400">Started by <Link to={`/profile/${discussion.starter?.username}`} className="font-semibold text-gray-200 hover:underline">{discussion.starter?.username}</Link> • <span className="text-gray-400">{timeAgo(discussion.createdAt)}</span></div>
               <div className="mt-2 text-sm text-gray-300">Movie: <span className="font-medium text-gray-100">{discussion.movieTitle}</span></div>
             </div>
-            <div className="ml-4">
+            <div className="ml-4 flex flex-col items-end gap-2">
+              <button 
+                onClick={() => setShowShare(true)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-full transition-colors"
+              >
+                <Share2 size={16} /> Share
+              </button>
               <div className="text-right text-sm text-gray-400">{discussion.comments.length} comments</div>
             </div>
           </div>
@@ -449,6 +464,15 @@ const DiscussionPage = () => {
         </div>
       </div>
     </div>
+    
+    {/* Share Modal Component */}
+    <ShareModal 
+      isOpen={showShare} 
+      onClose={() => setShowShare(false)} 
+      defaultMessage={shareText}
+      title="Share Discussion"
+    />
+
     {confirmState.open && (
       <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
         <div className="absolute inset-0 bg-black/50" onClick={() => setConfirmState({ open: false, title: '', onConfirm: null, loading: false })} />
@@ -466,4 +490,3 @@ const DiscussionPage = () => {
 };
 
 export default DiscussionPage;
-

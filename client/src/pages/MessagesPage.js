@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
-import { Send, MoreVertical, ArrowLeft, Trash2 } from 'lucide-react'; // Added Trash2
+import { Send, MoreVertical, ArrowLeft, Trash2 } from 'lucide-react'; 
 import { AuthContext } from '../context/AuthContext';
 import Avatar from '../components/Avatar';
 import * as api from '../api';
@@ -27,6 +27,25 @@ const MessagesPage = () => {
     const queryParams = new URLSearchParams(location.search);
     const initialChatUser = queryParams.get('user');
 
+    // Helper: Format Date for Sidebar
+    const formatConversationDate = (dateString) => {
+        if (!dateString) return '';
+        const date = new Date(dateString);
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+        if (messageDate.getTime() === today.getTime()) {
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        } else if (messageDate.getTime() === yesterday.getTime()) {
+            return 'Yesterday';
+        } else {
+            return date.toLocaleDateString();
+        }
+    };
+
     // 1. Load Conversations & Initial Chat
     useEffect(() => {
         const loadData = async () => {
@@ -47,6 +66,9 @@ const MessagesPage = () => {
                             toast.error("User not found");
                         }
                     }
+                } else if (convs.length > 0) {
+                    // Load the last conversed message (first in list) automatically
+                    handleSelectChat(convs[0].otherUser);
                 }
             } catch (error) {
                 console.error('Failed to load messages', error);
@@ -64,7 +86,10 @@ const MessagesPage = () => {
 
     const handleSelectChat = async (chatUser) => {
         setCurrentChat(chatUser);
-        setLoading(true);
+        // Don't set global loading to true here to prevent sidebar flicker, 
+        // just clear messages or show a local loader if needed.
+        // We keep loading=true only for the initial page load usually, 
+        // but here we want to show the chat loading state.
         
         setConversations(prev => prev.map(c => {
             if (c.otherUser.username === chatUser.username) {
@@ -82,7 +107,7 @@ const MessagesPage = () => {
         } catch (error) {
             toast.error('Failed to load conversation');
         } finally {
-            setLoading(false);
+            // setLoading(false); // Managed by initial load or local state
             setTimeout(() => inputRef.current?.focus(), 100);
         }
     };
@@ -128,22 +153,16 @@ const MessagesPage = () => {
         }
     };
 
-    // NEW: Handle Deleting Messages
+    // Handle Deleting Messages
     const handleDeleteMessage = async (msgId) => {
         if (!window.confirm("Delete this message for everyone?")) return;
 
         try {
-            // Optimistic remove from UI
             setMessages(prev => prev.filter(m => m._id !== msgId));
-            
             await api.deleteMessage(msgId);
             toast.success("Message deleted");
-            
-            // Update sidebar if it was the last message (simple approach: refresh list or leave as is)
-            // For now, we'll just leave it as it's complex to find the previous message without a full re-fetch
         } catch (err) {
             toast.error("Failed to delete message");
-            // Re-fetch messages to restore state if failed
             if (currentChat) {
                 const { data } = await api.getMessages(currentChat.username);
                 setMessages(data);
@@ -196,7 +215,7 @@ const MessagesPage = () => {
                             <div 
                                 key={conv.otherUser._id}
                                 onClick={() => handleSelectChat(conv.otherUser)}
-                                className={`flex items-center gap-3 p-4 cursor-pointer hover:bg-gray-800 transition-colors ${currentChat?.username === conv.otherUser.username ? 'bg-gray-800 border-l-4 border-blue-500' : ''}`}
+                                className={`flex items-center gap-3 p-4 cursor-pointer hover:bg-gray-800 transition-colors ${currentChat?.username === conv.otherUser.username ? 'bg-gray-800 border-l-4 border-green-600' : ''}`}
                             >
                                 <Avatar username={conv.otherUser.username} avatar={conv.otherUser.avatar} sizeClass="w-12 h-12" />
                                 <div className="flex-1 min-w-0">
@@ -206,7 +225,7 @@ const MessagesPage = () => {
                                         </h3>
                                         <div className="flex flex-col items-end">
                                             <span className={`text-xs ${conv.unreadCount > 0 ? 'text-green-500 font-bold' : 'text-gray-500'}`}>
-                                                {conv.lastMessage && new Date(conv.lastMessage.createdAt).toLocaleDateString()}
+                                                {conv.lastMessage && formatConversationDate(conv.lastMessage.createdAt)}
                                             </span>
                                         </div>
                                     </div>
@@ -217,7 +236,7 @@ const MessagesPage = () => {
                                             {conv.lastMessage?.content}
                                         </p>
                                         {conv.unreadCount > 0 && (
-                                            <span className="min-w-[20px] h-5 px-1.5 flex items-center justify-center bg-green-500 text-black text-xs font-bold rounded-full">
+                                            <span className="min-w-[20px] h-5 px-1.5 flex items-center justify-center bg-green-600 text-white text-xs font-bold rounded-full">
                                                 {conv.unreadCount}
                                             </span>
                                         )}
@@ -245,7 +264,7 @@ const MessagesPage = () => {
                                 <Link to={`/profile/${currentChat.username}`} className="flex items-center gap-3 group">
                                     <Avatar username={currentChat.username} avatar={currentChat.avatar} sizeClass="w-10 h-10" />
                                     <div>
-                                        <h2 className="font-bold text-gray-100 group-hover:underline decoration-blue-500 underline-offset-2">
+                                        <h2 className="font-bold text-gray-100 group-hover:underline decoration-green-500 underline-offset-2">
                                             {currentChat.username}
                                         </h2>
                                     </div>
@@ -278,12 +297,12 @@ const MessagesPage = () => {
                                                                 username={msg.sender?.username} 
                                                                 avatar={msg.sender?.avatar} 
                                                                 sizeClass="w-8 h-8" 
-                                                                className="hover:ring-2 ring-blue-500 transition-all"
+                                                                className="hover:ring-2 ring-green-500 transition-all"
                                                             />
                                                         </Link>
                                                     )}
 
-                                                    {/* Delete Button (Only visible on hover for OWN messages) */}
+                                                    {/* Delete Button */}
                                                     {isOwn && !isOptimistic && (
                                                         <button 
                                                             onClick={() => handleDeleteMessage(msg._id)}
@@ -298,14 +317,14 @@ const MessagesPage = () => {
                                                         className={`
                                                             relative px-4 py-2 shadow-md text-sm md:text-base break-words
                                                             ${isOwn 
-                                                                ? 'bg-blue-600 text-white rounded-2xl rounded-br-sm' 
+                                                                ? 'bg-green-600 text-white rounded-2xl rounded-br-sm' 
                                                                 : 'bg-gray-700 text-gray-100 rounded-2xl rounded-bl-sm'
                                                             }
                                                             ${isOptimistic ? 'opacity-70' : 'opacity-100'}
                                                         `}
                                                     >
                                                         {msg.content}
-                                                        <div className={`text-[10px] mt-1 flex items-center gap-1 ${isOwn ? 'text-blue-200 justify-end' : 'text-gray-400'}`}>
+                                                        <div className={`text-[10px] mt-1 flex items-center gap-1 ${isOwn ? 'text-green-200 justify-end' : 'text-gray-400'}`}>
                                                             {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                             {isOwn && (
                                                                 <span>{isOptimistic ? '🕒' : (msg.read ? '✓✓' : '✓')}</span>
@@ -326,7 +345,7 @@ const MessagesPage = () => {
                                 <MoreVertical size={20} />
                             </button>
                             
-                            <div className="flex-1 bg-gray-800 rounded-2xl flex items-center px-4 py-2 focus-within:ring-2 ring-blue-500/50 transition-all">
+                            <div className="flex-1 bg-gray-800 rounded-2xl flex items-center px-4 py-2 focus-within:ring-2 ring-green-500/50 transition-all">
                                 <input
                                     ref={inputRef}
                                     type="text"
@@ -341,7 +360,7 @@ const MessagesPage = () => {
                             <button 
                                 type="submit" 
                                 disabled={!newMessage.trim() || sending}
-                                className="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 active:scale-95"
+                                className="p-3 bg-green-600 hover:bg-green-700 text-white rounded-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 active:scale-95"
                             >
                                 <Send size={20} />
                             </button>
@@ -350,7 +369,7 @@ const MessagesPage = () => {
                 ) : (
                     <div className="flex-1 flex flex-col items-center justify-center text-gray-500 p-8">
                         <div className="w-24 h-24 bg-gray-800 rounded-full flex items-center justify-center mb-6 animate-pulse">
-                            <Send size={40} className="text-blue-500 ml-2" />
+                            <Send size={40} className="text-green-500 ml-2" />
                         </div>
                         <h2 className="text-2xl font-bold text-white mb-2">Your Messages</h2>
                         <p className="max-w-md text-center">
