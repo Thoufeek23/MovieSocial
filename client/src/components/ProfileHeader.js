@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { BsThreeDotsVertical } from 'react-icons/bs';
-import { MessageCircle } from 'lucide-react'; // Import the icon
+import { MessageCircle } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import Avatar from './Avatar';
 import ModleSummary from './ModleSummary';
@@ -36,8 +36,8 @@ const ProfileHeader = ({ profile, isFollowing, onFollowToggle, onEditClick, onUs
                 {/* User Info Block */}
                 <div className="flex-1 w-full flex flex-col items-center sm:items-start">
                     
-                    {/* Username, Badges, Dropdown Row */}
-                    <div className="flex items-center justify-between w-full mb-1">
+                    {/* Row 1: Username, Badges, Dropdown */}
+                    <div className="flex items-center justify-between w-full mb-3">
                         <div className="flex items-center gap-2">
                             <h1 className="text-2xl sm:text-3xl font-bold">{profile.username}</h1>
                             <div className="flex flex-wrap items-center gap-1.5">
@@ -84,7 +84,7 @@ const ProfileHeader = ({ profile, isFollowing, onFollowToggle, onEditClick, onUs
                                             </button>
                                             <button
                                                 onClick={() => {
-                                                    onEditClick(); // Call parent handler
+                                                    onEditClick(); 
                                                     setShowDropdown(false);
                                                 }}
                                                 className="w-full text-left px-4 py-2 text-sm hover:bg-gray-700 transition-colors"
@@ -137,8 +137,13 @@ const ProfileHeader = ({ profile, isFollowing, onFollowToggle, onEditClick, onUs
                         )}
                     </div>
 
-                    {/* Stats Row */}
-                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-1 text-sm text-gray-300 mb-3">
+                    {/* Row 2: Bio (Full width) */}
+                    <div className="w-full mb-4 text-center sm:text-left">
+                        <p className="text-gray-400 text-sm">{profile.bio || "This user has not set a bio."}</p>
+                    </div>
+
+                    {/* Row 3: Stats */}
+                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-2 text-sm text-gray-300 mb-4">
                         <button 
                             onClick={() => onUserListClick('Followers', profile.followers || [])} 
                             className="inline-flex items-center gap-1 hover:text-green-400 transition-colors"
@@ -164,37 +169,33 @@ const ProfileHeader = ({ profile, isFollowing, onFollowToggle, onEditClick, onUs
                         )}
                     </div>
 
-                    {/* Bio and Action Buttons Row */}
-                    <div className="w-full flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                        <p className="text-gray-400 text-center sm:text-left text-sm flex-1">{profile.bio || "This user has not set a bio."}</p>
-                        
-                        <div className="flex-shrink-0 self-center sm:self-auto">
-                            {user ? (
-                                user.username === profile.username ? null : (
-                                    <div className="flex items-center gap-2">
-                                        {/* New Message Button */}
-                                        <button 
-                                            onClick={() => navigate(`/messages?user=${profile.username}`)}
-                                            className="btn btn-ghost border border-gray-600 px-3 py-1 text-sm flex items-center gap-2 hover:bg-gray-700 transition-colors"
-                                            title={`Message ${profile.username}`}
-                                        >
-                                            <MessageCircle className="w-4 h-4" />
-                                            <span className="hidden sm:inline">Message</span>
-                                        </button>
+                    {/* Row 4: Action Buttons (Under stats) */}
+                    <div className="w-full flex justify-center sm:justify-start">
+                        {user ? (
+                            user.username === profile.username ? null : (
+                                <div className="flex items-center gap-2">
+                                    {/* Message Button */}
+                                    <button 
+                                        onClick={() => navigate(`/messages?user=${profile.username}`)}
+                                        className="btn btn-ghost border border-gray-600 px-4 py-1.5 text-sm flex items-center gap-2 hover:bg-gray-700 transition-colors"
+                                        title={`Message ${profile.username}`}
+                                    >
+                                        <MessageCircle className="w-4 h-4" />
+                                        <span>Message</span>
+                                    </button>
 
-                                        {/* Existing Follow/Unfollow Button */}
-                                        <button 
-                                            onClick={onFollowToggle} 
-                                            className={`btn ${isFollowing ? 'btn-ghost text-red-500 border border-gray-700' : 'btn-primary'} px-3 py-1 text-sm`}
-                                        >
-                                            {isFollowing ? 'Unfollow' : 'Follow'}
-                                        </button>
-                                    </div>
-                                )
-                            ) : (
-                                <button onClick={() => navigate('/login')} className="btn btn-ghost px-3 py-1 text-sm">Log in to follow</button>
-                            )}
-                        </div>
+                                    {/* Follow/Unfollow Button */}
+                                    <button 
+                                        onClick={onFollowToggle} 
+                                        className={`btn ${isFollowing ? 'btn-ghost text-red-500 border border-gray-700' : 'btn-primary'} px-6 py-1.5 text-sm`}
+                                    >
+                                        {isFollowing ? 'Unfollow' : 'Follow'}
+                                    </button>
+                                </div>
+                            )
+                        ) : (
+                            <button onClick={() => navigate('/login')} className="btn btn-ghost px-3 py-1 text-sm">Log in to follow</button>
+                        )}
                     </div>
                 </div>
             </div>

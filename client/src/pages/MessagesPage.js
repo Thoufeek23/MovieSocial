@@ -1,166 +1,227 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import * as api from '../api';
+import React, { useState, useEffect, useRef, useContext } from 'react';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
+import { Send, MoreVertical, ArrowLeft, Trash2 } from 'lucide-react'; // Added Trash2
 import { AuthContext } from '../context/AuthContext';
 import Avatar from '../components/Avatar';
-import { Send, MessageSquare } from 'lucide-react';
+import * as api from '../api';
 import toast from 'react-hot-toast';
 
 const MessagesPage = () => {
     const { user } = useContext(AuthContext);
     const navigate = useNavigate();
-    const [searchParams] = useSearchParams();
+    const location = useLocation();
     
     // State
     const [conversations, setConversations] = useState([]);
-    const [currentChatUser, setCurrentChatUser] = useState(null);
+    const [currentChat, setCurrentChat] = useState(null);
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
     const [loading, setLoading] = useState(true);
+    const [sending, setSending] = useState(false);
     
-    const messagesEndRef = useRef(null);
-    const chatContainerRef = useRef(null);
+    // Refs
+    const scrollRef = useRef();
+    const inputRef = useRef();
 
-    // URL param ?user=username to start/open a chat directly
-    const targetUsername = searchParams.get('user');
+    // Parse query params
+    const queryParams = new URLSearchParams(location.search);
+    const initialChatUser = queryParams.get('user');
 
-    // Fetch conversation list
+    // 1. Load Conversations & Initial Chat
     useEffect(() => {
-        fetchConversations();
-        // Optional: Poll for new conversations every 10s
-        const interval = setInterval(fetchConversations, 10000);
-        return () => clearInterval(interval);
-    }, [user]);
+        const loadData = async () => {
+            try {
+                setLoading(true);
+                const { data: convs } = await api.getConversations(); 
+                setConversations(convs);
 
-    // Handle direct navigation via ?user=username
-    useEffect(() => {
-        const initChat = async () => {
-            if (targetUsername && user) {
-                if (targetUsername === user.username) return; // Can't chat with self
-                
-                try {
-                    // Check if we already have this user in our list
-                    const existing = conversations.find(c => c.otherUser.username === targetUsername);
-                    if (existing) {
-                        setCurrentChatUser(existing.otherUser);
+                if (initialChatUser) {
+                    const found = convs.find(c => c.otherUser.username === initialChatUser);
+                    if (found) {
+                        handleSelectChat(found.otherUser);
                     } else {
-                        // Fetch user details if new chat
-                        const { data } = await api.getUserProfile(targetUsername);
-                        // Structure it like the conversation object user
-                        setCurrentChatUser({
-                            _id: data._id,
-                            username: data.username,
-                            avatar: data.avatar
-                        });
+                        try {
+                            const { data: userProfile } = await api.getUserProfile(initialChatUser);
+                            handleSelectChat(userProfile);
+                        } catch (err) {
+                            toast.error("User not found");
+                        }
                     }
-                } catch (err) {
-                    toast.error("User not found");
                 }
+            } catch (error) {
+                console.error('Failed to load messages', error);
+            } finally {
+                setLoading(false);
             }
         };
-        initChat();
-    }, [targetUsername, conversations.length, user]);
+        loadData();
+    }, [initialChatUser]);
 
-    // Fetch messages when active chat user changes
+    // 2. Auto-scroll to bottom
     useEffect(() => {
-        if (currentChatUser) {
-            fetchMessages(currentChatUser._id);
-            // Poll for new messages in this specific chat every 3s
-            const interval = setInterval(() => fetchMessages(currentChatUser._id), 3000);
-            return () => clearInterval(interval);
-        }
-    }, [currentChatUser]);
-
-    // Scroll to bottom on new messages
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        scrollRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages]);
 
-    const fetchConversations = async () => {
-        try {
-            const { data } = await api.getConversations();
-            setConversations(data);
-            setLoading(false);
-        } catch (err) {
-            console.error(err);
-        }
-    };
+    const handleSelectChat = async (chatUser) => {
+        setCurrentChat(chatUser);
+        setLoading(true);
+        
+        setConversations(prev => prev.map(c => {
+            if (c.otherUser.username === chatUser.username) {
+                return { ...c, unreadCount: 0 };
+            }
+            return c;
+        }));
 
-    const fetchMessages = async (userId) => {
         try {
-            const { data } = await api.getMessages(userId);
-            setMessages(data);
-        } catch (err) {
-            console.error(err);
+            const [msgsRes, readRes] = await Promise.all([
+                api.getMessages(chatUser.username),
+                api.markMessagesRead(chatUser.username)
+            ]);
+            setMessages(msgsRes.data);
+        } catch (error) {
+            toast.error('Failed to load conversation');
+        } finally {
+            setLoading(false);
+            setTimeout(() => inputRef.current?.focus(), 100);
         }
     };
 
     const handleSendMessage = async (e) => {
         e.preventDefault();
-        if (!newMessage.trim() || !currentChatUser) return;
+        if (!newMessage.trim() || !currentChat) return;
+
+        const tempId = Date.now();
+        const msgContent = newMessage;
+        setNewMessage('');
+        setSending(true);
 
         try {
-            const tempMsg = {
-                _id: Date.now(), // temp id
-                content: newMessage,
-                sender: { _id: user._id, username: user.username, avatar: user.avatar },
+            const optimisticMsg = {
+                _id: tempId,
+                content: msgContent,
+                sender: { _id: user._id || user.id, username: user.username, avatar: user.avatar },
                 createdAt: new Date().toISOString(),
-                pending: true
+                isOptimistic: true
             };
-            
-            setMessages([...messages, tempMsg]);
-            const msgContent = newMessage;
-            setNewMessage(''); // Clear input early
+            setMessages(prev => [...prev, optimisticMsg]);
 
-            const { data } = await api.sendMessage(currentChatUser._id, msgContent);
+            const { data: sentMsg } = await api.sendMessage(currentChat.username, msgContent);
             
-            // Replace temp message with real one
-            setMessages(prev => prev.map(m => m._id === tempMsg._id ? data : m));
-            fetchConversations(); // Update sidebar list to show latest
-        } catch (err) {
+            setMessages(prev => prev.map(m => m._id === tempId ? sentMsg : m));
+            
+            setConversations(prev => {
+                const filtered = prev.filter(c => c.otherUser.username !== currentChat.username);
+                return [{ 
+                    otherUser: currentChat, 
+                    lastMessage: sentMsg,
+                    unreadCount: 0 
+                }, ...filtered];
+            });
+
+        } catch (error) {
             toast.error('Failed to send message');
+            setMessages(prev => prev.filter(m => m._id !== tempId));
+            setNewMessage(msgContent);
+        } finally {
+            setSending(false);
         }
     };
 
+    // NEW: Handle Deleting Messages
+    const handleDeleteMessage = async (msgId) => {
+        if (!window.confirm("Delete this message for everyone?")) return;
+
+        try {
+            // Optimistic remove from UI
+            setMessages(prev => prev.filter(m => m._id !== msgId));
+            
+            await api.deleteMessage(msgId);
+            toast.success("Message deleted");
+            
+            // Update sidebar if it was the last message (simple approach: refresh list or leave as is)
+            // For now, we'll just leave it as it's complex to find the previous message without a full re-fetch
+        } catch (err) {
+            toast.error("Failed to delete message");
+            // Re-fetch messages to restore state if failed
+            if (currentChat) {
+                const { data } = await api.getMessages(currentChat.username);
+                setMessages(data);
+            }
+        }
+    };
+
+    const groupMessagesByDate = (msgs) => {
+        const groups = {};
+        msgs.forEach(msg => {
+            const date = new Date(msg.createdAt).toDateString();
+            if (!groups[date]) groups[date] = [];
+            groups[date].push(msg);
+        });
+        return groups;
+    };
+
+    const groupedMessages = groupMessagesByDate(messages);
+
+    const isMessageFromMe = (msg) => {
+        if (!user || !msg || !msg.sender) return false;
+        const myId = String(user._id || user.id);
+        let senderId;
+        if (typeof msg.sender === 'object') {
+            senderId = msg.sender._id || msg.sender.id;
+        } else {
+            senderId = msg.sender;
+        }
+        return myId === String(senderId);
+    };
+
     return (
-        <div className="h-[calc(100vh-100px)] flex bg-zinc-900/50 rounded-xl border border-zinc-800 overflow-hidden">
-            {/* Sidebar - List of Conversations */}
-            <div className={`w-full md:w-1/3 border-r border-zinc-800 flex flex-col ${currentChatUser ? 'hidden md:flex' : 'flex'}`}>
-                <div className="p-4 border-b border-zinc-800">
-                    <h2 className="text-xl font-bold text-white">Messages</h2>
+        <div className="flex h-[calc(100vh-64px)] bg-gray-900 text-gray-100 overflow-hidden">
+            
+            {/* LEFT SIDEBAR */}
+            <div className={`${currentChat ? 'hidden md:flex' : 'flex'} w-full md:w-80 lg:w-96 flex-col border-r border-gray-800 bg-gray-900`}>
+                <div className="p-4 border-b border-gray-800">
+                    <h1 className="text-xl font-bold text-white">Messages</h1>
                 </div>
                 
-                <div className="flex-1 overflow-y-auto">
-                    {loading ? (
-                        <div className="p-4 text-zinc-500">Loading chats...</div>
+                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                    {loading && !conversations.length ? (
+                        <div className="p-4 text-center text-gray-500">Loading chats...</div>
                     ) : conversations.length === 0 ? (
-                        <div className="p-8 text-center text-zinc-500">
-                            <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                        <div className="p-8 text-center text-gray-500">
                             <p>No conversations yet.</p>
-                            <p className="text-sm mt-2">Visit a profile to start chatting!</p>
                         </div>
                     ) : (
                         conversations.map(conv => (
                             <div 
                                 key={conv.otherUser._id}
-                                onClick={() => setCurrentChatUser(conv.otherUser)}
-                                className={`p-4 flex items-center gap-3 cursor-pointer hover:bg-zinc-800/50 transition-colors ${currentChatUser?._id === conv.otherUser._id ? 'bg-zinc-800' : ''}`}
+                                onClick={() => handleSelectChat(conv.otherUser)}
+                                className={`flex items-center gap-3 p-4 cursor-pointer hover:bg-gray-800 transition-colors ${currentChat?.username === conv.otherUser.username ? 'bg-gray-800 border-l-4 border-blue-500' : ''}`}
                             >
-                                <Avatar 
-                                    username={conv.otherUser.username} 
-                                    avatar={conv.otherUser.avatar} 
-                                    sizeClass="w-12 h-12" 
-                                />
+                                <Avatar username={conv.otherUser.username} avatar={conv.otherUser.avatar} sizeClass="w-12 h-12" />
                                 <div className="flex-1 min-w-0">
-                                    <div className="flex justify-between items-baseline">
-                                        <h3 className="font-semibold text-zinc-200 truncate">{conv.otherUser.username}</h3>
-                                        <span className="text-xs text-zinc-500">
-                                            {new Date(conv.lastMessage.createdAt).toLocaleDateString()}
-                                        </span>
+                                    <div className="flex justify-between items-center">
+                                        <h3 className={`truncate text-gray-200 ${conv.unreadCount > 0 ? 'font-bold text-white' : 'font-semibold'}`}>
+                                            {conv.otherUser.username}
+                                        </h3>
+                                        <div className="flex flex-col items-end">
+                                            <span className={`text-xs ${conv.unreadCount > 0 ? 'text-green-500 font-bold' : 'text-gray-500'}`}>
+                                                {conv.lastMessage && new Date(conv.lastMessage.createdAt).toLocaleDateString()}
+                                            </span>
+                                        </div>
                                     </div>
-                                    <p className={`text-sm truncate ${!conv.lastMessage.read && !conv.lastMessage.isMine ? 'text-white font-bold' : 'text-zinc-500'}`}>
-                                        {conv.lastMessage.isMine ? 'You: ' : ''}{conv.lastMessage.content}
-                                    </p>
+                                    
+                                    <div className="flex justify-between items-center mt-1">
+                                        <p className={`text-sm truncate pr-2 ${conv.unreadCount > 0 ? 'text-white font-medium' : 'text-gray-400'}`}>
+                                            {isMessageFromMe({ sender: conv.lastMessage?.sender }) ? 'You: ' : ''}
+                                            {conv.lastMessage?.content}
+                                        </p>
+                                        {conv.unreadCount > 0 && (
+                                            <span className="min-w-[20px] h-5 px-1.5 flex items-center justify-center bg-green-500 text-black text-xs font-bold rounded-full">
+                                                {conv.unreadCount}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         ))
@@ -168,75 +229,134 @@ const MessagesPage = () => {
                 </div>
             </div>
 
-            {/* Chat Area */}
-            <div className={`w-full md:w-2/3 flex flex-col ${!currentChatUser ? 'hidden md:flex' : 'flex'}`}>
-                {!currentChatUser ? (
-                    <div className="flex-1 flex items-center justify-center text-zinc-500 flex-col">
-                        <MessageSquare className="w-16 h-16 mb-4 opacity-20" />
-                        <p>Select a conversation to start messaging</p>
-                    </div>
-                ) : (
+            {/* RIGHT SIDE - Active Chat Area */}
+            <div className={`${!currentChat ? 'hidden md:flex' : 'flex'} flex-1 flex-col bg-black/20`}>
+                {currentChat ? (
                     <>
-                        {/* Chat Header */}
-                        <div className="p-4 border-b border-zinc-800 flex items-center gap-3 bg-zinc-900">
-                            <button 
-                                onClick={() => setCurrentChatUser(null)}
-                                className="md:hidden mr-2 text-zinc-400"
-                            >
-                                ← Back
-                            </button>
-                            <Avatar 
-                                username={currentChatUser.username} 
-                                avatar={currentChatUser.avatar} 
-                                sizeClass="w-10 h-10" 
-                            />
-                            <div>
-                                <h3 className="font-bold text-white">{currentChatUser.username}</h3>
+                        <div className="h-16 px-4 flex items-center justify-between border-b border-gray-800 bg-gray-900/50 backdrop-blur-sm">
+                            <div className="flex items-center gap-3">
+                                <button 
+                                    onClick={() => setCurrentChat(null)}
+                                    className="md:hidden p-2 -ml-2 text-gray-400 hover:text-white"
+                                >
+                                    <ArrowLeft size={20} />
+                                </button>
+                                
+                                <Link to={`/profile/${currentChat.username}`} className="flex items-center gap-3 group">
+                                    <Avatar username={currentChat.username} avatar={currentChat.avatar} sizeClass="w-10 h-10" />
+                                    <div>
+                                        <h2 className="font-bold text-gray-100 group-hover:underline decoration-blue-500 underline-offset-2">
+                                            {currentChat.username}
+                                        </h2>
+                                    </div>
+                                </Link>
                             </div>
                         </div>
 
-                        {/* Messages List */}
-                        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-black/20" ref={chatContainerRef}>
-                            {messages.map((msg, idx) => {
-                                const isMine = msg.sender._id === user._id;
-                                return (
-                                    <div key={idx} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
-                                        <div className={`max-w-[70%] rounded-2xl px-4 py-2 ${
-                                            isMine 
-                                                ? 'bg-primary text-white rounded-br-none' 
-                                                : 'bg-zinc-800 text-zinc-200 rounded-bl-none'
-                                        }`}>
-                                            <p>{msg.content}</p>
-                                            <p className={`text-[10px] mt-1 text-right ${isMine ? 'text-primary-content/70' : 'text-zinc-500'}`}>
-                                                {new Date(msg.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                            </p>
-                                        </div>
+                        <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
+                            {Object.entries(groupedMessages).map(([date, dateMessages]) => (
+                                <div key={date} className="space-y-4">
+                                    <div className="flex justify-center sticky top-0 z-10">
+                                        <span className="px-3 py-1 bg-gray-800/80 backdrop-blur text-xs text-gray-400 rounded-full shadow-sm">
+                                            {date === new Date().toDateString() ? 'Today' : date}
+                                        </span>
                                     </div>
-                                );
-                            })}
-                            <div ref={messagesEndRef} />
+
+                                    {dateMessages.map((msg, index) => {
+                                        const isOwn = isMessageFromMe(msg);
+                                        const isOptimistic = msg.isOptimistic;
+
+                                        return (
+                                            <div 
+                                                key={msg._id || index} 
+                                                className={`flex w-full ${isOwn ? 'justify-end' : 'justify-start'} group`}
+                                            >
+                                                <div className={`flex items-end max-w-[80%] md:max-w-[60%] gap-2 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
+                                                    {!isOwn && (
+                                                        <Link to={`/profile/${msg.sender?.username}`} className="flex-shrink-0 mb-1">
+                                                            <Avatar 
+                                                                username={msg.sender?.username} 
+                                                                avatar={msg.sender?.avatar} 
+                                                                sizeClass="w-8 h-8" 
+                                                                className="hover:ring-2 ring-blue-500 transition-all"
+                                                            />
+                                                        </Link>
+                                                    )}
+
+                                                    {/* Delete Button (Only visible on hover for OWN messages) */}
+                                                    {isOwn && !isOptimistic && (
+                                                        <button 
+                                                            onClick={() => handleDeleteMessage(msg._id)}
+                                                            className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-500 hover:text-red-500 transition-all self-center"
+                                                            title="Delete for everyone"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    )}
+
+                                                    <div 
+                                                        className={`
+                                                            relative px-4 py-2 shadow-md text-sm md:text-base break-words
+                                                            ${isOwn 
+                                                                ? 'bg-blue-600 text-white rounded-2xl rounded-br-sm' 
+                                                                : 'bg-gray-700 text-gray-100 rounded-2xl rounded-bl-sm'
+                                                            }
+                                                            ${isOptimistic ? 'opacity-70' : 'opacity-100'}
+                                                        `}
+                                                    >
+                                                        {msg.content}
+                                                        <div className={`text-[10px] mt-1 flex items-center gap-1 ${isOwn ? 'text-blue-200 justify-end' : 'text-gray-400'}`}>
+                                                            {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                            {isOwn && (
+                                                                <span>{isOptimistic ? '🕒' : (msg.read ? '✓✓' : '✓')}</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ))}
+                            <div ref={scrollRef} />
                         </div>
 
-                        {/* Input Area */}
-                        <form onSubmit={handleSendMessage} className="p-4 border-t border-zinc-800 bg-zinc-900">
-                            <div className="flex gap-2">
+                        <form onSubmit={handleSendMessage} className="p-4 bg-gray-900 border-t border-gray-800 flex gap-2 items-end">
+                            <button type="button" className="p-3 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors">
+                                <MoreVertical size={20} />
+                            </button>
+                            
+                            <div className="flex-1 bg-gray-800 rounded-2xl flex items-center px-4 py-2 focus-within:ring-2 ring-blue-500/50 transition-all">
                                 <input
+                                    ref={inputRef}
                                     type="text"
                                     value={newMessage}
                                     onChange={(e) => setNewMessage(e.target.value)}
-                                    placeholder="Type a message..."
-                                    className="flex-1 bg-zinc-800 border-none rounded-full px-4 py-2 text-white focus:ring-2 focus:ring-primary focus:outline-none"
+                                    placeholder={`Message ${currentChat.username}...`}
+                                    className="flex-1 bg-transparent border-none outline-none text-white placeholder-gray-500 max-h-32 py-1"
+                                    disabled={sending}
                                 />
-                                <button 
-                                    type="submit" 
-                                    disabled={!newMessage.trim()}
-                                    className="p-2 bg-primary rounded-full text-white disabled:opacity-50 hover:bg-primary-focus transition-colors"
-                                >
-                                    <Send className="w-5 h-5" />
-                                </button>
                             </div>
+
+                            <button 
+                                type="submit" 
+                                disabled={!newMessage.trim() || sending}
+                                className="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 active:scale-95"
+                            >
+                                <Send size={20} />
+                            </button>
                         </form>
                     </>
+                ) : (
+                    <div className="flex-1 flex flex-col items-center justify-center text-gray-500 p-8">
+                        <div className="w-24 h-24 bg-gray-800 rounded-full flex items-center justify-center mb-6 animate-pulse">
+                            <Send size={40} className="text-blue-500 ml-2" />
+                        </div>
+                        <h2 className="text-2xl font-bold text-white mb-2">Your Messages</h2>
+                        <p className="max-w-md text-center">
+                            Select a conversation to start chatting
+                        </p>
+                    </div>
                 )}
             </div>
         </div>

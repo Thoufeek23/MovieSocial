@@ -1,7 +1,15 @@
 const Message = require('../models/Message');
 const User = require('../models/User');
 
-// Send a message
+const findUserByIdOrUsername = async (identifier) => {
+  const isObjectId = /^[0-9a-fA-F]{24}$/.test(identifier);
+  if (isObjectId) {
+    const user = await User.findById(identifier);
+    if (user) return user;
+  }
+  return await User.findOne({ username: identifier });
+};
+
 exports.sendMessage = async (req, res) => {
   try {
     const { recipientId, content } = req.body;
@@ -11,58 +19,59 @@ exports.sendMessage = async (req, res) => {
       return res.status(400).json({ msg: 'Recipient and content are required' });
     }
 
-    // Verify recipient exists
-    const recipient = await User.findById(recipientId);
+    const recipient = await findUserByIdOrUsername(recipientId);
     if (!recipient) {
       return res.status(404).json({ msg: 'User not found' });
     }
 
     const newMessage = new Message({
       sender: senderId,
-      recipient: recipientId,
-      content
+      recipient: recipient._id,
+      content,
+      read: false
     });
 
     const savedMessage = await newMessage.save();
-    // Populate sender details for immediate frontend display
     await savedMessage.populate('sender', 'username avatar');
     
     res.status(201).json(savedMessage);
   } catch (err) {
-    console.error(err);
+    console.error('Error sending message:', err);
     res.status(500).json({ msg: 'Server error' });
   }
 };
 
-// Get conversation with a specific user
 exports.getConversation = async (req, res) => {
   try {
     const currentUserId = req.user.id;
-    const otherUserId = req.params.userId;
+    const otherUserIdentifier = req.params.userId;
+
+    const otherUser = await findUserByIdOrUsername(otherUserIdentifier);
+    if (!otherUser) {
+      return res.status(404).json({ msg: 'User not found' });
+    }
 
     const messages = await Message.find({
       $or: [
-        { sender: currentUserId, recipient: otherUserId },
-        { sender: otherUserId, recipient: currentUserId }
+        { sender: currentUserId, recipient: otherUser._id },
+        { sender: otherUser._id, recipient: currentUserId }
       ]
     })
-    .sort({ createdAt: 1 }) // Oldest first
+    .sort({ createdAt: 1 })
     .populate('sender', 'username avatar')
     .populate('recipient', 'username avatar');
 
     res.json(messages);
   } catch (err) {
-    console.error(err);
+    console.error('Error getting conversation:', err);
     res.status(500).json({ msg: 'Server error' });
   }
 };
 
-// Get list of all conversations (latest message per user)
 exports.getConversationsList = async (req, res) => {
   try {
     const currentUserId = req.user.id;
 
-    // Find all messages involving the current user
     const messages = await Message.find({
       $or: [{ sender: currentUserId }, { recipient: currentUserId }]
     })
@@ -70,40 +79,96 @@ exports.getConversationsList = async (req, res) => {
     .populate('sender', 'username avatar')
     .populate('recipient', 'username avatar');
 
-    const conversations = [];
-    const seenUsers = new Set();
+    const conversationsMap = new Map();
 
-    // Filter to get only the latest message for each unique conversation partner
     for (const msg of messages) {
       const otherUser = msg.sender._id.toString() === currentUserId 
         ? msg.recipient 
         : msg.sender;
       
-      if (!otherUser) continue; // specific case if user was deleted
+      if (!otherUser) continue;
 
       const otherUserId = otherUser._id.toString();
 
-      if (!seenUsers.has(otherUserId)) {
-        seenUsers.add(otherUserId);
-        conversations.push({
+      if (!conversationsMap.has(otherUserId)) {
+        conversationsMap.set(otherUserId, {
           otherUser: {
             _id: otherUser._id,
             username: otherUser.username,
             avatar: otherUser.avatar
           },
           lastMessage: {
+            _id: msg._id, // Added _id here
             content: msg.content,
             createdAt: msg.createdAt,
             isMine: msg.sender._id.toString() === currentUserId,
             read: msg.read
-          }
+          },
+          unreadCount: 0
         });
+      }
+
+      if (msg.recipient._id.toString() === currentUserId && !msg.read) {
+        conversationsMap.get(otherUserId).unreadCount += 1;
       }
     }
 
-    res.json(conversations);
+    res.json(Array.from(conversationsMap.values()));
   } catch (err) {
-    console.error(err);
+    console.error('Error getting conversation list:', err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+};
+
+exports.markMessagesRead = async (req, res) => {
+  try {
+    const currentUserId = req.user.id;
+    const otherUserIdentifier = req.params.userId;
+
+    const otherUser = await findUserByIdOrUsername(otherUserIdentifier);
+    if (!otherUser) {
+      return res.status(404).json({ msg: 'User not found' });
+    }
+
+    await Message.updateMany(
+      { 
+        sender: otherUser._id, 
+        recipient: currentUserId, 
+        read: false 
+      },
+      { $set: { read: true } }
+    );
+
+    res.status(200).json({ msg: 'Messages marked as read' });
+  } catch (err) {
+    console.error('Error marking messages read:', err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+};
+
+// --- NEW FUNCTION ---
+// Delete a message (Delete for everyone)
+exports.deleteMessage = async (req, res) => {
+  try {
+    const messageId = req.params.messageId;
+    const userId = req.user.id;
+
+    const message = await Message.findById(messageId);
+
+    if (!message) {
+      return res.status(404).json({ msg: 'Message not found' });
+    }
+
+    // Ensure only the sender can delete the message
+    if (message.sender.toString() !== userId) {
+      return res.status(403).json({ msg: 'Not authorized to delete this message' });
+    }
+
+    await Message.findByIdAndDelete(messageId);
+
+    res.json({ msg: 'Message deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting message:', err);
     res.status(500).json({ msg: 'Server error' });
   }
 };

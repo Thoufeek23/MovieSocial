@@ -1,11 +1,9 @@
 import axios from 'axios';
 
 // In production the client should be built with REACT_APP_API_URL set to your API root 
-//const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'https://moviesocial-backend-khd2.onrender.com';
 const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://localhost:5001';
 const API = axios.create({ baseURL: `${apiRoot}/api` });
 
-// Add the JWT to the header of every request if it exists
 API.interceptors.request.use((req) => {
   if (localStorage.getItem('token')) {
     req.headers.Authorization = `Bearer ${localStorage.getItem('token')}`;
@@ -40,7 +38,7 @@ export const getMovieStats = (movieId) => API.get(`/reviews/movie/${movieId}/sta
 export const updateReview = (id, reviewData) => API.put(`/reviews/${id}`, reviewData);
 export const deleteReview = (id) => API.delete(`/reviews/${id}`);
 export const fetchMyReviews = () => API.get('/reviews/mine');
-export const importLetterboxd = (username) => API.post('/reviews/import/letterboxd', { username }); // <-- Added this
+export const importLetterboxd = (username) => API.post('/reviews/import/letterboxd', { username });
 
 // Vote on a review: { value: 1 | 0.5 | 0 }
 export const voteReview = (id, value) => API.post(`/reviews/${id}/vote`, { value });
@@ -105,3 +103,5 @@ export const deletePuzzle = (id) => API.delete(`/puzzles/${id}`);
 export const getConversations = () => API.get('/messages/conversations');
 export const getMessages = (userId) => API.get(`/messages/${userId}`);
 export const sendMessage = (recipientId, content) => API.post('/messages', { recipientId, content });
+export const markMessagesRead = (username) => API.put(`/messages/${username}/read`);
+export const deleteMessage = (messageId) => API.delete(`/messages/${messageId}`); // New API Call
