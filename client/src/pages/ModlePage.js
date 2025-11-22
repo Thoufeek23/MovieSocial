@@ -1,433 +1,211 @@
-import React, { useState, useEffect, useRef, useContext } from 'react';
-import { useLocation, useNavigate, Link } from 'react-router-dom';
-import { Send, MoreVertical, ArrowLeft, Trash2, MessageSquare } from 'lucide-react'; 
+import React, { useContext, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import Avatar from '../components/Avatar';
-import ReviewCard from '../components/ReviewCard';
-import * as api from '../api';
 import toast from 'react-hot-toast';
+import { Info, PlayCircle, CheckCircle } from 'lucide-react'; // Import icons for a professional look
+import * as api from '../api';
 
-// Simple Discussion Card for Chat
-const ChatDiscussionCard = ({ discussion }) => {
-    if (!discussion) return null;
-    return (
-        <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden mt-2 max-w-sm shadow-lg">
-            <Link to={`/discussion/${discussion._id}`} className="flex p-3 gap-3 hover:bg-gray-750 transition-colors">
-                <img 
-                    src={discussion.poster_path ? `https://image.tmdb.org/t/p/w154${discussion.poster_path}` : '/default_dp.png'} 
-                    alt="poster"
-                    className="w-16 h-24 object-cover rounded"
-                />
-                <div className="flex-1 min-w-0">
-                    <h4 className="font-bold text-white text-sm leading-tight mb-1 line-clamp-2">{discussion.title}</h4>
-                    <div className="text-xs text-green-400 mb-2">{discussion.movieTitle}</div>
-                    
-                    <div className="flex items-center gap-2 mt-auto">
-                        <Avatar username={discussion.starter?.username} avatar={discussion.starter?.avatar} sizeClass="w-5 h-5" />
-                        <span className="text-xs text-gray-400">{discussion.starter?.username}</span>
-                        <span className="text-xs text-gray-500 ml-auto flex items-center gap-1">
-                            <MessageSquare size={10} /> {discussion.comments?.length || 0}
-                        </span>
-                    </div>
-                </div>
-            </Link>
-        </div>
-    );
-};
+// Available languages - no longer need puzzle imports since they come from backend
+const availableLanguages = ['English', 'Hindi', 'Tamil', 'Telugu', 'Kannada', 'Malayalam'];
 
-const MessagesPage = () => {
-    // --- FIX 1: Destructure updateUnreadCount from context ---
-    const { user, updateUnreadCount } = useContext(AuthContext);
-    const navigate = useNavigate();
-    const location = useLocation();
-    
-    // State
-    const [conversations, setConversations] = useState([]);
-    const [currentChat, setCurrentChat] = useState(null);
-    const [messages, setMessages] = useState([]);
-    const [newMessage, setNewMessage] = useState('');
-    const [loading, setLoading] = useState(true);
-    const [sending, setSending] = useState(false);
-    
-    // Refs
-    const scrollRef = useRef();
-    const inputRef = useRef();
+const ModlePage = () => {
+  const navigate = useNavigate();
+  const { user } = useContext(AuthContext);
+  const [completedToday, setCompletedToday] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [globalDailyLimitReached, setGlobalDailyLimitReached] = useState(false);
+  const [playedLanguage, setPlayedLanguage] = useState(null);
 
-    // Parse query params
-    const queryParams = new URLSearchParams(location.search);
-    const initialChatUser = queryParams.get('user');
+  // Check completion status for all languages
+  useEffect(() => {
+    const checkCompletionStatus = async () => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
 
-    // Helper: Format Date for Sidebar
-    const formatConversationDate = (dateString) => {
-        if (!dateString) return '';
-        const date = new Date(dateString);
-        const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-        const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-
-        if (messageDate.getTime() === today.getTime()) {
-            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        } else if (messageDate.getTime() === yesterday.getTime()) {
-            return 'Yesterday';
-        } else {
-            return date.toLocaleDateString();
-        }
-    };
-
-    // 1. Load Conversations & Initial Chat
-    useEffect(() => {
-        const loadData = async () => {
-            try {
-                setLoading(true);
-                const { data: convs } = await api.getConversations(); 
-                setConversations(convs);
-
-                if (initialChatUser) {
-                    const found = convs.find(c => c.otherUser.username === initialChatUser);
-                    if (found) {
-                        handleSelectChat(found.otherUser);
-                    } else {
-                        try {
-                            const { data: userProfile } = await api.getUserProfile(initialChatUser);
-                            handleSelectChat(userProfile);
-                        } catch (err) {
-                            toast.error("User not found");
-                        }
-                    }
-                } else if (convs.length > 0) {
-                    // Load the last conversed message (first in list) automatically
-                    handleSelectChat(convs[0].otherUser);
-                }
-            } catch (error) {
-                console.error('Failed to load messages', error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        loadData();
-    }, [initialChatUser]);
-
-    // 2. Auto-scroll to bottom
-    useEffect(() => {
-        scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [messages]);
-
-    const handleSelectChat = async (chatUser) => {
-        setCurrentChat(chatUser);
+      try {
+        const today = new Date().toISOString().slice(0, 10);
         
-        // Optimistically clear unread count in local conversation list
-        setConversations(prev => prev.map(c => {
-            if (c.otherUser.username === chatUser.username) {
-                return { ...c, unreadCount: 0 };
+        // First check global status to see if user has played ANY language today
+        try {
+          const globalResponse = await api.getModleStatus('global');
+          if (globalResponse.data.history && globalResponse.data.history[today]) {
+            // User has already played today - set global daily limit reached
+            setGlobalDailyLimitReached(true);
+            // Find which language they played
+            for (const lang of availableLanguages) {
+              try {
+                const langResponse = await api.getModleStatus(lang);
+                if (langResponse.data.history && 
+                    langResponse.data.history[today] && 
+                    langResponse.data.history[today].correct) {
+                  setPlayedLanguage(lang);
+                  break;
+                }
+              } catch (e) { /* ignore */ }
             }
-            return c;
-        }));
-
-        try {
-            const [msgsRes, readRes] = await Promise.all([
-                api.getMessages(chatUser.username),
-                api.markMessagesRead(chatUser.username)
-            ]);
-            setMessages(msgsRes.data);
-            
-            // --- FIX 2: Force sidebar to update immediately ---
-            if (updateUnreadCount) updateUnreadCount();
-
+            setLoading(false);
+            return;
+          }
         } catch (error) {
-            toast.error('Failed to load conversation');
-        } finally {
-            setTimeout(() => inputRef.current?.focus(), 100);
+          console.debug('Failed to check global status:', error);
         }
-    };
-
-    const handleSendMessage = async (e) => {
-        e.preventDefault();
-        if (!newMessage.trim() || !currentChat) return;
-
-        const tempId = Date.now();
-        const msgContent = newMessage;
-        setNewMessage('');
-        setSending(true);
-
-        try {
-            const optimisticMsg = {
-                _id: tempId,
-                content: msgContent,
-                sender: { _id: user._id || user.id, username: user.username, avatar: user.avatar },
-                createdAt: new Date().toISOString(),
-                isOptimistic: true
-            };
-            setMessages(prev => [...prev, optimisticMsg]);
-
-            const { data: sentMsg } = await api.sendMessage(currentChat.username, msgContent);
-            
-            setMessages(prev => prev.map(m => m._id === tempId ? sentMsg : m));
-            
-            setConversations(prev => {
-                const filtered = prev.filter(c => c.otherUser.username !== currentChat.username);
-                return [{ 
-                    otherUser: currentChat, 
-                    lastMessage: sentMsg,
-                    unreadCount: 0 
-                }, ...filtered];
-            });
-
-        } catch (error) {
-            toast.error('Failed to send message');
-            setMessages(prev => prev.filter(m => m._id !== tempId));
-            setNewMessage(msgContent);
-        } finally {
-            setSending(false);
-        }
-    };
-
-    // Handle Deleting Messages
-    const handleDeleteMessage = async (msgId) => {
-        if (!window.confirm("Delete this message for everyone?")) return;
-
-        try {
-            setMessages(prev => prev.filter(m => m._id !== msgId));
-            await api.deleteMessage(msgId);
-            toast.success("Message deleted");
-        } catch (err) {
-            toast.error("Failed to delete message");
-            if (currentChat) {
-                const { data } = await api.getMessages(currentChat.username);
-                setMessages(data);
-            }
-        }
-    };
-
-    const groupMessagesByDate = (msgs) => {
-        const groups = {};
-        msgs.forEach(msg => {
-            const date = new Date(msg.createdAt).toDateString();
-            if (!groups[date]) groups[date] = [];
-            groups[date].push(msg);
+        
+        // If no global daily limit, check individual language completion status
+        const statusPromises = availableLanguages.map(async (lang) => {
+          try {
+            const response = await api.getModleStatus(lang);
+            const isCompleted = response.data.history && 
+                               response.data.history[today] && 
+                               response.data.history[today].correct;
+            return { lang, completed: isCompleted };
+          } catch (error) {
+            return { lang, completed: false };
+          }
         });
-        return groups;
+
+        const results = await Promise.all(statusPromises);
+        const completionMap = {};
+        results.forEach(({ lang, completed }) => {
+          completionMap[lang] = completed;
+        });
+        setCompletedToday(completionMap);
+      } catch (error) {
+        console.error('Failed to check completion status:', error);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    const groupedMessages = groupMessagesByDate(messages);
+    checkCompletionStatus();
+  }, [user]);
 
-    const isMessageFromMe = (msg) => {
-        if (!user || !msg || !msg.sender) return false;
-        const myId = String(user._id || user.id);
-        let senderId;
-        if (typeof msg.sender === 'object') {
-            senderId = msg.sender._id || msg.sender.id;
-        } else {
-            senderId = msg.sender;
-        }
-        return myId === String(senderId);
-    };
+  const handleChoose = (chosen) => {
+    // Check if global daily limit is reached
+    if (globalDailyLimitReached) {
+      toast.error('Daily limit reached! One Modle per day across all languages. Come back tomorrow!');
+      return;
+    }
+    
+    // Check if user has already completed this language today
+    if (user && completedToday[chosen]) {
+      toast.error(`You already completed today's Modle in ${chosen}! Come back tomorrow for a new puzzle.`);
+      return;
+    }
 
-    return (
-        <div className="flex h-[calc(100vh-64px)] bg-gray-900 text-gray-100 overflow-hidden">
-            
-            {/* LEFT SIDEBAR */}
-            <div className={`${currentChat ? 'hidden md:flex' : 'flex'} w-full md:w-80 lg:w-96 flex-col border-r border-gray-800 bg-gray-900`}>
-                <div className="p-4 border-b border-gray-800">
-                    <h1 className="text-xl font-bold text-white">Messages</h1>
-                </div>
-                
-                <div className="flex-1 overflow-y-auto custom-scrollbar">
-                    {loading && !conversations.length ? (
-                        <div className="p-4 text-center text-gray-500">Loading chats...</div>
-                    ) : conversations.length === 0 ? (
-                        <div className="p-8 text-center text-gray-500">
-                            <p>No conversations yet.</p>
-                        </div>
-                    ) : (
-                        conversations.map(conv => (
-                            <div 
-                                key={conv.otherUser._id}
-                                onClick={() => handleSelectChat(conv.otherUser)}
-                                className={`flex items-center gap-3 p-4 cursor-pointer hover:bg-gray-800 transition-colors ${currentChat?.username === conv.otherUser.username ? 'bg-gray-800 border-l-4 border-green-600' : ''}`}
-                            >
-                                <Avatar username={conv.otherUser.username} avatar={conv.otherUser.avatar} sizeClass="w-12 h-12" />
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex justify-between items-center">
-                                        <h3 className={`truncate text-gray-200 ${conv.unreadCount > 0 ? 'font-bold text-white' : 'font-semibold'}`}>
-                                            {conv.otherUser.username}
-                                        </h3>
-                                        <div className="flex flex-col items-end">
-                                            <span className={`text-xs ${conv.unreadCount > 0 ? 'text-green-500 font-bold' : 'text-gray-500'}`}>
-                                                {conv.lastMessage && formatConversationDate(conv.lastMessage.createdAt)}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="flex justify-between items-center mt-1">
-                                        <p className={`text-sm truncate pr-2 ${conv.unreadCount > 0 ? 'text-white font-medium' : 'text-gray-400'}`}>
-                                            {isMessageFromMe({ sender: conv.lastMessage?.sender }) ? 'You: ' : ''}
-                                            {conv.lastMessage?.content}
-                                        </p>
-                                        {conv.unreadCount > 0 && (
-                                            <span className="min-w-[20px] h-5 px-1.5 flex items-center justify-center bg-green-600 text-white text-xs font-bold rounded-full">
-                                                {conv.unreadCount}
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        ))
-                    )}
-                </div>
-            </div>
+    // Allow users to play different languages - global streak system supports this
+    // Just navigate to the selected language
+    navigate(`/modle/play?lang=${encodeURIComponent(chosen)}`);
+  };
 
-            {/* RIGHT SIDE - Active Chat Area */}
-            <div className={`${!currentChat ? 'hidden md:flex' : 'flex'} flex-1 flex-col bg-black/20`}>
-                {currentChat ? (
-                    <>
-                        <div className="h-16 px-4 flex items-center justify-between border-b border-gray-800 bg-gray-900/50 backdrop-blur-sm">
-                            <div className="flex items-center gap-3">
-                                <button 
-                                    onClick={() => setCurrentChat(null)}
-                                    className="md:hidden p-2 -ml-2 text-gray-400 hover:text-white"
-                                >
-                                    <ArrowLeft size={20} />
-                                </button>
-                                
-                                <Link to={`/profile/${currentChat.username}`} className="flex items-center gap-3 group">
-                                    <Avatar username={currentChat.username} avatar={currentChat.avatar} sizeClass="w-10 h-10" />
-                                    <div>
-                                        <h2 className="font-bold text-gray-100 group-hover:underline decoration-green-500 underline-offset-2">
-                                            {currentChat.username}
-                                        </h2>
-                                    </div>
-                                </Link>
-                            </div>
-                        </div>
+  return (
+    // Use a constrained width and center it, with more padding
+    <div className="container mx-auto p-4 md:p-8 max-w-4xl">
 
-                        <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
-                            {Object.entries(groupedMessages).map(([date, dateMessages]) => (
-                                <div key={date} className="space-y-4">
-                                    <div className="flex justify-center sticky top-0 z-10">
-                                        <span className="px-3 py-1 bg-gray-800/80 backdrop-blur text-xs text-gray-400 rounded-full shadow-sm">
-                                            {date === new Date().toDateString() ? 'Today' : date}
-                                        </span>
-                                    </div>
+      {/* 1. Gradient Title */}
+      <div className="text-center mb-8">
+        <h1 className="text-4xl md:text-5xl font-bold pb-2
+                       bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+          Modle — Movie Wordle
+        </h1>
+        <p className="text-lg text-gray-400">Guess the movie of the day!</p>
+      </div>
 
-                                    {dateMessages.map((msg, index) => {
-                                        const isOwn = isMessageFromMe(msg);
-                                        const isOptimistic = msg.isOptimistic;
-
-                                        return (
-                                            <div 
-                                                key={msg._id || index} 
-                                                className={`flex w-full ${isOwn ? 'justify-end' : 'justify-start'} group`}
-                                            >
-                                                <div className={`flex flex-col items-end max-w-[90%] md:max-w-[70%] gap-1 ${isOwn ? 'items-end' : 'items-start'}`}>
-                                                    <div className={`flex gap-2 items-end ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
-                                                        {!isOwn && (
-                                                            <Link to={`/profile/${msg.sender?.username}`} className="flex-shrink-0 mb-1">
-                                                                <Avatar 
-                                                                    username={msg.sender?.username} 
-                                                                    avatar={msg.sender?.avatar} 
-                                                                    sizeClass="w-8 h-8" 
-                                                                    className="hover:ring-2 ring-green-500 transition-all"
-                                                                />
-                                                            </Link>
-                                                        )}
-
-                                                        {/* Message Bubble */}
-                                                        <div className="flex flex-col">
-                                                            {/* Text Content */}
-                                                            {msg.content && (
-                                                                <div 
-                                                                    className={`
-                                                                        relative px-4 py-2 shadow-md text-sm md:text-base break-words
-                                                                        ${isOwn 
-                                                                            ? 'bg-green-600 text-white rounded-2xl rounded-br-sm' 
-                                                                            : 'bg-gray-700 text-gray-100 rounded-2xl rounded-bl-sm'
-                                                                        }
-                                                                        ${isOptimistic ? 'opacity-70' : 'opacity-100'}
-                                                                    `}
-                                                                >
-                                                                    {msg.content}
-                                                                </div>
-                                                            )}
-
-                                                            {/* Shared Cards */}
-                                                            {msg.sharedReview && (
-                                                                <div className={`mt-1 transform scale-95 origin-${isOwn ? 'right' : 'left'}`}>
-                                                                    <ReviewCard review={msg.sharedReview} />
-                                                                </div>
-                                                            )}
-                                                            {msg.sharedDiscussion && (
-                                                                <ChatDiscussionCard discussion={msg.sharedDiscussion} />
-                                                            )}
-
-                                                            {/* Timestamp & Status */}
-                                                            <div className={`text-[10px] mt-1 flex items-center gap-1 ${isOwn ? 'text-gray-400 justify-end' : 'text-gray-400'}`}>
-                                                                {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                                {isOwn && !isOptimistic && (
-                                                                    <button 
-                                                                        onClick={() => handleDeleteMessage(msg._id)}
-                                                                        className="opacity-0 group-hover:opacity-100 hover:text-red-500 ml-2"
-                                                                        title="Delete"
-                                                                    >
-                                                                        <Trash2 size={12} />
-                                                                    </button>
-                                                                )}
-                                                                {isOwn && (
-                                                                    <span>{isOptimistic ? '🕒' : (msg.read ? '✓✓' : '✓')}</span>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            ))}
-                            <div ref={scrollRef} />
-                        </div>
-
-                        <form onSubmit={handleSendMessage} className="p-4 bg-gray-900 border-t border-gray-800 flex gap-2 items-end">
-                            <button type="button" className="p-3 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors">
-                                <MoreVertical size={20} />
-                            </button>
-                            
-                            <div className="flex-1 bg-gray-800 rounded-2xl flex items-center px-4 py-2 focus-within:ring-2 ring-green-500/50 transition-all">
-                                <input
-                                    ref={inputRef}
-                                    type="text"
-                                    value={newMessage}
-                                    onChange={(e) => setNewMessage(e.target.value)}
-                                    placeholder={`Message ${currentChat.username}...`}
-                                    className="flex-1 bg-transparent border-none outline-none text-white placeholder-gray-500 max-h-32 py-1"
-                                    disabled={sending}
-                                />
-                            </div>
-
-                            <button 
-                                type="submit" 
-                                disabled={!newMessage.trim() || sending}
-                                className="p-3 bg-green-600 hover:bg-green-700 text-white rounded-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 active:scale-95"
-                            >
-                                <Send size={20} />
-                            </button>
-                        </form>
-                    </>
-                ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center text-gray-500 p-8">
-                        <div className="w-24 h-24 bg-gray-800 rounded-full flex items-center justify-center mb-6 animate-pulse">
-                            <Send size={40} className="text-green-500 ml-2" />
-                        </div>
-                        <h2 className="text-2xl font-bold text-white mb-2">Your Messages</h2>
-                        <p className="max-w-md text-center">
-                            Select a conversation to start chatting
-                        </p>
-                    </div>
-                )}
-            </div>
+      {/* 2. "How to Play" Card */}
+      <div className="bg-card p-5 rounded-xl border border-gray-700 mb-10 shadow-lg">
+        <div className="flex items-center gap-3 mb-3">
+          <Info size={20} className="text-blue-400" />
+          <h2 className="text-xl font-semibold text-white">How to Play</h2>
         </div>
-    );
+        <ul className="list-disc list-inside text-gray-300 space-y-1.5 text-sm md:text-base">
+          <li>Choose any language to play each day. Your streak continues regardless of which language you play.</li>
+          <li>Guess the movie title based on the hints provided.</li>
+          <li>Each incorrect guess reveals another hint, up to a maximum number of hints.</li>
+          <li>Play consistently every day to maintain your streak across all languages!</li>
+        </ul>
+      </div>
+
+      {/* 3. Language Selection */}
+      <div className="text-center mb-6">
+        <h2 className="text-2xl font-semibold text-white">
+          {globalDailyLimitReached ? "Today's Modle Complete!" : "Choose Your Language for Today"}
+        </h2>
+      </div>
+
+      {loading && user ? (
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+          <p className="text-gray-400">Loading your progress...</p>
+        </div>
+      ) : globalDailyLimitReached ? (
+        <div className="max-w-md mx-auto bg-gray-800 border-2 border-green-500 rounded-xl p-8 text-center">
+          <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
+          <h3 className="text-xl font-bold text-green-500 mb-2">Daily Limit Reached!</h3>
+          <p className="text-white mb-2">
+            You've already completed today's Modle{playedLanguage ? ` in ${playedLanguage}` : ''}.
+          </p>
+          <p className="text-gray-400 mb-4">
+            Come back tomorrow for a new puzzle in any language!
+          </p>
+          <div className="flex items-center justify-center gap-2 bg-gray-700 rounded-lg px-3 py-2">
+            <Info className="w-4 h-4 text-gray-400" />
+            <span className="text-sm text-gray-400 italic">
+              One Modle per day across all languages
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {availableLanguages.map(lang => {
+            const isCompleted = user && completedToday[lang];
+            return (
+              <button 
+                key={lang} 
+                onClick={() => handleChoose(lang)} 
+                disabled={isCompleted}
+                className={`
+                  group relative p-6 rounded-xl border
+                  transition-all duration-300 ease-in-out
+                  ${isCompleted 
+                    ? 'bg-green-900/20 border-green-700 cursor-not-allowed' 
+                    : 'bg-card border-gray-700 hover:-translate-y-1 hover:border-primary hover:shadow-lg hover:shadow-primary/10 hover:bg-gradient-to-br hover:from-card hover:to-primary/10'
+                  }
+                `}
+              >
+                <div className="flex justify-between items-center mb-1">
+                  <span className={`text-2xl font-bold ${isCompleted ? 'text-green-400' : 'text-white'}`}>
+                    {lang}
+                  </span>
+                  {isCompleted ? (
+                    <CheckCircle 
+                      size={28} 
+                      className="text-green-400" 
+                    />
+                  ) : (
+                    <PlayCircle 
+                      size={28} 
+                      className="text-gray-500 transition-all duration-300
+                                 group-hover:text-primary group-hover:translate-x-1" 
+                    />
+                  )}
+                </div>
+                <div className={`text-sm text-left transition-colors ${
+                  isCompleted 
+                    ? 'text-green-300' 
+                    : 'text-gray-400 group-hover:text-gray-300'
+                }`}>
+                  {isCompleted ? '✅ Completed today!' : `Play Modle in ${lang}`}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      
+      {/* (Removed the redundant "Available languages" text for a cleaner look) */}
+    </div>
+  );
 };
 
-export default MessagesPage;
+export default ModlePage;

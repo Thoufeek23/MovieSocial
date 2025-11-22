@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
-import { useLocation, Link } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { Send, MoreVertical, ArrowLeft, Trash2, MessageSquare } from 'lucide-react'; 
 import { AuthContext } from '../context/AuthContext';
 import Avatar from '../components/Avatar';
@@ -36,8 +36,9 @@ const ChatDiscussionCard = ({ discussion }) => {
 };
 
 const MessagesPage = () => {
-    const { user } = useContext(AuthContext);
-    //const navigate = useNavigate();
+    // --- FIX 1: Destructure updateUnreadCount from context ---
+    const { user, updateUnreadCount } = useContext(AuthContext);
+    const navigate = useNavigate();
     const location = useLocation();
     
     // State
@@ -116,6 +117,7 @@ const MessagesPage = () => {
     const handleSelectChat = async (chatUser) => {
         setCurrentChat(chatUser);
         
+        // Optimistically clear unread count in local conversation list
         setConversations(prev => prev.map(c => {
             if (c.otherUser.username === chatUser.username) {
                 return { ...c, unreadCount: 0 };
@@ -124,11 +126,15 @@ const MessagesPage = () => {
         }));
 
         try {
-            const [msgsRes] = await Promise.all([
+            const [msgsRes, readRes] = await Promise.all([
                 api.getMessages(chatUser.username),
                 api.markMessagesRead(chatUser.username)
             ]);
             setMessages(msgsRes.data);
+            
+            // --- FIX 2: Force sidebar to update immediately ---
+            if (updateUnreadCount) updateUnreadCount();
+
         } catch (error) {
             toast.error('Failed to load conversation');
         } finally {
