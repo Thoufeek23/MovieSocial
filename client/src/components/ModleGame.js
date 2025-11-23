@@ -166,87 +166,95 @@ const ModleGame = ({ puzzles: propPuzzles, language = 'English' }) => {
       return;
     }
 
-    // Update guesses and reveal next hint immediately
+    // 1. Update guesses list immediately (Optimistic UI for the list is fine)
     const newGuesses = [...guesses, normalized];
     setGuesses(newGuesses);
     
-    const newRevealedHints = Math.min(maxReveal, newGuesses.length + 1);
-    setRevealedHints(newRevealedHints);
+    // --- DELETED: The immediate hint update lines were here ---
 
     const today = effectiveDate;
 
-  // Send guess to server for validation
-  (async () => {
-    try {
-      const res = await api.postModleResult({ date: today, language, guess: normalized });
-      
-      if (res && res.data) {
-        const server = res.data; // <-- 'server' is defined here
-        const langObj = server.language || server;
-        const globalObj = server.global;
+    // 2. Send guess to server and WAIT for the result to decide on hints
+    (async () => {
+      try {
+        const res = await api.postModleResult({ date: today, language, guess: normalized });
         
-        // Server determines correctness
-        if (langObj && langObj.history && langObj.history[today]) {
-          const serverResult = langObj.history[today]; // <-- 'serverResult' is defined here
-          setTodayPlayed(serverResult);
+        if (res && res.data) {
+          const server = res.data;
+          const langObj = server.language || server;
+          const globalObj = server.global;
           
-          if ((serverResult.guesses || []).length > newGuesses.length) {
-            setGuesses(serverResult.guesses || []);
-            const serverHints = Math.min(maxReveal, Math.max(1, (serverResult.guesses || []).length + 1));
-            setRevealedHints(serverHints);
-          }
-          
-          if (serverResult.correct) {
-            // --- FIX for blank answer ---
-            const answer = puzzle.answer || server.solvedAnswer;
-            if (server.solvedAnswer && !puzzle.answer) {
-              setPuzzle(prev => ({ ...prev, answer: server.solvedAnswer }));
-            }
-            // -----------------------------
-
-            toast.success(`Correct! The movie was ${answer}.`);
+          // Server determines correctness
+          if (langObj && langObj.history && langObj.history[today]) {
+            const serverResult = langObj.history[today];
+            setTodayPlayed(serverResult);
             
-            if (refreshGlobal) {
-              refreshGlobal();
+            if ((serverResult.guesses || []).length > newGuesses.length) {
+              setGuesses(serverResult.guesses || []);
+              // If server has more guesses (e.g. sync), we might need to update hints here too
+              const serverHints = Math.min(maxReveal, Math.max(1, (serverResult.guesses || []).length + 1));
+              if (!serverResult.correct) {
+                 setRevealedHints(serverHints);
+              }
             }
             
-            try {
-              const eventDetail = { language: langObj, global: globalObj };
-              window.dispatchEvent(new CustomEvent('modleUpdated', { detail: eventDetail }));
-              updateFromServerPayload(eventDetail, language);
-            } catch (e) {
-              // ignore
+            if (serverResult.correct) {
+              // --- CASE 1: CORRECT ANSWER ---
+              // Do NOT increment revealedHints. The user won!
+              
+              const answer = puzzle.answer || server.solvedAnswer;
+              if (server.solvedAnswer && !puzzle.answer) {
+                setPuzzle(prev => ({ ...prev, answer: server.solvedAnswer }));
+              }
+
+              toast.success(`Correct! The movie was ${answer}.`);
+              
+              if (refreshGlobal) {
+                refreshGlobal();
+              }
+              
+              try {
+                const eventDetail = { language: langObj, global: globalObj };
+                window.dispatchEvent(new CustomEvent('modleUpdated', { detail: eventDetail }));
+                updateFromServerPayload(eventDetail, language);
+              } catch (e) {
+                // ignore
+              }
+            } else {
+              // --- CASE 2: INCORRECT ANSWER ---
+              // ONLY HERE do we reveal the next hint
+              const nextHints = Math.min(maxReveal, newGuesses.length + 1);
+              setRevealedHints(nextHints);
+              
+              toast.error('Incorrect guess. Try again!');
             }
-          } else {
-            toast.error('Incorrect guess. Try again!');
           }
+          
+          const primaryStreak = server.primaryStreak || (globalObj && globalObj.streak) || 0;
+          setStreak(primaryStreak);
         }
-        
-        const primaryStreak = server.primaryStreak || (globalObj && globalObj.streak) || 0;
-        setStreak(primaryStreak);
-      }
 
-    } catch (e) {
-      if (e.response && e.response.status === 409) {
-        const errorMsg = e.response.data?.msg || 'You have already played today.';
-        toast.error(errorMsg);
-        
-        const responseData = e.response.data;
-        if (responseData) {
-          setTodayPlayed({ 
-            correct: responseData.dailyLimitReached || false, 
-            globalDaily: responseData.dailyLimitReached || false, 
-            date: today,
-            msg: errorMsg 
-          });
+      } catch (e) {
+        if (e.response && e.response.status === 409) {
+          const errorMsg = e.response.data?.msg || 'You have already played today.';
+          toast.error(errorMsg);
+          
+          const responseData = e.response.data;
+          if (responseData) {
+            setTodayPlayed({ 
+              correct: responseData.dailyLimitReached || false, 
+              globalDaily: responseData.dailyLimitReached || false, 
+              date: today,
+              msg: errorMsg 
+            });
+          }
+        } else {
+          toast.error('Unable to submit guess. Please check your connection.');
         }
-      } else {
-        toast.error('Unable to submit guess. Please check your connection.');
       }
-    }
-  })();
+    })();
 
-  setGuess('');
+    setGuess('');
   };
 
   // Show loading state

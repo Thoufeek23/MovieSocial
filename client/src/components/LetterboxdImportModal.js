@@ -85,7 +85,7 @@ const LetterboxdImportModal = ({ isOpen, onClose, onImportComplete }) => {
           </button>
           
           <p className="mt-4 text-xs text-center text-gray-500">
-            Note: Only reviews with star ratings will be imported. We only fetch the latest 50 items from your public feed.
+            Note: Only reviews with star ratings will be imported. We only fetch the latest 10 items from your public feed.
           </p>
         </form>
       </div>

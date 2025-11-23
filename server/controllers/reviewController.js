@@ -117,8 +117,11 @@ const importLetterboxdReviews = async (req, res) => {
         let importedCount = 0;
         let skippedCount = 0;
 
+        // --- CHANGED: Limit to the latest 10 items ---
+        const itemsToProcess = feed.items.slice(0, 10);
+
         // Process items sequentially to avoid overwhelming APIs
-        for (const item of feed.items) {
+        for (const item of itemsToProcess) {
             try {
                 // 1. Determine Rating
                 // Letterboxd uses 0.5-5 scale in memberRating
@@ -237,7 +240,8 @@ const importLetterboxdReviews = async (req, res) => {
             msg: `Import successful`, 
             imported: importedCount, 
             skipped: skippedCount,
-            note: "Note: Only the latest rated films from your public RSS feed were imported."
+            // --- CHANGED: Updated note text ---
+            note: "Note: Only the latest 10 rated films from your public RSS feed were imported."
         });
 
     } catch (error) {

@@ -11,7 +11,6 @@ import {
   Animated,
   KeyboardAvoidingView,
   Platform,
-  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../src/context/AuthContext';
@@ -23,7 +22,7 @@ const ModleGame = ({ language = 'English' }) => {
   const { user } = useContext(AuthContext);
   const { updateFromServerPayload, refreshGlobal } = useContext(ModleContext);
   
-  // State for puzzle - now loaded from backend
+  // State for puzzle
   const [puzzle, setPuzzle] = useState(null);
   const [puzzleLoading, setPuzzleLoading] = useState(true);
   const [puzzleError, setPuzzleError] = useState(null);
@@ -68,7 +67,6 @@ const ModleGame = ({ language = 'English' }) => {
       } catch (error) {
         console.error('Failed to load puzzle:', error);
         setPuzzleError(error.message || 'Failed to load puzzle');
-        // Fallback to a default puzzle structure
         setPuzzle({
           answer: 'LOADING',
           hints: ['Puzzle is loading...', 'Please check your connection'],
@@ -83,70 +81,62 @@ const ModleGame = ({ language = 'English' }) => {
     loadPuzzle();
   }, [language, effectiveDate]);
 
+  // --- UPDATED: Logic now matches Client (Web) exactly ---
   useEffect(() => {
-    // If user is signed in, prefer server as the source-of-truth.
     const load = async () => {
       try {
         if (user) {
-          // First check global status to see if user has played today
-          const globalRes = await api.getModleStatus('global');
-          if (globalRes && globalRes.data) {
-            const globalServer = globalRes.data;
-            const today = effectiveDate;
-            
-            // Check if user has played ANY language today
-            if (globalServer.history && globalServer.history[today]) {
-              // User has already played today - block all languages
-              setTodayPlayed({ 
-                correct: true, 
-                globalDaily: true, 
-                date: today,
-                msg: 'Already played today\'s Modle! One puzzle per day across all languages.' 
-              });
-              setStreak(globalServer.streak || 0);
-              setGuesses([]);
-              setRevealedHints(1);
-              return;
-            }
-          }
-          
-          // If not played globally, get language-specific data
           const res = await api.getModleStatus(language);
           if (res && res.data) {
-            const server = res.data;
+            const data = res.data;
             const today = effectiveDate;
             
-            // Check if user has played today for this language
-            if (server.history && server.history[today]) {
-              setTodayPlayed(server.history[today]);
-              setGuesses(server.history[today].guesses || []);
-              const prevGuesses = (server.history[today].guesses || []).length;
-              setRevealedHints(Math.min(maxReveal, Math.max(1, prevGuesses + 1)));
+            // Server now determines if user can play
+            if (!data.canPlay) {
+              const message = data.dailyLimitReached 
+                ? 'Already played today\'s Modle! One puzzle per day across all languages.'
+                : (data.completedToday ? 'You already solved today\'s puzzle.' : 'Cannot play today.');
+                
+              setTodayPlayed({ 
+                correct: data.completedToday, 
+                globalDaily: data.dailyLimitReached, 
+                date: today,
+                msg: message 
+              });
+              
+              const serverGuesses = data.language?.history?.[today]?.guesses || [];
+              setGuesses(serverGuesses);
+              setRevealedHints(Math.min(maxReveal, Math.max(1, serverGuesses.length + 1)));
             } else {
-              setTodayPlayed(null);
-              setGuesses([]);
-              setRevealedHints(1);
+              // User can play - check partial progress
+              if (data.language?.history?.[today] && !data.language.history[today].correct) {
+                const historyItem = data.language.history[today];
+                setTodayPlayed(historyItem);
+                const serverGuesses = historyItem.guesses || [];
+                setGuesses(serverGuesses);
+                setRevealedHints(Math.min(maxReveal, Math.max(1, serverGuesses.length + 1)));
+              } else {
+                // Fresh start
+                setTodayPlayed(null);
+                setGuesses([]);
+                setRevealedHints(1);
+              }
             }
             
-            // Use primary streak from server response
-            setStreak(server.primaryStreak || server.globalStreak || server.streak || 0);
+            setStreak(data.primaryStreak || 0);
             return;
           }
         }
       } catch (e) {
-        // server fetch failed; fall back to defaults
         console.debug('Failed to load modle status:', e);
       }
 
-      // No persistent localStorage fallback: for unauthenticated users or if server fetch fails
-      // we keep in-memory defaults so the UI remains functional but not persisted across reloads.
       setTodayPlayed(null);
       setGuesses([]);
       setRevealedHints(1);
       setStreak(0);
     };
 
-    // Only load modle status if puzzle is loaded
     if (puzzle && !puzzleLoading) {
       load();
     }
@@ -180,28 +170,25 @@ const ModleGame = ({ language = 'English' }) => {
       Alert.alert('Invalid Guess', 'Please enter a movie title.');
       return;
     }
-    
 
-
-    // Enforce one guess per revealed hint until the player has seen maxReveal hints.
     if (!(revealedHints >= maxReveal || guesses.length < revealedHints)) {
       Alert.alert('Hint Required', 'Submit a guess to reveal the next hint.');
       return;
     }
 
-    // Update guesses and reveal next hint immediately
+    // 1. Update guesses list immediately (Optimistic UI)
     const newGuesses = [...guesses, normalized];
     setGuesses(newGuesses);
     
-    // Reveal another hint after each submitted guess, up to the configured cap (maxReveal)
-    const newRevealedHints = Math.min(maxReveal, newGuesses.length + 1);
-    setRevealedHints(newRevealedHints);
+    // --- FIX: Do NOT update hints here immediately ---
+    // const newRevealedHints = Math.min(maxReveal, newGuesses.length + 1);
+    // setRevealedHints(newRevealedHints);
 
     const today = effectiveDate;
 
-    // Send guess to server for validation - server handles all game logic
     if (user) {
       try {
+        // 2. Send to server
         const res = await api.postModleResult({ 
           date: today, 
           language, 
@@ -213,42 +200,47 @@ const ModleGame = ({ language = 'English' }) => {
           const langObj = server.language || server;
           const globalObj = server.global;
           
-          // Server determines correctness - update UI accordingly
           if (langObj && langObj.history && langObj.history[today]) {
             const serverResult = langObj.history[today];
             setTodayPlayed(serverResult);
-            setGuesses(serverResult.guesses || []);
-            // Don't override revealed hints - we already revealed the next hint above
             
-            // Show success/failure message based on server validation
+            // Sync guesses if server has more (e.g. from another device)
+            if ((serverResult.guesses || []).length > newGuesses.length) {
+              setGuesses(serverResult.guesses || []);
+            }
+
+            // 3. Handle Correct vs Incorrect
             if (serverResult.correct) {
-              Alert.alert('Correct!', `The movie was ${puzzle.answer}.`);
-              
-              // Update context
-              updateFromServerPayload({ language: langObj, global: globalObj });
-              
-              // Refresh global state
-              try {
-                await refreshGlobal();
-              } catch (e) {
-                // ignore refresh errors
+              // --- CASE 1: Correct ---
+              // Do NOT increment hints.
+              // Fix blank answer issue if needed
+              if (server.solvedAnswer && puzzle.answer === 'LOADING') {
+                 setPuzzle(prev => ({ ...prev, answer: server.solvedAnswer }));
               }
+
+              Alert.alert('Correct!', `The movie was ${server.solvedAnswer || puzzle.answer}.`);
+              
+              updateFromServerPayload({ language: langObj, global: globalObj });
+              try { await refreshGlobal(); } catch (e) {}
+
             } else {
+              // --- CASE 2: Incorrect ---
+              // NOW we reveal the next hint
+              const nextHints = Math.min(maxReveal, newGuesses.length + 1);
+              setRevealedHints(nextHints);
+              
               Alert.alert('Incorrect', 'Try again!');
             }
           }
           
-          // Use primary/global streak for display
           const primaryStreak = server.primaryStreak || (globalObj && globalObj.streak) || 0;
           setStreak(primaryStreak);
         }
       } catch (e) {
-        // Handle server responses (daily limit, etc.)
         if (e.response && e.response.status === 409) {
           const errorMsg = e.response.data?.msg || 'You have already played today.';
           Alert.alert('Daily Limit', errorMsg);
           
-          // Set appropriate state based on server response
           const responseData = e.response.data;
           if (responseData) {
             setTodayPlayed({ 
@@ -259,19 +251,18 @@ const ModleGame = ({ language = 'English' }) => {
             });
           }
         } else {
-          // For network errors, show generic message
           Alert.alert('Error', 'Unable to submit guess. Please check your connection.');
         }
       }
     } else {
-      // For unauthenticated users, show local validation message
       Alert.alert('Error', 'Please log in to play Modle.');
     }
 
     setGuess('');
   };
 
-  // Show loading state
+  // ... [Rest of the render logic/styles remains the same] ...
+
   if (puzzleLoading) {
     return (
       <View style={styles.container}>
@@ -283,7 +274,6 @@ const ModleGame = ({ language = 'English' }) => {
     );
   }
 
-  // Show error state
   if (puzzleError && (!puzzle || puzzle.answer === 'LOADING')) {
     return (
       <View style={styles.container}>
@@ -291,7 +281,7 @@ const ModleGame = ({ language = 'English' }) => {
           <Ionicons name="alert-circle-outline" size={48} color="#dc2626" />
           <Text style={styles.errorTitle}>Failed to load puzzle</Text>
           <Text style={styles.errorText}>{puzzleError}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={() => window.location.reload()}>
+          <TouchableOpacity style={styles.retryButton} onPress={() => { /* Reload logic */ }}>
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
         </View>
@@ -299,7 +289,6 @@ const ModleGame = ({ language = 'English' }) => {
     );
   }
 
-  // Show puzzle not found state
   if (!puzzle) {
     return (
       <View style={styles.container}>
@@ -315,7 +304,6 @@ const ModleGame = ({ language = 'English' }) => {
       style={styles.container} 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      {/* Fixed Header Stats */}
       <View style={styles.fixedHeader}>
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
@@ -324,7 +312,7 @@ const ModleGame = ({ language = 'English' }) => {
           </View>
           <View style={styles.statItem}>
             <Text style={styles.statLabel}>Streak</Text>
-            <Text style={styles.statValue}>{streak} 🔥</Text>
+            <Text style={styles.statValue}>{streak} 櫨</Text>
           </View>
           <View style={styles.statItem}>
             <Text style={styles.statLabel}>Guesses</Text>
@@ -340,8 +328,8 @@ const ModleGame = ({ language = 'English' }) => {
             />
             <Text style={styles.solvedText}>
               {todayPlayed.globalDaily 
-                ? "Daily limit reached! One puzzle per day across all languages" 
-                : "Solved! Come back tomorrow for a new puzzle"}
+                ? "Daily limit reached!" 
+                : "Solved! Come back tomorrow"}
             </Text>
           </View>
         ) : (
@@ -352,13 +340,11 @@ const ModleGame = ({ language = 'English' }) => {
         )}
       </View>
 
-      {/* Scrollable Main Content */}
       <ScrollView 
         style={styles.mainContent} 
         contentContainerStyle={styles.mainContentContainer}
         showsVerticalScrollIndicator={false}
       >
-        {/* Win Animation */}
         {todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily) && (
           <Animated.View 
             style={[
@@ -369,12 +355,11 @@ const ModleGame = ({ language = 'English' }) => {
               }
             ]}
           >
-            <Text style={styles.winText}>🎉 Correct! 🎉</Text>
+            <Text style={styles.winText}>脂 Correct! 脂</Text>
             <Text style={styles.winSubtext}>The movie was {puzzle.answer}</Text>
           </Animated.View>
         )}
 
-        {/* Enhanced Hints Section */}
         <View style={styles.hintsSection}>
           <Text style={styles.sectionTitle}>Movie Clues</Text>
           <View style={styles.hintsList}>
@@ -398,7 +383,6 @@ const ModleGame = ({ language = 'English' }) => {
           )}
         </View>
 
-        {/* Previous Guesses */}
         <View style={styles.guessesSection}>
           <Text style={styles.sectionTitle}>Your Guesses</Text>
           {guesses.length === 0 ? (
@@ -445,7 +429,6 @@ const ModleGame = ({ language = 'English' }) => {
         </View>
       </ScrollView>
 
-      {/* Fixed Input Section at Bottom */}
       <View style={styles.fixedInputSection}>
         <View style={styles.inputContainer}>
           <View style={styles.inputRow}>
@@ -489,8 +472,6 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: 16,
   },
-  
-  // Fixed header styles
   fixedHeader: {
     backgroundColor: '#0f172a',
     paddingHorizontal: 20,
@@ -504,19 +485,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 8,
   },
-  
-  // Main scrollable content
   mainContent: {
     flex: 1,
     backgroundColor: '#09090b',
   },
-  
   mainContentContainer: {
     padding: 20,
     paddingBottom: 20,
   },
-  
-  // Fixed input section at bottom
   fixedInputSection: {
     backgroundColor: '#0f172a',
     paddingHorizontal: 20,
@@ -530,7 +506,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 8,
   },
-  
   inputContainer: {
     backgroundColor: 'transparent',
   },
@@ -573,9 +548,6 @@ const styles = StyleSheet.create({
   retryButtonText: {
     color: 'white',
     fontWeight: '600',
-  },
-  header: {
-    marginBottom: 24,
   },
   statsRow: {
     flexDirection: 'row',
@@ -702,8 +674,6 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     fontWeight: '500',
   },
-  
-  // Enhanced hint note styles
   hintNote: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -714,14 +684,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     gap: 8,
   },
-  
   hintNoteText: {
     fontSize: 13,
     color: '#9ca3af',
     fontStyle: 'italic',
   },
-  
-  // Empty guesses state
   emptyGuesses: {
     alignItems: 'center',
     paddingVertical: 50,
@@ -739,22 +706,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontStyle: 'italic',
   },
-  
-  // Enhanced guess card
   guessContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
-  },
-  hintNote: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginTop: 8,
-    fontStyle: 'italic',
-  },
-  inputSection: {
-    marginBottom: 24,
   },
   inputRow: {
     flexDirection: 'row',
@@ -777,13 +733,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  
   inputDisabled: {
     backgroundColor: '#111827',
     borderColor: '#1f2937',
     color: '#6b7280',
   },
-  
   guessButton: {
     backgroundColor: '#10b981',
     paddingHorizontal: 20,
@@ -801,11 +755,6 @@ const styles = StyleSheet.create({
   guessButtonDisabled: {
     backgroundColor: '#475569',
     shadowOpacity: 0.1,
-  },
-  guessButtonText: {
-    color: 'white',
-    fontWeight: '600',
-    fontSize: 16,
   },
   guessesSection: {
     marginBottom: 24,

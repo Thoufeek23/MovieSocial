@@ -18,11 +18,11 @@ const ProfileHeader = ({
   onSettingsPress,
   onFollowersPress,
   onFollowingPress,
+  onImportPress, // <-- Added to match Client
   stats = {}
 }) => {
   const { user: currentUser, logout } = useContext(AuthContext);
   const router = useRouter();
-  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const isCurrentUser = currentUser && String(currentUser._id || currentUser.id) === String(user._id || user.id);
 
   const renderBadge = (badge) => {
@@ -57,6 +57,7 @@ const ProfileHeader = ({
     if (isCurrentUser) {
       options.push('Share Profile');
       options.push('Edit Profile');
+      options.push('Import from Letterboxd'); // <-- Added to match Client
       options.push('Logout');
       options.push('Delete Account');
       options.push('Cancel');
@@ -68,7 +69,7 @@ const ProfileHeader = ({
     Alert.alert(
       'Profile Options',
       undefined,
-      options.map((option, index) => ({
+      options.map((option) => ({
         text: option,
         style: option === 'Cancel' ? 'cancel' : 
                (option === 'Logout' || option === 'Delete Account') ? 'destructive' : 'default',
@@ -77,6 +78,8 @@ const ProfileHeader = ({
             handleShareProfile();
           } else if (option === 'Edit Profile') {
             onEditPress?.();
+          } else if (option === 'Import from Letterboxd') {
+            onImportPress?.(); // <-- Handle Import
           } else if (option === 'Logout') {
             handleLogout();
           } else if (option === 'Delete Account') {
@@ -95,7 +98,6 @@ const ProfileHeader = ({
         title: `${user.username}'s MovieSocial Profile`
       });
     } catch (error) {
-      // Fallback to clipboard if share fails
       await Clipboard.setStringAsync(`https://moviesocial.app/profile/${user.username}`);
       Alert.alert('Profile Link Copied', 'The profile link has been copied to your clipboard.');
     }
@@ -128,7 +130,6 @@ const ProfileHeader = ({
           text: 'Delete Account',
           style: 'destructive',
           onPress: () => {
-            // Second confirmation
             Alert.alert(
               'Are you absolutely sure?',
               'Type DELETE to confirm account deletion',
@@ -239,7 +240,17 @@ const ProfileHeader = ({
             <Text style={styles.primaryButtonText}>Edit Profile</Text>
           </TouchableOpacity>
         ) : (
-          <>
+          <View style={styles.actionButtonsContainer}>
+            {/* --- ADDED: Message Button (Matches Client) --- */}
+            <TouchableOpacity 
+              style={styles.messageButton} 
+              onPress={() => router.push(`/chat/${user.username}`)}
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={20} color="#e5e7eb" />
+              <Text style={styles.messageButtonText}>Message</Text>
+            </TouchableOpacity>
+
+            {/* Follow Button */}
             <TouchableOpacity 
               style={[styles.primaryButton, isFollowing && styles.followingButton]} 
               onPress={onFollowPress}
@@ -253,7 +264,7 @@ const ProfileHeader = ({
                 {isFollowing ? 'Unfollow' : 'Follow'}
               </Text>
             </TouchableOpacity>
-          </>
+          </View>
         )}
       </View>
     </View>
@@ -367,10 +378,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9ca3af',
   },
+  // Action Buttons
   actionRow: {
+    marginTop: 4,
+  },
+  actionButtonsContainer: {
     flexDirection: 'row',
-    justifyContent: 'center',
     gap: 12,
+    flex: 1,
   },
   primaryButton: {
     flex: 1,
@@ -382,6 +397,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 8,
     gap: 6,
+  },
+  // Message Button Style (Ghost style like Client)
+  messageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#4b5563',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    gap: 6,
+    minWidth: 110,
+  },
+  messageButtonText: {
+    color: '#e5e7eb',
+    fontSize: 14,
+    fontWeight: '600',
   },
   followingButton: {
     backgroundColor: 'transparent',
@@ -395,14 +429,6 @@ const styles = StyleSheet.create({
   },
   followingButtonText: {
     color: '#dc2626',
-  },
-  secondaryButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#374151',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
   },
 });
 

@@ -1,9 +1,9 @@
 const BADGE_MAP = {
   new_user: { 
     id: 'new_user', 
-    title: 'Welcome to MovieSocial!', 
+    title: 'New user', 
     short: 'New User', 
-    description: 'Welcome to MovieSocial! This badge marks your first step into our movie community.', 
+    description: 'New user! This badge marks your first step into our movie community.', 
     color: '#10b981', 
     icon: '🎬' 
   },
