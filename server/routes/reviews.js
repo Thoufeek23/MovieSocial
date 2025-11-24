@@ -3,6 +3,7 @@ const router = express.Router();
 const { 
     createReview, 
     importLetterboxdReviews,
+    getUserReviews,
     getMyReviews,
     getFeedReviews,
     getPersonalizedFeedReviews,
@@ -32,6 +33,9 @@ router.route('/mine')
 
 router.route('/movie/:movieId')
     .get(getMovieReviews);
+
+router.route('/user/:username')
+    .get(getUserReviews);
 
 // Movie stats (MovieSocial weighted rating + count)
 router.route('/movie/:movieId/stats')

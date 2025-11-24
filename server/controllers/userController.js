@@ -15,13 +15,11 @@ const getUserProfile = async (req, res) => {
         if (!user) {
             return res.status(404).json({ msg: 'User not found' });
         }
-        // Add follower/following counts and whether the current user follows this profile
         const profile = user.toObject();
         profile.followersCount = (user.followers || []).length;
         profile.followingCount = (user.following || []).length;
-    profile.isFollowedByCurrentUser = false;
+        profile.isFollowedByCurrentUser = false;
 
-        // If protect middleware ran it will set req.user. If not, also accept a Bearer token in the Authorization header
         let currentUserId = null;
         if (req.user) {
             currentUserId = req.user.id;
@@ -33,19 +31,15 @@ const getUserProfile = async (req, res) => {
                     const decoded = jwt.verify(token, process.env.JWT_SECRET);
                     currentUserId = decoded.user && decoded.user.id ? decoded.user.id : null;
                 }
-            } catch (e) {
-                // ignore token errors — leave currentUserId null
-            }
+            } catch (e) {}
         }
 
         if (currentUserId) {
             profile.isFollowedByCurrentUser = (user.followers || []).some(f => String(f._id) === String(currentUserId));
         }
 
-        // Add discussion counts: started and participated
         try {
             const startedCount = await Discussion.countDocuments({ starter: user._id });
-            // participated = commented (exclude starter-only) — count distinct discussions where user has at least one comment
             const participatedCountAgg = await Discussion.aggregate([
                 { $match: { 'comments.user': user._id } },
                 { $group: { _id: '$_id' } },
@@ -58,9 +52,8 @@ const getUserProfile = async (req, res) => {
         } catch (e) {
             profile.discussionsStarted = 0;
             profile.discussionsParticipated = 0;
-            logger.warn('Failed to compute discussion counts for profile', e);
         }
-        // Compute community agreement metrics based on other users' votes on this user's reviews
+        
         try {
             const reviews = await Review.find({ user: user._id }, 'agreementVotes');
             let totalVotes = 0;
@@ -80,23 +73,18 @@ const getUserProfile = async (req, res) => {
                 });
             });
 
-            const average = totalVotes > 0 ? (sumValues / totalVotes) * 100 : null; // percent 0-100
+            const average = totalVotes > 0 ? (sumValues / totalVotes) * 100 : null; 
             const agreePercent = totalVotes > 0 ? Math.round((agreeCount / totalVotes) * 100) : 0;
             const partialPercent = totalVotes > 0 ? Math.round((partialCount / totalVotes) * 100) : 0;
             const disagreePercent = totalVotes > 0 ? Math.round((disagreeCount / totalVotes) * 100) : 0;
 
             profile.communityAgreement = {
                 average: average === null ? null : Math.round(average),
-                breakdown: {
-                    agreePercent,
-                    partialPercent,
-                    disagreePercent,
-                },
+                breakdown: { agreePercent, partialPercent, disagreePercent },
                 totalVotes
             };
         } catch (e) {
             profile.communityAgreement = { average: null, breakdown: { agreePercent: 0, partialPercent: 0, disagreePercent: 0 }, totalVotes: 0 };
-            logger.warn('Failed to compute community agreement metrics', e);
         }
         res.json(profile);
     } catch (error) {
@@ -115,10 +103,7 @@ const updateProfile = async (req, res) => {
         const { bio, avatar, interests } = req.body;
         if (typeof bio !== 'undefined') user.bio = bio;
         if (typeof avatar !== 'undefined') user.avatar = avatar;
-        if (Array.isArray(interests)) {
-            // Limit to top 3 interests
-            user.interests = interests.slice(0, 3);
-        }
+        if (Array.isArray(interests)) user.interests = interests.slice(0, 3);
 
         await user.save();
         res.json({ msg: 'Profile updated', user });
@@ -137,12 +122,10 @@ const followUser = async (req, res) => {
         const me = await User.findById(req.user.id);
         if (!me) return res.status(404).json({ msg: 'User not found' });
 
-        // Prevent following yourself
         if (String(target._id) === String(me._id)) {
             return res.status(400).json({ msg: "You can't follow yourself" });
         }
 
-        // Add to following/followers if not already present
         if (!((me.following || []).map(String).includes(String(target._id)))) {
             me.following = me.following || [];
             me.following.push(target._id);
@@ -189,15 +172,17 @@ const addToWatchlist = async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
         const { movieId } = req.body;
-        // normalize to strings for safe comparison
         const mid = String(movieId);
 
         if (user.watchlist.map(String).includes(mid)) {
             return res.status(400).json({ msg: 'Movie already in watchlist' });
         }
 
-        // If movie is in watched, remove it to enforce exclusivity
-        user.watched = (user.watched || []).filter((id) => String(id) !== mid);
+        // Remove from watched if exists (handle objects)
+        user.watched = (user.watched || []).filter(entry => {
+            const entryId = typeof entry === 'string' ? entry : entry.movieId;
+            return String(entryId) !== mid;
+        });
 
         user.watchlist.push(mid);
         await user.save();
@@ -208,27 +193,33 @@ const addToWatchlist = async (req, res) => {
     }
 };
 
-// @desc    Add a movie to the user's watched list
-// @route   POST /api/users/watched
+// --- UPDATED: Add to Watched (Allows Duplicates/Rewatches) ---
 const addToWatched = async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
-        const { movieId } = req.body;
+        const { movieId, date } = req.body;
         const mid = String(movieId);
 
-        if ((user.watched || []).map(String).includes(mid)) {
-            return res.status(400).json({ msg: 'Movie already in watched list' });
-        }
+        // --- FIX: Removed the check that prevents duplicates ---
+        // We now want to allow multiple entries for rewatches
 
         // Remove from watchlist if it exists there
         user.watchlist = (user.watchlist || []).filter((id) => String(id) !== mid);
 
+        // Initialize array if undefined
         user.watched = user.watched || [];
-        user.watched.push(mid);
+        
+        // Push the new watched entry with its specific date
+        // Mongoose will automatically cast this object to the subdocument schema
+        user.watched.push({
+            movieId: mid,
+            watchedAt: date ? new Date(date) : new Date()
+        });
+
         await user.save();
         res.json(user.watched);
     } catch (error) {
-        logger.error(error);
+        logger.error('addToWatched error:', error);
         res.status(500).json({ msg: 'Server Error' });
     }
 };
@@ -256,7 +247,14 @@ const removeFromWatched = async (req, res) => {
         const user = await User.findById(req.user.id);
         const { movieId } = req.body;
         const mid = String(movieId);
-        user.watched = (user.watched || []).filter((id) => String(id) !== mid);
+        
+        // Filter out the movie (removes ALL instances/rewatches of this movie)
+        // Handles both legacy string format and new object format
+        user.watched = (user.watched || []).filter((entry) => {
+            if (typeof entry === 'string') return entry !== mid;
+            return entry.movieId !== mid;
+        });
+
         await user.save();
         res.json(user.watched);
     } catch (error) {
@@ -264,17 +262,50 @@ const removeFromWatched = async (req, res) => {
     }
 };
 
-
 // @desc    Search users by username prefix
 // @route   GET /api/users/search?q=...
 const searchUsers = async (req, res) => {
     try {
         const q = (req.query.q || '').trim();
         if (!q) return res.json([]);
-        // search by prefix, case-insensitive, limit to 12
         const re = new RegExp('^' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
         const users = await User.find({ username: re }).select('username avatar').limit(12);
         res.json(users);
+    } catch (error) {
+        res.status(500).json({ msg: 'Server Error' });
+    }
+};
+
+// DELETE /api/users/me - delete current user's account and cascade cleanups
+const deleteMyAccount = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const user = await User.findById(userId);
+        if (!user) return res.status(404).json({ msg: 'User not found' });
+
+        try {
+            const Comment = require('../models/Comment');
+            await Comment.deleteMany({ user: userId });
+            await Review.updateMany({ likes: userId }, { $pull: { likes: userId } });
+            await Review.updateMany({ 'agreementVotes.user': userId }, { $pull: { agreementVotes: { user: userId } } });
+            await Review.deleteMany({ user: userId });
+        } catch (e) {}
+
+        try {
+            await Discussion.deleteMany({ starter: userId });
+            await Discussion.updateMany(
+                { 'comments.user': userId },
+                { $pull: { comments: { user: userId } } }
+            );
+        } catch (e) {}
+
+        try {
+            await User.updateMany({ followers: userId }, { $pull: { followers: userId } });
+            await User.updateMany({ following: userId }, { $pull: { following: userId } });
+        } catch (e) {}
+
+        await User.findByIdAndDelete(userId);
+        res.json({ msg: 'Account deleted' });
     } catch (error) {
         res.status(500).json({ msg: 'Server Error' });
     }
@@ -290,76 +321,5 @@ module.exports = {
     removeFromWatchlist,
     removeFromWatched,
     searchUsers,
-    // Delete account
     deleteMyAccount,
 };
-
-// DELETE /api/users/me - delete current user's account and cascade cleanups
-async function deleteMyAccount(req, res) {
-    try {
-        const userId = req.user.id;
-        const user = await User.findById(userId);
-        if (!user) return res.status(404).json({ msg: 'User not found' });
-
-        // Remove user's reviews
-        try {
-            const Review = require('../models/Review');
-                // First, delete comments that are stored in a separate Comment model and reference reviews
-                try {
-                    const Comment = require('../models/Comment');
-                    await Comment.deleteMany({ user: userId });
-                } catch (e) {
-                    logger.error('Failed to delete review comments authored by user:', e);
-                }
-
-                // Remove the user's likes and agreement votes from other reviews, then delete reviews authored by the user
-                try {
-                    // Remove likes where the user liked other users' reviews
-                    await Review.updateMany({ likes: userId }, { $pull: { likes: userId } });
-                    // Remove agreement votes by the user from any review
-                    await Review.updateMany({ 'agreementVotes.user': userId }, { $pull: { agreementVotes: { user: userId } } });
-                    // Finally delete reviews authored by the user
-                    await Review.deleteMany({ user: userId });
-                } catch (e) {
-                    logger.error('Failed to clean up reviews/likes/votes for user:', e);
-                }
-        } catch (e) {
-            logger.error('Failed to delete user reviews:', e);
-        }
-
-        // Remove discussions started by user
-        try {
-            const Discussion = require('../models/Discussion');
-            await Discussion.deleteMany({ starter: userId });
-        } catch (e) {
-            logger.error('Failed to delete user discussions:', e);
-        }
-
-        // Remove user's comments from other discussions
-        try {
-            const Discussion = require('../models/Discussion');
-            await Discussion.updateMany(
-                { 'comments.user': userId },
-                { $pull: { comments: { user: userId } } }
-            );
-        } catch (e) {
-            logger.error('Failed to remove user comments from discussions:', e);
-        }
-
-        // Remove user from other users' followers/following lists
-        try {
-            await User.updateMany({ followers: userId }, { $pull: { followers: userId } });
-            await User.updateMany({ following: userId }, { $pull: { following: userId } });
-        } catch (e) {
-            logger.error('Failed to clean follower/following references:', e);
-        }
-
-        // Finally delete the user
-        await User.findByIdAndDelete(userId);
-
-        res.json({ msg: 'Account deleted' });
-    } catch (error) {
-        logger.error(error);
-        res.status(500).json({ msg: 'Server Error' });
-    }
-}

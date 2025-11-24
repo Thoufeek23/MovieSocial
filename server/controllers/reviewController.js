@@ -3,6 +3,7 @@ const logger = require('../utils/logger');
 const badges = require('../utils/badges');
 const Parser = require('rss-parser');
 const axios = require('axios');
+const User = require('../models/User');
 
 // Simple in-memory TTL cache for movie stats to reduce aggregation load
 const statsCache = new Map(); // movieId -> { value: { movieSocialRating, reviewCount }, expires: Number }
@@ -565,9 +566,28 @@ const voteReview = async (req, res) => {
     }
 };
 
+const getUserReviews = async (req, res) => {
+    try {
+        const user = await User.findOne({ username: req.params.username });
+        if (!user) {
+            return res.status(404).json({ msg: 'User not found' });
+        }
+
+        const reviews = await Review.find({ user: user._id })
+            .populate('user', 'username avatar _id badges')
+            .sort({ createdAt: -1 });
+            
+        res.json(reviews);
+    } catch (error) {
+        logger.error('getUserReviews error', error);
+        res.status(500).json({ msg: 'Server Error' });
+    }
+};
+
 module.exports = {
     createReview,
     importLetterboxdReviews,
+    getUserReviews,
     getMyReviews,
     getFeedReviews,
     getPersonalizedFeedReviews,

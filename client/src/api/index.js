@@ -1,8 +1,8 @@
 import axios from 'axios';
 
 // In production the client should be built with REACT_APP_API_URL set to your API root 
-//const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://localhost:5001';
-const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'https://moviesocial-backend-khd2.onrender.com';
+const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://localhost:5001';
+// const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'https://moviesocial-backend-khd2.onrender.com';
 const API = axios.create({ baseURL: `${apiRoot}/api` });
 
 API.interceptors.request.use((req) => {
@@ -12,7 +12,6 @@ API.interceptors.request.use((req) => {
   return req;
 });
 
-// ... [Keep other exports the same until sendMessage] ...
 // Authentication
 export const login = (formData) => API.post('/auth/login', formData);
 export const register = (formData) => API.post('/auth/register', formData);
@@ -39,6 +38,9 @@ export const getMovieStats = (movieId) => API.get(`/reviews/movie/${movieId}/sta
 export const updateReview = (id, reviewData) => API.put(`/reviews/${id}`, reviewData);
 export const deleteReview = (id) => API.delete(`/reviews/${id}`);
 export const fetchMyReviews = () => API.get('/reviews/mine');
+// --- ADDED THIS MISSING EXPORT ---
+export const getReviewsByUser = (username) => API.get(`/reviews/user/${username}`);
+// ---------------------------------
 export const importLetterboxd = (username) => API.post('/reviews/import/letterboxd', { username });
 export const voteReview = (id, value) => API.post(`/reviews/${id}/vote`, { value });
 
@@ -47,7 +49,8 @@ export const getUserProfile = (username) => API.get(`/users/${username}`);
 export const getMyProfile = () => API.get('/auth/me');
 export const searchUsers = (q) => API.get(`/users/search?q=${encodeURIComponent(q)}`);
 export const addToWatchlist = (movieId) => API.post('/users/watchlist', { movieId });
-export const addToWatched = (movieId) => API.post('/users/watched', { movieId });
+// Updated to accept date
+export const addToWatched = (movieId, date) => API.post('/users/watched', { movieId, date });
 export const removeFromWatchlist = (movieId) => API.delete('/users/watchlist', { data: { movieId } });
 export const removeFromWatched = (movieId) => API.delete('/users/watched', { data: { movieId } });
 export const updateMyProfile = (profileData) => API.patch('/users/me', profileData);
@@ -97,10 +100,9 @@ export const createPuzzle = (puzzleData) => API.post('/puzzles', puzzleData);
 export const updatePuzzle = (id, puzzleData) => API.put(`/puzzles/${id}`, puzzleData);
 export const deletePuzzle = (id) => API.delete(`/puzzles/${id}`);
 
-// Messages - Updated
+// Messages
 export const getConversations = () => API.get('/messages/conversations');
 export const getMessages = (userId) => API.get(`/messages/${userId}`);
-// Updated to accept attachments
 export const sendMessage = (recipientId, content, attachments = {}) => 
     API.post('/messages', { recipientId, content, ...attachments });
 export const markMessagesRead = (username) => API.put(`/messages/${username}/read`);
