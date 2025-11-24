@@ -1,8 +1,8 @@
 import axios from 'axios';
 
 // In production the client should be built with REACT_APP_API_URL set to your API root 
-const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://localhost:5001';
-// const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'https://moviesocial-backend-khd2.onrender.com';
+//const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://localhost:5001';
+const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'https://moviesocial-backend-khd2.onrender.com';
 const API = axios.create({ baseURL: `${apiRoot}/api` });
 
 API.interceptors.request.use((req) => {
@@ -107,8 +107,8 @@ export const deletePuzzle = (id) => API.delete(`/puzzles/${id}`);
 // Messages
 export const getConversations = () => API.get('/messages/conversations');
 export const getMessages = (userId) => API.get(`/messages/${userId}`);
-export const sendMessage = (recipientId, content, attachments = {}) => 
-    API.post('/messages', { recipientId, content, ...attachments });
+export const sendMessage = (recipientId, content, attachments = {}) =>
+  API.post('/messages', { recipientId, content, ...attachments });
 export const markMessagesRead = (username) => API.put(`/messages/${username}/read`);
 export const deleteMessage = (messageId) => API.delete(`/messages/${messageId}`);
 export const getUnreadMessageCount = () => API.get('/messages/unread-count');
