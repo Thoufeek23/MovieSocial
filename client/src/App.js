@@ -19,6 +19,7 @@ import BadgeDetail from './pages/BadgeDetail';
 import ModlePage from './pages/ModlePage';
 import ModlePlayPage from './pages/ModlePlayPage';
 import PuzzleAdmin from './pages/PuzzleAdmin';
+import UserAdmin from './pages/UserAdmin'; // Import new page
 import InterestsPage from './pages/InterestsPage';
 import AIMovieRecommendationPage from './pages/AIMovieRecommendationPage';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -86,6 +87,8 @@ const AppRoutes = () => {
                 <PageWrapper><MessagesPage /></PageWrapper>
               </ProtectedRoute>
             } />
+            
+            {/* Admin Routes */}
             <Route 
               path="/admin/puzzles" 
               element={
@@ -94,6 +97,15 @@ const AppRoutes = () => {
                 </PrivateRoute>
               } 
             />
+            <Route 
+              path="/admin/users" 
+              element={
+                <PrivateRoute>
+                  <PageWrapper><UserAdmin /></PageWrapper>
+                </PrivateRoute>
+              } 
+            />
+
             <Route path="/movie/:id" element={
               <ProtectedRoute>
                 <PageWrapper><MovieDetailPage /></PageWrapper>

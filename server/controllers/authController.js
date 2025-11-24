@@ -25,8 +25,8 @@ const registerUser = async (req, res) => {
         }
 
         // Validate username length
-        if (username.trim().length > 10) {
-            return res.status(400).json({ msg: 'Username cannot be more than 10 characters' });
+        if (username.trim().length > 20) {
+            return res.status(400).json({ msg: 'Username cannot be more than 20 characters' });
         }
 
         const userExists = await User.findOne({ email });

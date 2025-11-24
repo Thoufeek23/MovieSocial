@@ -145,7 +145,7 @@ const ProfilePage = () => {
 
     // --- RENDER HELPER: Horizontal Discussion Card ---
     const DiscussionCardSmall = ({ d }) => (
-        <Link to={`/discussion/${d._id}`} className="flex-shrink-0 w-72 bg-gray-900 border border-gray-800 rounded-xl overflow-hidden hover:border-gray-700 transition-all group">
+        <Link to={`/discussions/${d._id}`} className="flex-shrink-0 w-72 bg-gray-900 border border-gray-800 rounded-xl overflow-hidden hover:border-gray-700 transition-all group">
             <div className="flex h-24">
                 <img 
                     src={d.poster_path ? `https://image.tmdb.org/t/p/w154${d.poster_path}` : '/default_dp.png'} 

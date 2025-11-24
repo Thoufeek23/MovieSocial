@@ -12,6 +12,10 @@ API.interceptors.request.use((req) => {
   return req;
 });
 
+//Admin
+export const getAllUsers = () => API.get('/users/admin/list');
+export const adminDeleteUser = (id) => API.delete(`/users/${id}`);
+
 // Authentication
 export const login = (formData) => API.post('/auth/login', formData);
 export const register = (formData) => API.post('/auth/register', formData);

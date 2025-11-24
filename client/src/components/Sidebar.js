@@ -1,7 +1,7 @@
 import React, { useContext, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import { Home, Search, User, FileText, BookOpen, Puzzle, Database, MessageCircle } from 'lucide-react';
+import { Home, Search, User, FileText, BookOpen, Puzzle, Database, MessageCircle, Users } from 'lucide-react';
 import { Award } from 'lucide-react';
 import * as api from '../api';
 
@@ -84,6 +84,7 @@ const Sidebar = () => {
               <div className="border-t border-gray-700 my-2 w-full"></div>
               <div className="text-xs text-gray-500 px-4 mb-1 hidden md:block">ADMIN</div>
               <NavItem to="/admin/puzzles" icon={Database} label="Puzzle Admin" />
+              <NavItem to="/admin/users" icon={Users} label="User Admin" />
             </>
           )}
         </nav>

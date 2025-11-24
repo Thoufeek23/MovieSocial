@@ -267,11 +267,30 @@ const removeFromWatched = async (req, res) => {
 const searchUsers = async (req, res) => {
     try {
         const q = (req.query.q || '').trim();
-        if (!q) return res.json([]);
+        
+        // --- MODIFIED LOGIC START ---
+        if (!q) {
+            // If no query is provided, return the top 20 users with the most followers
+            const users = await User.aggregate([
+                // Calculate size of followers array
+                { $addFields: { followersCount: { $size: { $ifNull: ["$followers", []] } } } },
+                // Sort by followers count descending
+                { $sort: { followersCount: -1 } },
+                { $limit: 20 },
+                // Return only necessary fields
+                { $project: { username: 1, avatar: 1, followersCount: 1 } }
+            ]);
+            return res.json(users);
+        }
+        // --- MODIFIED LOGIC END ---
+
         const re = new RegExp('^' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
         const users = await User.find({ username: re }).select('username avatar').limit(12);
         res.json(users);
     } catch (error) {
+        // Use logger if available, otherwise console
+        if (typeof logger !== 'undefined') logger.error(error);
+        else console.error(error);
         res.status(500).json({ msg: 'Server Error' });
     }
 };
@@ -311,6 +330,66 @@ const deleteMyAccount = async (req, res) => {
     }
 };
 
+// @desc    Get all users (Admin only)
+// @route   GET /api/users/admin/list
+const getAllUsers = async (req, res) => {
+    try {
+        // Return all users sorted by newest first
+        const users = await User.find({})
+            .select('-passwordHash')
+            .sort({ createdAt: -1 });
+        res.json(users);
+    } catch (error) {
+        logger.error(error);
+        res.status(500).json({ msg: 'Server Error' });
+    }
+};
+
+// @desc    Delete a user by ID (Admin only)
+// @route   DELETE /api/users/:id
+const deleteUser = async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const user = await User.findById(userId);
+        if (!user) return res.status(404).json({ msg: 'User not found' });
+
+        // Prevent deleting yourself via this route
+        if (req.user.id === userId) {
+             return res.status(400).json({ msg: 'You cannot delete your own admin account from here.' });
+        }
+
+        // --- Cleanup Logic (Same as deleteMyAccount) ---
+        try {
+            await Comment.deleteMany({ user: userId });
+            await Review.updateMany({ likes: userId }, { $pull: { likes: userId } });
+            await Review.updateMany({ 'agreementVotes.user': userId }, { $pull: { agreementVotes: { user: userId } } });
+            await Review.deleteMany({ user: userId });
+        } catch (e) { logger.error(e); }
+
+        try {
+            await Discussion.deleteMany({ starter: userId });
+            await Discussion.updateMany(
+                { 'comments.user': userId },
+                { $pull: { comments: { user: userId } } }
+            );
+        } catch (e) { logger.error(e); }
+
+        try {
+            await User.updateMany({ followers: userId }, { $pull: { followers: userId } });
+            await User.updateMany({ following: userId }, { $pull: { following: userId } });
+        } catch (e) { logger.error(e); }
+
+        await User.findByIdAndDelete(userId);
+        
+        logger.info(`User ${user.username} deleted by Admin ${req.user.username}`);
+        res.json({ msg: 'User deleted successfully' });
+
+    } catch (error) {
+        logger.error(error);
+        res.status(500).json({ msg: 'Server Error' });
+    }
+};
+
 module.exports = {
     getUserProfile,
     updateProfile,
@@ -322,4 +401,6 @@ module.exports = {
     removeFromWatched,
     searchUsers,
     deleteMyAccount,
+    getAllUsers, // New export
+    deleteUser,  // New export
 };
