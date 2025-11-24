@@ -6,6 +6,7 @@ import Avatar from '../components/Avatar';
 import ReviewCard from '../components/ReviewCard';
 import * as api from '../api';
 import toast from 'react-hot-toast';
+import { io } from 'socket.io-client';
 
 // Simple Discussion Card for Chat
 const ChatDiscussionCard = ({ discussion }) => {
@@ -36,7 +37,6 @@ const ChatDiscussionCard = ({ discussion }) => {
 };
 
 const MessagesPage = () => {
-    // --- FIX 1: Destructure updateUnreadCount from context ---
     const { user, updateUnreadCount } = useContext(AuthContext);
     const navigate = useNavigate();
     const location = useLocation();
@@ -52,10 +52,85 @@ const MessagesPage = () => {
     // Refs
     const scrollRef = useRef();
     const inputRef = useRef();
+    
+    // Socket Refs
+    const socketRef = useRef();
+    const currentChatRef = useRef(); // Needed to access current state inside socket listener
 
     // Parse query params
     const queryParams = new URLSearchParams(location.search);
     const initialChatUser = queryParams.get('user');
+
+    // --- SOCKET.IO INTEGRATION START ---
+
+    // 1. Keep the Ref synced with the State so the socket listener knows who we are talking to
+    useEffect(() => {
+        currentChatRef.current = currentChat;
+    }, [currentChat]);
+
+    // 2. Initialize Socket & Listen for Messages
+    useEffect(() => {
+        // Connect to backend (uses env var or defaults to localhost)
+        const socketUrl = process.env.REACT_APP_API_URL || 'https://moviesocial-backend-khd2.onrender.com';
+        //const socketUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+        socketRef.current = io(socketUrl);
+
+        // Join specific user room to receive private messages
+        if (user?._id) {
+            socketRef.current.emit("join_room", user._id);
+        }
+
+        // Listen for incoming messages
+        socketRef.current.on("receive_message", (incomingMsg) => {
+            const activeChat = currentChatRef.current;
+            const senderUsername = incomingMsg.sender.username;
+            const senderId = incomingMsg.sender._id || incomingMsg.sender;
+
+            // Check if this message belongs to the currently open chat
+            const isChattingWithSender = activeChat && (
+                activeChat._id === senderId || 
+                activeChat.username === senderUsername
+            );
+
+            if (isChattingWithSender) {
+                // If chat is open, append message immediately to the view
+                setMessages(prev => [...prev, incomingMsg]);
+                // Optional: API call to mark as read could go here
+            } else {
+                // If chat is NOT open, update the global unread count badge in the sidebar/navbar
+                if (updateUnreadCount) updateUnreadCount();
+            }
+
+            // Update the Sidebar Conversations List (Move sender to top)
+            setConversations(prev => {
+                // Remove the sender's old conversation entry from the list
+                const otherConvs = prev.filter(c => 
+                    c.otherUser.username !== senderUsername
+                );
+                
+                // Find existing conversation data to preserve user details
+                const existingConv = prev.find(c => c.otherUser.username === senderUsername);
+                
+                // Create new conversation object
+                const newConv = {
+                    otherUser: existingConv ? existingConv.otherUser : incomingMsg.sender,
+                    lastMessage: incomingMsg,
+                    // If we are chatting with them, unread is 0. Otherwise increment.
+                    unreadCount: isChattingWithSender ? 0 : (existingConv ? existingConv.unreadCount + 1 : 1)
+                };
+
+                // Return new list with sender at the top
+                return [newConv, ...otherConvs];
+            });
+        });
+
+        // Cleanup on unmount
+        return () => {
+            socketRef.current?.disconnect();
+        };
+    }, [user, updateUnreadCount]); // Re-run only if user changes
+
+    // --- SOCKET.IO INTEGRATION END ---
 
     // Helper: Format Date for Sidebar
     const formatConversationDate = (dateString) => {
@@ -76,7 +151,7 @@ const MessagesPage = () => {
         }
     };
 
-    // 1. Load Conversations & Initial Chat
+    // Load Conversations & Initial Chat
     useEffect(() => {
         const loadData = async () => {
             try {
@@ -109,7 +184,7 @@ const MessagesPage = () => {
         loadData();
     }, [initialChatUser]);
 
-    // 2. Auto-scroll to bottom
+    // Auto-scroll to bottom
     useEffect(() => {
         scrollRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages]);
@@ -132,7 +207,6 @@ const MessagesPage = () => {
             ]);
             setMessages(msgsRes.data);
             
-            // --- FIX 2: Force sidebar to update immediately ---
             if (updateUnreadCount) updateUnreadCount();
 
         } catch (error) {

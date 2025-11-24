@@ -47,6 +47,13 @@ exports.sendMessage = async (req, res) => {
         populate: { path: 'starter', select: 'username avatar' }
       }
     ]);
+
+    const io = req.app.get('io');
+    
+    // Emit to the recipient's "room" (which is their User ID)
+    if (io) {
+      io.to(recipientId).emit('receive_message', savedMessage);
+    }
     
     res.status(201).json(savedMessage);
   } catch (err) {

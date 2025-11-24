@@ -2,7 +2,6 @@ import React, { useContext, useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
-  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
@@ -11,32 +10,30 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import MaskedView from '@react-native-masked-view/masked-view';
-
 import { AuthContext } from '../../src/context/AuthContext';
 import * as api from '../../src/api';
 import { useScrollToTop } from './_layout';
 
-// Available languages - no longer need puzzle imports since they come from backend
+// Available languages
 const availableLanguages = ['English', 'Hindi', 'Tamil', 'Telugu', 'Kannada', 'Malayalam'];
 
 export default function ModlePage() {
   const router = useRouter();
   const { user } = useContext(AuthContext);
   const scrollViewRef = useRef(null);
+  
+  // Hook to scroll to top when tab is tapped
   const { registerScrollRef } = useScrollToTop();
-  const [completedToday, setCompletedToday] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [globalDailyLimitReached, setGlobalDailyLimitReached] = useState(false);
-  const [playedLanguage, setPlayedLanguage] = useState(null);
-
-  // Register scroll ref for tab navigation
   useEffect(() => {
     if (registerScrollRef) {
       registerScrollRef('modle', scrollViewRef);
     }
   }, [registerScrollRef]);
+
+  const [completedToday, setCompletedToday] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [globalDailyLimitReached, setGlobalDailyLimitReached] = useState(false);
+  const [playedLanguage, setPlayedLanguage] = useState(null);
 
   // Check completion status for all languages
   useEffect(() => {
@@ -49,13 +46,13 @@ export default function ModlePage() {
       try {
         const today = new Date().toISOString().slice(0, 10);
         
-        // First check global status to see if user has played ANY language today
+        // 1. Check global status (Did user play ANY language today?)
         try {
           const globalResponse = await api.getModleStatus('global');
           if (globalResponse.data.history && globalResponse.data.history[today]) {
-            // User has already played today - set global daily limit reached
             setGlobalDailyLimitReached(true);
-            // Find which language they played
+            
+            // Find which language was played to display it
             for (const lang of availableLanguages) {
               try {
                 const langResponse = await api.getModleStatus(lang);
@@ -74,7 +71,8 @@ export default function ModlePage() {
           console.debug('Failed to check global status:', error);
         }
         
-        // If no global daily limit, check individual language completion status
+        // 2. If no global limit, check individual language completion status
+        // (Useful if the global check fails or for partial states)
         const statusPromises = availableLanguages.map(async (lang) => {
           try {
             const response = await api.getModleStatus(lang);
@@ -103,8 +101,8 @@ export default function ModlePage() {
     checkCompletionStatus();
   }, [user]);
 
-  const handleChoose = async (chosen) => {
-    // Check if global daily limit is reached
+  const handleChoose = (chosen) => {
+    // 1. Check Global Limit
     if (globalDailyLimitReached) {
       Alert.alert(
         'Daily Limit Reached',
@@ -113,7 +111,7 @@ export default function ModlePage() {
       return;
     }
     
-    // Check if user has already completed this language today
+    // 2. Check specific language completion (redundant but safe)
     if (user && completedToday[chosen]) {
       Alert.alert(
         'Already Completed',
@@ -122,14 +120,18 @@ export default function ModlePage() {
       return;
     }
 
-    // Navigate to the selected language (global validation prevents multiple plays per day)
+    // 3. Navigate to Game
     router.push(`/modle/play?lang=${encodeURIComponent(chosen)}`);
   };
 
   return (
     <View style={styles.container}>
-      <ScrollView ref={scrollViewRef} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Gradient Title */}
+      <ScrollView 
+        ref={scrollViewRef} 
+        contentContainerStyle={styles.scrollContent} 
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Title Section */}
         <View style={styles.titleContainer}>
           <Text style={styles.title}>Modle — Movie Wordle</Text>
           <Text style={styles.subtitle}>Guess the movie of the day!</Text>
@@ -157,17 +159,19 @@ export default function ModlePage() {
           </View>
         </View>
 
-        {/* Language Selection */}
+        {/* Selection Header */}
         <Text style={styles.selectionTitle}>
           {globalDailyLimitReached ? "Today's Modle Complete!" : "Choose Your Language for Today"}
         </Text>
 
+        {/* Content States */}
         {loading && user ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#10b981" />
             <Text style={styles.loadingText}>Loading your progress...</Text>
           </View>
         ) : globalDailyLimitReached ? (
+          /* Daily Limit State */
           <View style={styles.dailyLimitCard}>
             <Ionicons name="checkmark-circle" size={48} color="#10b981" />
             <Text style={styles.dailyLimitTitle}>Daily Limit Reached!</Text>
@@ -178,13 +182,14 @@ export default function ModlePage() {
               Come back tomorrow for a new puzzle in any language!
             </Text>
             <View style={styles.dailyLimitInfo}>
-              <Ionicons name="information-circle" size={16} color="#6b7280" />
+              <Ionicons name="information-circle" size={16} color="#9ca3af" />
               <Text style={styles.dailyLimitInfoText}>
                 One Modle per day across all languages
               </Text>
             </View>
           </View>
         ) : (
+          /* Language Grid State */
           <View style={styles.languageGrid}>
             {availableLanguages.map(lang => {
               const isCompleted = user && completedToday[lang];
@@ -232,11 +237,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#09090b',
-    paddingTop: 120,
+    paddingTop: 60, // Adjust based on header height/safe area
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 120, // Increased padding for Samsung navigation compatibility
+    paddingBottom: 120, // Extra padding for bottom tab bar
   },
   titleContainer: {
     alignItems: 'center',
@@ -247,8 +252,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#10b981',
     textAlign: 'center',
-    letterSpacing: 0.5,
-    marginBottom: 12,
+    marginBottom: 8,
     textShadowColor: 'rgba(16, 185, 129, 0.3)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
@@ -311,10 +315,16 @@ const styles = StyleSheet.create({
     padding: 20,
     borderWidth: 1,
     borderColor: '#374151',
+    // Shadow props
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   languageCardCompleted: {
-    backgroundColor: '#10b981/10',
-    borderColor: '#10b981/30',
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderColor: 'rgba(16, 185, 129, 0.3)',
   },
   languageHeader: {
     flexDirection: 'row',

@@ -7,6 +7,11 @@ const jwt = require('jsonwebtoken');
 const path = require('path');
 const logger = require('./utils/logger');
 const badges = require('./utils/badges');
+
+
+const http = require('http'); // Add this
+const { Server } = require('socket.io'); // Add this
+
 // Add global error handlers to aid debugging in hosted environments
 process.on('uncaughtException', (err) => {
   logger.error('Uncaught Exception - shutting down', err && err.stack ? err.stack : err);
@@ -20,6 +25,32 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 const app = express();
+
+const server = http.createServer(app); // Wrap express app
+const io = new Server(server, {
+  cors: {
+    origin: process.env.CORS_ORIGIN || "*", // Configure CORS for sockets
+    methods: ["GET", "POST"]
+  }
+});
+
+// Store io instance globally or pass it to routes
+app.set('io', io);
+
+// Socket Logic
+io.on('connection', (socket) => {
+  console.log('User connected:', socket.id);
+
+  // Join a room specific to the user ID so we can send them private messages
+  socket.on('join_room', (userId) => {
+    socket.join(userId);
+    console.log(`User ${userId} joined room ${userId}`);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('User disconnected', socket.id);
+  });
+});
 
 // Configure `trust proxy` carefully. Passing `true` trusts all proxies which
 // allows a client to spoof the IP via X-Forwarded-For and will make IP-based
@@ -222,4 +253,4 @@ if (process.env.NODE_ENV === 'production' && fs.existsSync(clientBuildPath)) {
 }
 
 const PORT = process.env.PORT || 5001;
-app.listen(PORT, () => logger.info(`Server running on port ${PORT}`));
+server.listen(PORT, () => logger.info(`Server running on port ${PORT}`));

@@ -75,7 +75,7 @@ const Sidebar = () => {
           {/* Pass the unreadCount to the Messages item */}
           <NavItem to="/messages" icon={MessageCircle} label="Messages" badge={unreadCount} />
           
-          <NavItem to="/leaderboard" icon={Award} label="Leaderboard" />
+          {/*<NavItem to="/leaderboard" icon={Award} label="Leaderboard" />*/}
           <NavItem to={profileLink} icon={User} label="Profile" />
           
           {/* Admin Section */}

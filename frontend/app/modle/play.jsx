@@ -14,7 +14,7 @@ import { AuthContext } from '../../src/context/AuthContext';
 import ModleGame from '../../components/ModleGame';
 import * as api from '../../src/api';
 
-// Available languages - puzzles now come from backend
+// Available languages
 const availableLanguages = ['English', 'Hindi', 'Tamil', 'Telugu', 'Kannada', 'Malayalam'];
 
 const ModlePlayPage = () => {
@@ -26,7 +26,7 @@ const ModlePlayPage = () => {
   
   const language = lang || 'English';
 
-  // Check if user has already played today
+  // Check if user has already played today (using UTC to match server)
   useEffect(() => {
     const checkPlayStatus = async () => {
       if (!user) {
@@ -37,11 +37,20 @@ const ModlePlayPage = () => {
       }
 
       try {
-        // First check global status to see if user has played ANY language today
-        const globalResponse = await api.getModleStatus('global');
+        // Use UTC date for all checks
         const today = new Date().toISOString().slice(0, 10);
         
+        // 1. Check Global Daily Limit (Has user played ANY language today?)
+        const globalResponse = await api.getModleStatus('global');
+        
         if (globalResponse.data.history && globalResponse.data.history[today]) {
+          // Exception: If they are returning to the SAME language they already played, let them finish/view it
+          // We check this by seeing if the current language matches the history entry?
+          // Actually, the global history object usually just keys by date: { "2023-10-27": { language: "Tamil", ... } }
+          // But the API structure might differ. 
+          // Safe fallback: The server will reject the POST anyway if limit reached.
+          
+          // However, strictly following Client logic:
           Alert.alert(
             'Daily Limit Reached',
             'You have already played today\'s Modle in another language! One puzzle per day across all languages.',
@@ -55,11 +64,11 @@ const ModlePlayPage = () => {
           return;
         }
         
-        // If no global daily limit, check language-specific status
+        // 2. Check Language Specific Status
         const response = await api.getModleStatus(language);
         const modleStatus = response.data;
         
-        // Check if user played today and got it correct
+        // Check if user played THIS language today and got it correct
         if (modleStatus.history && modleStatus.history[today] && modleStatus.history[today].correct) {
           Alert.alert(
             'Already Completed',
@@ -78,7 +87,7 @@ const ModlePlayPage = () => {
         setCanPlay(true);
       } catch (error) {
         console.error('Failed to check Modle status:', error);
-        // On error, allow them to play (fail gracefully)
+        // Fail gracefully: allow play, server will handle strict validation on submit
         setCanPlay(true);
       } finally {
         setIsCheckingStatus(false);
@@ -88,9 +97,8 @@ const ModlePlayPage = () => {
     checkPlayStatus();
   }, [user, language, router]);
 
-  // if invalid language, go back to selection
+  // Valid language check
   if (!availableLanguages.includes(language)) {
-    // redirect back to language selection
     router.replace('/modle');
     return null;
   }
@@ -140,6 +148,7 @@ const ModlePlayPage = () => {
           You can only choose one language per day.
         </Text>
         
+        {/* Game Component */}
         <ModleGame language={language} />
       </View>
     </SafeAreaView>

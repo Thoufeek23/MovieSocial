@@ -15,8 +15,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../src/context/AuthContext';
 import { ModleContext } from '../src/context/ModleContext';
-import { normalizeTitle, levenshtein, localYYYYMMDD } from '../src/utils/fuzzy';
 import * as api from '../src/api';
+
+// Helper for UTC Date (matches server logic)
+function utcYYYYMMDD(date = new Date()) {
+  return date.toISOString().slice(0, 10);
+}
 
 const ModleGame = ({ language = 'English' }) => {
   const { user } = useContext(AuthContext);
@@ -36,13 +40,10 @@ const ModleGame = ({ language = 'English' }) => {
   const [fadeAnim] = useState(new Animated.Value(0));
   const [scaleAnim] = useState(new Animated.Value(0));
 
-  // determine today's date string in YYYY-MM-DD
-  const todayStr = localYYYYMMDD();
-  const effectiveDate = todayStr;
+  // Use UTC date to match server/web daily cycles
+  const effectiveDate = utcYYYYMMDD();
 
   // Calculate values that depend on puzzle being loaded
-  const normAnswer = puzzle ? normalizeTitle(puzzle.answer || '') : '';
-  const fuzzyThreshold = Math.max(2, Math.ceil((normAnswer.length || 0) * 0.2));
   const maxReveal = puzzle ? Math.min(5, (puzzle.hints && puzzle.hints.length) || 5) : 5;
 
   // Load puzzle from backend
@@ -81,7 +82,7 @@ const ModleGame = ({ language = 'English' }) => {
     loadPuzzle();
   }, [language, effectiveDate]);
 
-  // --- UPDATED: Logic now matches Client (Web) exactly ---
+  // Load User Status (Server-Driven Logic)
   useEffect(() => {
     const load = async () => {
       try {
@@ -91,20 +92,24 @@ const ModleGame = ({ language = 'English' }) => {
             const data = res.data;
             const today = effectiveDate;
             
-            // Server now determines if user can play
+            // Server determines if user can play
             if (!data.canPlay) {
               const message = data.dailyLimitReached 
                 ? 'Already played today\'s Modle! One puzzle per day across all languages.'
                 : (data.completedToday ? 'You already solved today\'s puzzle.' : 'Cannot play today.');
                 
+              // Load full history including guessesStatus for coloring
+              const historyItem = data.language?.history?.[today] || {};
+              
               setTodayPlayed({ 
                 correct: data.completedToday, 
                 globalDaily: data.dailyLimitReached, 
                 date: today,
-                msg: message 
+                msg: message,
+                guessesStatus: historyItem.guessesStatus || [], // Important for coloring
               });
               
-              const serverGuesses = data.language?.history?.[today]?.guesses || [];
+              const serverGuesses = historyItem.guesses || [];
               setGuesses(serverGuesses);
               setRevealedHints(Math.min(maxReveal, Math.max(1, serverGuesses.length + 1)));
             } else {
@@ -180,10 +185,6 @@ const ModleGame = ({ language = 'English' }) => {
     const newGuesses = [...guesses, normalized];
     setGuesses(newGuesses);
     
-    // --- FIX: Do NOT update hints here immediately ---
-    // const newRevealedHints = Math.min(maxReveal, newGuesses.length + 1);
-    // setRevealedHints(newRevealedHints);
-
     const today = effectiveDate;
 
     if (user) {
@@ -204,7 +205,7 @@ const ModleGame = ({ language = 'English' }) => {
             const serverResult = langObj.history[today];
             setTodayPlayed(serverResult);
             
-            // Sync guesses if server has more (e.g. from another device)
+            // Sync guesses if server has more
             if ((serverResult.guesses || []).length > newGuesses.length) {
               setGuesses(serverResult.guesses || []);
             }
@@ -212,8 +213,6 @@ const ModleGame = ({ language = 'English' }) => {
             // 3. Handle Correct vs Incorrect
             if (serverResult.correct) {
               // --- CASE 1: Correct ---
-              // Do NOT increment hints.
-              // Fix blank answer issue if needed
               if (server.solvedAnswer && puzzle.answer === 'LOADING') {
                  setPuzzle(prev => ({ ...prev, answer: server.solvedAnswer }));
               }
@@ -225,7 +224,6 @@ const ModleGame = ({ language = 'English' }) => {
 
             } else {
               // --- CASE 2: Incorrect ---
-              // NOW we reveal the next hint
               const nextHints = Math.min(maxReveal, newGuesses.length + 1);
               setRevealedHints(nextHints);
               
@@ -260,8 +258,6 @@ const ModleGame = ({ language = 'English' }) => {
 
     setGuess('');
   };
-
-  // ... [Rest of the render logic/styles remains the same] ...
 
   if (puzzleLoading) {
     return (
@@ -312,7 +308,7 @@ const ModleGame = ({ language = 'English' }) => {
           </View>
           <View style={styles.statItem}>
             <Text style={styles.statLabel}>Streak</Text>
-            <Text style={styles.statValue}>{streak} 櫨</Text>
+            <Text style={styles.statValue}>{streak} 🔥</Text>
           </View>
           <View style={styles.statItem}>
             <Text style={styles.statLabel}>Guesses</Text>
@@ -355,7 +351,7 @@ const ModleGame = ({ language = 'English' }) => {
               }
             ]}
           >
-            <Text style={styles.winText}>脂 Correct! 脂</Text>
+            <Text style={styles.winText}>🎉 Correct! 🎉</Text>
             <Text style={styles.winSubtext}>The movie was {puzzle.answer}</Text>
           </Animated.View>
         )}
@@ -394,31 +390,28 @@ const ModleGame = ({ language = 'English' }) => {
           ) : (
             <View style={styles.guessesList}>
               {guesses.slice().reverse().map((g, index) => {
-                const isCorrect = (() => {
-                  try {
-                    const d = levenshtein(g, normAnswer);
-                    return d <= fuzzyThreshold;
-                  } catch (e) { 
-                    return false; 
-                  }
-                })();
+                const guessIdx = guesses.length - 1 - index;
+                // USE SERVER STATUS for correctness (similar to client)
+                // If status not available yet (optimistic), default to null/neutral
+                const isCorrect = todayPlayed && todayPlayed.guessesStatus && todayPlayed.guessesStatus[guessIdx] === true;
+                const isIncorrect = todayPlayed && todayPlayed.guessesStatus && todayPlayed.guessesStatus[guessIdx] === false;
                 
                 return (
-                  <View key={guesses.length - 1 - index} style={styles.guessCard}>
+                  <View key={guessIdx} style={styles.guessCard}>
                     <View style={styles.guessContent}>
                       <Text style={styles.guessText}>{g}</Text>
                       <View style={styles.guessResult}>
-                        <Ionicons 
-                          name={isCorrect ? "checkmark-circle" : "close-circle"} 
-                          size={18} 
-                          color={isCorrect ? "#10b981" : "#dc2626"} 
-                        />
-                        <Text style={[
-                          styles.guessResultText,
-                          { color: isCorrect ? "#10b981" : "#dc2626" }
-                        ]}>
-                          {isCorrect ? 'Correct' : 'Incorrect'}
-                        </Text>
+                        {isCorrect && <Ionicons name="checkmark-circle" size={18} color="#10b981" />}
+                        {isIncorrect && <Ionicons name="close-circle" size={18} color="#dc2626" />}
+                        
+                        {(isCorrect || isIncorrect) && (
+                          <Text style={[
+                            styles.guessResultText,
+                            { color: isCorrect ? "#10b981" : "#dc2626" }
+                          ]}>
+                            {isCorrect ? 'Correct' : 'Incorrect'}
+                          </Text>
+                        )}
                       </View>
                     </View>
                   </View>
