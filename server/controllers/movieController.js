@@ -92,7 +92,7 @@ let omdbCircuitBreaker = {
 };
 
 const searchMovies = async (req, res) => {
-    const { query } = req.query;
+    const { query, language, decade } = req.query; // Extract new params
     try {
         // Fetch first 5 pages to get ~100 results
         const pageRequests = [1, 2, 3, 4, 5].map(page =>
@@ -122,15 +122,37 @@ const searchMovies = async (req, res) => {
             return !duplicate;
         });
 
-        const data = { results: uniqueResults };
+        // --- NEW FILTERING LOGIC START ---
+        let filteredResults = uniqueResults;
+
+        // Filter by Language
+        if (language) {
+            filteredResults = filteredResults.filter(m => m.original_language === language);
+        }
+
+        // Filter by Decade
+        if (decade) {
+            const startYear = parseInt(decade);
+            const endYear = startYear + 9;
+            filteredResults = filteredResults.filter(m => {
+                if (!m.release_date) return false;
+                const releaseYear = parseInt(m.release_date.substring(0, 4));
+                return releaseYear >= startYear && releaseYear <= endYear;
+            });
+        }
+        // --- NEW FILTERING LOGIC END ---
+
+        const data = { results: filteredResults };
 
         const OMDB_API_KEY = process.env.OMDB_API_KEY;
-        if (OMDB_ENABLED && OMDB_API_KEY && uniqueResults.length > 0) {
+        // Check filteredResults instead of uniqueResults to save API calls
+        if (OMDB_ENABLED && OMDB_API_KEY && filteredResults.length > 0) {
             const concurrency = Number(process.env.OMDB_CONCURRENCY) || 3;
-            // Enrich top 30 to maintain performance
-            const moviesToEnrich = uniqueResults.slice(0, 30);
+            // Enrich top 30 of the FILTERED list
+            const moviesToEnrich = filteredResults.slice(0, 30);
 
             await runWithConcurrency(moviesToEnrich, concurrency, async (m) => {
+                // ... (keep existing enrichment logic) ...
                 const title = m.title || m.original_title;
                 const year = m.release_date ? m.release_date.substring(0, 4) : undefined;
                 const key = `omdb:t:${title}|y:${year}`;
@@ -158,7 +180,7 @@ const searchMovies = async (req, res) => {
                 }
             });
         } else {
-            if (Array.isArray(data.results)) {
+             if (Array.isArray(data.results)) {
                 data.results.forEach(m => {
                     if (typeof m.vote_average !== 'undefined') {
                         m.imdbRating = m.vote_average;

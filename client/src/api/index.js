@@ -1,9 +1,10 @@
 import axios from 'axios';
 
 // In production the client should be built with REACT_APP_API_URL set to your API root 
-//const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://localhost:5001';
-const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'https://moviesocial-backend-khd2.onrender.com';
+const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://localhost:5001';
+//const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'https://moviesocial-backend-khd2.onrender.com';
 const API = axios.create({ baseURL: `${apiRoot}/api` });
+
 
 API.interceptors.request.use((req) => {
   if (localStorage.getItem('token')) {
@@ -28,7 +29,14 @@ export const completeSignup = (payload) => API.post('/auth/complete-signup', pay
 export const getCurrentUser = () => API.get('/auth/me');
 
 // Movies (Proxy)
-export const searchMovies = (query) => API.get(`/movies/search?query=${query}`);
+// --- UPDATED FUNCTION ---
+export const searchMovies = (query, filters = {}) => {
+  const params = new URLSearchParams({ query });
+  if (filters?.language) params.append('language', filters.language);
+  if (filters?.decade) params.append('decade', filters.decade);
+  return API.get(`/movies/search?${params.toString()}`);
+};
+// ------------------------
 export const getMovieDetails = (id) => API.get(`/movies/${id}`);
 export const getPopularMovies = () => API.get('/movies/popular');
 export const getPersonalizedMovies = () => API.get('/movies/personalized');
@@ -42,9 +50,7 @@ export const getMovieStats = (movieId) => API.get(`/reviews/movie/${movieId}/sta
 export const updateReview = (id, reviewData) => API.put(`/reviews/${id}`, reviewData);
 export const deleteReview = (id) => API.delete(`/reviews/${id}`);
 export const fetchMyReviews = () => API.get('/reviews/mine');
-// --- ADDED THIS MISSING EXPORT ---
 export const getReviewsByUser = (username) => API.get(`/reviews/user/${username}`);
-// ---------------------------------
 export const importLetterboxd = (username) => API.post('/reviews/import/letterboxd', { username });
 export const voteReview = (id, value) => API.post(`/reviews/${id}/vote`, { value });
 
@@ -53,7 +59,6 @@ export const getUserProfile = (username) => API.get(`/users/${username}`);
 export const getMyProfile = () => API.get('/auth/me');
 export const searchUsers = (q) => API.get(`/users/search?q=${encodeURIComponent(q)}`);
 export const addToWatchlist = (movieId) => API.post('/users/watchlist', { movieId });
-// Updated to accept date
 export const addToWatched = (movieId, date) => API.post('/users/watched', { movieId, date });
 export const removeFromWatchlist = (movieId) => API.delete('/users/watchlist', { data: { movieId } });
 export const removeFromWatched = (movieId) => API.delete('/users/watched', { data: { movieId } });

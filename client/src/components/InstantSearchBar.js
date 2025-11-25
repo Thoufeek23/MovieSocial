@@ -35,8 +35,15 @@ const InstantSearchBar = ({ className = 'w-full', maxResults = 5 }) => {
       try {
         let data = [];
         if (searchType === 'movies') {
-          const res = await api.searchMovies(searchQuery);
+          // --- UPDATED: Pass Filters to Instant Search ---
+          const params = new URLSearchParams(location.search);
+          const filters = {
+            language: params.get('language'),
+            decade: params.get('decade')
+          };
+          const res = await api.searchMovies(searchQuery, filters);
           data = res.data.results || [];
+          // -----------------------------------------------
         } else {
           const res = await api.searchUsers(searchQuery);
           data = res.data.results || res.data || [];
@@ -66,7 +73,7 @@ const InstantSearchBar = ({ className = 'w-full', maxResults = 5 }) => {
     }, 300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, searchType]);
+  }, [query, searchType, location.search]); // Add location.search dependency to refetch if filters change
 
   const closeDropdown = () => {
     setIsOpen(false);
@@ -99,7 +106,12 @@ const InstantSearchBar = ({ className = 'w-full', maxResults = 5 }) => {
     if (e) e.preventDefault();
     const trimmed = query.trim();
     if (trimmed.length > 0) {
-      navigate(`/search?q=${encodeURIComponent(trimmed)}&type=${searchType}`);
+      // --- UPDATED: Preserve Filters ---
+      const params = new URLSearchParams(location.search);
+      params.set('q', trimmed);
+      params.set('type', searchType);
+      navigate(`/search?${params.toString()}`);
+      // ---------------------------------
       setIsOpen(false);
     }
   };
@@ -107,15 +119,15 @@ const InstantSearchBar = ({ className = 'w-full', maxResults = 5 }) => {
   const handleTypeToggle = (type) => {
     setSearchType(type);
     setResults([]);
-    // If we are already on the search page, update the URL immediately to reflect the mode switch
-    // This allows the "Popular Users" vs "Explore Movies" view to toggle without typing
+    // If we are already on the search page, update the URL immediately
     if (location.pathname === '/search') {
       const trimmed = query.trim();
-      if (trimmed) {
-          navigate(`/search?q=${encodeURIComponent(trimmed)}&type=${type}`);
-      } else {
-          navigate(`/search?type=${type}`);
-      }
+      // --- UPDATED: Preserve Filters ---
+      const params = new URLSearchParams(location.search);
+      params.set('type', type);
+      if (trimmed) params.set('q', trimmed);
+      navigate(`/search?${params.toString()}`);
+      // ---------------------------------
     }
   };
 
