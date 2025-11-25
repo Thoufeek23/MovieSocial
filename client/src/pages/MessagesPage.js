@@ -55,7 +55,7 @@ const MessagesPage = () => {
     
     // Socket Refs
     const socketRef = useRef();
-    const currentChatRef = useRef(); // Needed to access current state inside socket listener
+    const currentChatRef = useRef(); 
 
     // Parse query params
     const queryParams = new URLSearchParams(location.search);
@@ -70,18 +70,26 @@ const MessagesPage = () => {
 
     // 2. Initialize Socket & Listen for Messages
     useEffect(() => {
-        // Connect to backend (uses env var or defaults to localhost)
+        // Connect to backend
         const socketUrl = process.env.REACT_APP_API_URL || 'https://moviesocial-backend-khd2.onrender.com';
-        //const socketUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
         socketRef.current = io(socketUrl);
 
-        // Join specific user room to receive private messages
-        if (user?._id) {
-            socketRef.current.emit("join_room", user._id);
+        console.log("Socket connecting...");
+
+        // FIX: Robustly check for User ID (handle both _id and id)
+        const userId = user?._id || user?.id;
+
+        if (userId) {
+            console.log("Emitting join_room for User ID:", userId);
+            socketRef.current.emit("join_room", userId);
+        } else {
+            console.warn("User ID missing, cannot join socket room.", user);
         }
 
         // Listen for incoming messages
         socketRef.current.on("receive_message", (incomingMsg) => {
+            console.log("New message received:", incomingMsg); // Debug log
+            
             const activeChat = currentChatRef.current;
             const senderUsername = incomingMsg.sender.username;
             const senderId = incomingMsg.sender._id || incomingMsg.sender;
@@ -95,9 +103,8 @@ const MessagesPage = () => {
             if (isChattingWithSender) {
                 // If chat is open, append message immediately to the view
                 setMessages(prev => [...prev, incomingMsg]);
-                // Optional: API call to mark as read could go here
             } else {
-                // If chat is NOT open, update the global unread count badge in the sidebar/navbar
+                // If chat is NOT open, update the global unread count badge
                 if (updateUnreadCount) updateUnreadCount();
             }
 
@@ -115,11 +122,9 @@ const MessagesPage = () => {
                 const newConv = {
                     otherUser: existingConv ? existingConv.otherUser : incomingMsg.sender,
                     lastMessage: incomingMsg,
-                    // If we are chatting with them, unread is 0. Otherwise increment.
                     unreadCount: isChattingWithSender ? 0 : (existingConv ? existingConv.unreadCount + 1 : 1)
                 };
 
-                // Return new list with sender at the top
                 return [newConv, ...otherConvs];
             });
         });
@@ -128,7 +133,7 @@ const MessagesPage = () => {
         return () => {
             socketRef.current?.disconnect();
         };
-    }, [user, updateUnreadCount]); // Re-run only if user changes
+    }, [user, updateUnreadCount]); // Re-run if user object changes (e.g., loads from null)
 
     // --- SOCKET.IO INTEGRATION END ---
 
@@ -172,7 +177,6 @@ const MessagesPage = () => {
                         }
                     }
                 } else if (convs.length > 0) {
-                    // Load the last conversed message (first in list) automatically
                     handleSelectChat(convs[0].otherUser);
                 }
             } catch (error) {
@@ -226,6 +230,7 @@ const MessagesPage = () => {
         setSending(true);
 
         try {
+            // FIX: Ensure optimistic message has correct sender structure
             const optimisticMsg = {
                 _id: tempId,
                 content: msgContent,
@@ -288,6 +293,7 @@ const MessagesPage = () => {
 
     const isMessageFromMe = (msg) => {
         if (!user || !msg || !msg.sender) return false;
+        // FIX: Robust ID check here too
         const myId = String(user._id || user.id);
         let senderId;
         if (typeof msg.sender === 'object') {
