@@ -74,13 +74,10 @@ const MessagesPage = () => {
         const socketUrl = process.env.REACT_APP_API_URL || 'https://moviesocial-backend-khd2.onrender.com';
         socketRef.current = io(socketUrl);
 
-        console.log("Socket connecting...");
-
         // FIX: Robustly check for User ID (handle both _id and id)
         const userId = user?._id || user?.id;
 
         if (userId) {
-            console.log("Emitting join_room for User ID:", userId);
             socketRef.current.emit("join_room", userId);
         } else {
             console.warn("User ID missing, cannot join socket room.", user);
@@ -88,7 +85,6 @@ const MessagesPage = () => {
 
         // Listen for incoming messages
         socketRef.current.on("receive_message", (incomingMsg) => {
-            console.log("New message received:", incomingMsg); // Debug log
             
             const activeChat = currentChatRef.current;
             const senderUsername = incomingMsg.sender.username;

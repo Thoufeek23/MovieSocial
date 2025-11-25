@@ -39,16 +39,10 @@ app.set('io', io);
 
 // Socket Logic
 io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
 
   // Join a room specific to the user ID so we can send them private messages
   socket.on('join_room', (userId) => {
     socket.join(userId);
-    console.log(`User ${userId} joined room ${userId}`);
-  });
-
-  socket.on('disconnect', () => {
-    console.log('User disconnected', socket.id);
   });
 });
 
