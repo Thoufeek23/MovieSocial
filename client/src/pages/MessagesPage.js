@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
-import { useLocation, useNavigate, Link } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 import { Send, MoreVertical, ArrowLeft, Trash2, MessageSquare } from 'lucide-react'; 
 import { AuthContext } from '../context/AuthContext';
 import Avatar from '../components/Avatar';
@@ -8,27 +8,24 @@ import * as api from '../api';
 import toast from 'react-hot-toast';
 import { io } from 'socket.io-client';
 
-// Simple Discussion Card for Chat
+// Enhanced Discussion Card for Chat
 const ChatDiscussionCard = ({ discussion }) => {
     if (!discussion) return null;
     return (
-        <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden mt-2 max-w-sm shadow-lg">
-            <Link to={`/discussion/${discussion._id}`} className="flex p-3 gap-3 hover:bg-gray-750 transition-colors">
+        <div className="bg-gray-900/50 border border-gray-700/50 rounded-xl overflow-hidden mt-2 max-w-sm shadow-md transition-all hover:bg-gray-800">
+            <Link to={`/discussion/${discussion._id}`} className="flex p-3 gap-3">
                 <img 
                     src={discussion.poster_path ? `https://image.tmdb.org/t/p/w154${discussion.poster_path}` : '/default_dp.png'} 
                     alt="poster"
-                    className="w-16 h-24 object-cover rounded"
+                    className="w-14 h-20 object-cover rounded-lg shadow-sm"
                 />
-                <div className="flex-1 min-w-0">
-                    <h4 className="font-bold text-white text-sm leading-tight mb-1 line-clamp-2">{discussion.title}</h4>
-                    <div className="text-xs text-green-400 mb-2">{discussion.movieTitle}</div>
+                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <h4 className="font-semibold text-gray-100 text-sm leading-tight mb-1 line-clamp-2">{discussion.title}</h4>
+                    <div className="text-xs text-green-400 font-medium mb-2">{discussion.movieTitle}</div>
                     
                     <div className="flex items-center gap-2 mt-auto">
-                        <Avatar username={discussion.starter?.username} avatar={discussion.starter?.avatar} sizeClass="w-5 h-5" />
+                        <Avatar username={discussion.starter?.username} avatar={discussion.starter?.avatar} sizeClass="w-4 h-4" />
                         <span className="text-xs text-gray-400">{discussion.starter?.username}</span>
-                        <span className="text-xs text-gray-500 ml-auto flex items-center gap-1">
-                            <MessageSquare size={10} /> {discussion.comments?.length || 0}
-                        </span>
                     </div>
                 </div>
             </Link>
@@ -38,7 +35,6 @@ const ChatDiscussionCard = ({ discussion }) => {
 
 const MessagesPage = () => {
     const { user, updateUnreadCount } = useContext(AuthContext);
-    const navigate = useNavigate();
     const location = useLocation();
     
     // State
@@ -52,8 +48,6 @@ const MessagesPage = () => {
     // Refs
     const scrollRef = useRef();
     const inputRef = useRef();
-    
-    // Socket Refs
     const socketRef = useRef();
     const currentChatRef = useRef(); 
 
@@ -61,60 +55,40 @@ const MessagesPage = () => {
     const queryParams = new URLSearchParams(location.search);
     const initialChatUser = queryParams.get('user');
 
-    // --- SOCKET.IO INTEGRATION START ---
-
-    // 1. Keep the Ref synced with the State so the socket listener knows who we are talking to
+    // --- SOCKET.IO LOGIC ---
     useEffect(() => {
         currentChatRef.current = currentChat;
     }, [currentChat]);
 
-    // 2. Initialize Socket & Listen for Messages
     useEffect(() => {
-        // Connect to backend
         const socketUrl = process.env.REACT_APP_API_URL || 'https://moviesocial-backend-khd2.onrender.com';
         socketRef.current = io(socketUrl);
-
-        // FIX: Robustly check for User ID (handle both _id and id)
         const userId = user?._id || user?.id;
 
         if (userId) {
             socketRef.current.emit("join_room", userId);
-        } else {
-            console.warn("User ID missing, cannot join socket room.", user);
         }
 
-        // Listen for incoming messages
         socketRef.current.on("receive_message", (incomingMsg) => {
-            
             const activeChat = currentChatRef.current;
             const senderUsername = incomingMsg.sender.username;
             const senderId = incomingMsg.sender._id || incomingMsg.sender;
 
-            // Check if this message belongs to the currently open chat
             const isChattingWithSender = activeChat && (
                 activeChat._id === senderId || 
                 activeChat.username === senderUsername
             );
 
             if (isChattingWithSender) {
-                // If chat is open, append message immediately to the view
                 setMessages(prev => [...prev, incomingMsg]);
             } else {
-                // If chat is NOT open, update the global unread count badge
                 if (updateUnreadCount) updateUnreadCount();
             }
 
-            // Update the Sidebar Conversations List (Move sender to top)
             setConversations(prev => {
-                // Remove the sender's old conversation entry from the list
-                const otherConvs = prev.filter(c => 
-                    c.otherUser.username !== senderUsername
-                );
-                
-                // Find existing conversation data to preserve user details
+                const otherConvs = prev.filter(c => c.otherUser.username !== senderUsername);
                 const existingConv = prev.find(c => c.otherUser.username === senderUsername);
                 
-                // Create new conversation object
                 const newConv = {
                     otherUser: existingConv ? existingConv.otherUser : incomingMsg.sender,
                     lastMessage: incomingMsg,
@@ -125,15 +99,14 @@ const MessagesPage = () => {
             });
         });
 
-        // Cleanup on unmount
         return () => {
             socketRef.current?.disconnect();
         };
-    }, [user, updateUnreadCount]); // Re-run if user object changes (e.g., loads from null)
+    }, [user, updateUnreadCount]);
 
-    // --- SOCKET.IO INTEGRATION END ---
-
-    // Helper: Format Date for Sidebar
+    // Format helpers
+    const formatTime = (date) => new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
     const formatConversationDate = (dateString) => {
         if (!dateString) return '';
         const date = new Date(dateString);
@@ -143,16 +116,12 @@ const MessagesPage = () => {
         yesterday.setDate(yesterday.getDate() - 1);
         const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
-        if (messageDate.getTime() === today.getTime()) {
-            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        } else if (messageDate.getTime() === yesterday.getTime()) {
-            return 'Yesterday';
-        } else {
-            return date.toLocaleDateString();
-        }
+        if (messageDate.getTime() === today.getTime()) return formatTime(date);
+        if (messageDate.getTime() === yesterday.getTime()) return 'Yesterday';
+        return date.toLocaleDateString();
     };
 
-    // Load Conversations & Initial Chat
+    // Load Data
     useEffect(() => {
         const loadData = async () => {
             try {
@@ -172,7 +141,8 @@ const MessagesPage = () => {
                             toast.error("User not found");
                         }
                     }
-                } else if (convs.length > 0) {
+                } else if (convs.length > 0 && window.innerWidth > 768) {
+                    // Only auto-select on desktop
                     handleSelectChat(convs[0].otherUser);
                 }
             } catch (error) {
@@ -184,31 +154,24 @@ const MessagesPage = () => {
         loadData();
     }, [initialChatUser]);
 
-    // Auto-scroll to bottom
+    // Auto-scroll
     useEffect(() => {
         scrollRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages]);
 
     const handleSelectChat = async (chatUser) => {
         setCurrentChat(chatUser);
-        
-        // Optimistically clear unread count in local conversation list
-        setConversations(prev => prev.map(c => {
-            if (c.otherUser.username === chatUser.username) {
-                return { ...c, unreadCount: 0 };
-            }
-            return c;
-        }));
+        setConversations(prev => prev.map(c => 
+            c.otherUser.username === chatUser.username ? { ...c, unreadCount: 0 } : c
+        ));
 
         try {
-            const [msgsRes, readRes] = await Promise.all([
+            const [msgsRes] = await Promise.all([
                 api.getMessages(chatUser.username),
                 api.markMessagesRead(chatUser.username)
             ]);
             setMessages(msgsRes.data);
-            
             if (updateUnreadCount) updateUnreadCount();
-
         } catch (error) {
             toast.error('Failed to load conversation');
         } finally {
@@ -222,11 +185,16 @@ const MessagesPage = () => {
 
         const tempId = Date.now();
         const msgContent = newMessage;
+        
+        // 1. Clear message immediately
         setNewMessage('');
+        
+        // 2. KEEP FOCUS: Do not wait, refocus immediately
+        inputRef.current?.focus();
+        
         setSending(true);
 
         try {
-            // FIX: Ensure optimistic message has correct sender structure
             const optimisticMsg = {
                 _id: tempId,
                 content: msgContent,
@@ -239,7 +207,6 @@ const MessagesPage = () => {
             const { data: sentMsg } = await api.sendMessage(currentChat.username, msgContent);
             
             setMessages(prev => prev.map(m => m._id === tempId ? sentMsg : m));
-            
             setConversations(prev => {
                 const filtered = prev.filter(c => c.otherUser.username !== currentChat.username);
                 return [{ 
@@ -248,30 +215,24 @@ const MessagesPage = () => {
                     unreadCount: 0 
                 }, ...filtered];
             });
-
         } catch (error) {
             toast.error('Failed to send message');
             setMessages(prev => prev.filter(m => m._id !== tempId));
             setNewMessage(msgContent);
         } finally {
             setSending(false);
+            // 3. Ensure focus again just in case
+            setTimeout(() => inputRef.current?.focus(), 0);
         }
     };
 
-    // Handle Deleting Messages
     const handleDeleteMessage = async (msgId) => {
-        if (!window.confirm("Delete this message for everyone?")) return;
-
+        if (!window.confirm("Delete this message?")) return;
         try {
             setMessages(prev => prev.filter(m => m._id !== msgId));
             await api.deleteMessage(msgId);
-            toast.success("Message deleted");
         } catch (err) {
-            toast.error("Failed to delete message");
-            if (currentChat) {
-                const { data } = await api.getMessages(currentChat.username);
-                setMessages(data);
-            }
+            toast.error("Failed to delete");
         }
     };
 
@@ -285,35 +246,32 @@ const MessagesPage = () => {
         return groups;
     };
 
-    const groupedMessages = groupMessagesByDate(messages);
-
     const isMessageFromMe = (msg) => {
         if (!user || !msg || !msg.sender) return false;
-        // FIX: Robust ID check here too
         const myId = String(user._id || user.id);
-        let senderId;
-        if (typeof msg.sender === 'object') {
-            senderId = msg.sender._id || msg.sender.id;
-        } else {
-            senderId = msg.sender;
-        }
+        const senderId = typeof msg.sender === 'object' ? (msg.sender._id || msg.sender.id) : msg.sender;
         return myId === String(senderId);
     };
 
+    const groupedMessages = groupMessagesByDate(messages);
+
     return (
-        <div className="flex h-[calc(100vh-64px)] bg-gray-900 text-gray-100 overflow-hidden">
+        <div className="flex h-[calc(100dvh-64px)] w-full bg-gray-950 text-gray-100 overflow-hidden relative">
             
-            {/* LEFT SIDEBAR */}
-            <div className={`${currentChat ? 'hidden md:flex' : 'flex'} w-full md:w-80 lg:w-96 flex-col border-r border-gray-800 bg-gray-900`}>
-                <div className="p-4 border-b border-gray-800">
-                    <h1 className="text-xl font-bold text-white">Messages</h1>
+            {/* --- LEFT SIDEBAR (List) --- */}
+            <div className={`
+                ${currentChat ? 'hidden md:flex' : 'flex'} 
+                w-full md:w-80 lg:w-96 flex-col border-r border-gray-800 bg-gray-950 z-20 flex-shrink-0 h-full
+            `}>
+                <div className="p-5 border-b border-gray-800 flex justify-between items-center bg-gray-950 flex-shrink-0">
+                    <h1 className="text-2xl font-bold text-white tracking-tight">Messages</h1>
                 </div>
                 
-                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                <div className="flex-1 overflow-y-auto no-scrollbar">
                     {loading && !conversations.length ? (
-                        <div className="p-4 text-center text-gray-500">Loading chats...</div>
+                        <div className="p-4 flex justify-center mt-10"><div className="w-6 h-6 border-2 border-green-600 border-t-transparent rounded-full animate-spin"></div></div>
                     ) : conversations.length === 0 ? (
-                        <div className="p-8 text-center text-gray-500">
+                        <div className="p-8 text-center text-gray-500 mt-10">
                             <p>No conversations yet.</p>
                         </div>
                     ) : (
@@ -321,28 +279,31 @@ const MessagesPage = () => {
                             <div 
                                 key={conv.otherUser._id}
                                 onClick={() => handleSelectChat(conv.otherUser)}
-                                className={`flex items-center gap-3 p-4 cursor-pointer hover:bg-gray-800 transition-colors ${currentChat?.username === conv.otherUser.username ? 'bg-gray-800 border-l-4 border-green-600' : ''}`}
+                                className={`
+                                    group flex items-center gap-4 p-4 cursor-pointer transition-all duration-200 border-b border-gray-900/50
+                                    ${currentChat?.username === conv.otherUser.username 
+                                        ? 'bg-gray-900 border-l-4 border-l-green-600' 
+                                        : 'hover:bg-gray-900/50 border-l-4 border-l-transparent'}
+                                `}
                             >
                                 <Avatar username={conv.otherUser.username} avatar={conv.otherUser.avatar} sizeClass="w-12 h-12" />
                                 <div className="flex-1 min-w-0">
-                                    <div className="flex justify-between items-center">
-                                        <h3 className={`truncate text-gray-200 ${conv.unreadCount > 0 ? 'font-bold text-white' : 'font-semibold'}`}>
+                                    <div className="flex justify-between items-baseline mb-1">
+                                        <h3 className={`truncate text-[15px] ${conv.unreadCount > 0 ? 'font-bold text-white' : 'font-medium text-gray-200'}`}>
                                             {conv.otherUser.username}
                                         </h3>
-                                        <div className="flex flex-col items-end">
-                                            <span className={`text-xs ${conv.unreadCount > 0 ? 'text-green-500 font-bold' : 'text-gray-500'}`}>
-                                                {conv.lastMessage && formatConversationDate(conv.lastMessage.createdAt)}
-                                            </span>
-                                        </div>
+                                        <span className={`text-[11px] ${conv.unreadCount > 0 ? 'text-green-500 font-bold' : 'text-gray-500'}`}>
+                                            {conv.lastMessage && formatConversationDate(conv.lastMessage.createdAt)}
+                                        </span>
                                     </div>
                                     
-                                    <div className="flex justify-between items-center mt-1">
-                                        <p className={`text-sm truncate pr-2 ${conv.unreadCount > 0 ? 'text-white font-medium' : 'text-gray-400'}`}>
-                                            {isMessageFromMe({ sender: conv.lastMessage?.sender }) ? 'You: ' : ''}
-                                            {conv.lastMessage?.content}
+                                    <div className="flex justify-between items-center">
+                                        <p className={`text-sm truncate pr-2 ${conv.unreadCount > 0 ? 'text-gray-100 font-medium' : 'text-gray-500'}`}>
+                                            {isMessageFromMe({ sender: conv.lastMessage?.sender }) && <span className="text-gray-400">You: </span>}
+                                            {conv.lastMessage?.content || <span className="italic opacity-50">Attachment</span>}
                                         </p>
                                         {conv.unreadCount > 0 && (
-                                            <span className="min-w-[20px] h-5 px-1.5 flex items-center justify-center bg-green-600 text-white text-xs font-bold rounded-full">
+                                            <span className="min-w-[18px] h-[18px] px-1.5 flex items-center justify-center bg-green-600 text-white text-[10px] font-bold rounded-full shadow-lg shadow-green-900/20">
                                                 {conv.unreadCount}
                                             </span>
                                         )}
@@ -354,15 +315,18 @@ const MessagesPage = () => {
                 </div>
             </div>
 
-            {/* RIGHT SIDE - Active Chat Area */}
-            <div className={`${!currentChat ? 'hidden md:flex' : 'flex'} flex-1 flex-col bg-black/20`}>
+            {/* --- RIGHT SIDE (Active Chat) --- */}
+            <div className={`
+                ${!currentChat ? 'hidden md:flex' : 'flex'} 
+                flex-1 flex-col bg-black relative z-10 w-full h-full
+            `}>
                 {currentChat ? (
                     <>
-                        <div className="h-16 px-4 flex items-center justify-between border-b border-gray-800 bg-gray-900/50 backdrop-blur-sm">
+                        <div className="h-16 px-4 md:px-6 flex items-center justify-between border-b border-gray-800 bg-gray-950/80 backdrop-blur-md sticky top-0 z-30 flex-shrink-0">
                             <div className="flex items-center gap-3">
                                 <button 
                                     onClick={() => setCurrentChat(null)}
-                                    className="md:hidden p-2 -ml-2 text-gray-400 hover:text-white"
+                                    className="md:hidden p-2 -ml-2 text-gray-400 hover:text-white transition-colors"
                                 >
                                     <ArrowLeft size={20} />
                                 </button>
@@ -370,23 +334,27 @@ const MessagesPage = () => {
                                 <Link to={`/profile/${currentChat.username}`} className="flex items-center gap-3 group">
                                     <Avatar username={currentChat.username} avatar={currentChat.avatar} sizeClass="w-10 h-10" />
                                     <div>
-                                        <h2 className="font-bold text-gray-100 group-hover:underline decoration-green-500 underline-offset-2">
+                                        <h2 className="font-bold text-gray-100 group-hover:text-green-400 transition-colors">
                                             {currentChat.username}
                                         </h2>
                                     </div>
                                 </Link>
                             </div>
+                            <button className="text-gray-500 hover:text-white transition p-2">
+                                <MoreVertical size={20} />
+                            </button>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
+                        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-8 no-scrollbar bg-gradient-to-b from-gray-900 to-black">
                             {Object.entries(groupedMessages).map(([date, dateMessages]) => (
-                                <div key={date} className="space-y-4">
-                                    <div className="flex justify-center sticky top-0 z-10">
-                                        <span className="px-3 py-1 bg-gray-800/80 backdrop-blur text-xs text-gray-400 rounded-full shadow-sm">
+                                <div key={date} className="space-y-6">
+                                    <div className="flex justify-center">
+                                        <span className="px-3 py-1 bg-gray-800/60 backdrop-blur-sm border border-gray-700/50 text-[11px] font-medium text-gray-400 rounded-full">
                                             {date === new Date().toDateString() ? 'Today' : date}
                                         </span>
                                     </div>
 
+                                    <div className="space-y-1">
                                     {dateMessages.map((msg, index) => {
                                         const isOwn = isMessageFromMe(msg);
                                         const isOptimistic = msg.isOptimistic;
@@ -394,110 +362,99 @@ const MessagesPage = () => {
                                         return (
                                             <div 
                                                 key={msg._id || index} 
-                                                className={`flex w-full ${isOwn ? 'justify-end' : 'justify-start'} group`}
+                                                className={`flex w-full group ${isOwn ? 'justify-end' : 'justify-start'}`}
                                             >
-                                                <div className={`flex flex-col items-end max-w-[90%] md:max-w-[70%] gap-1 ${isOwn ? 'items-end' : 'items-start'}`}>
-                                                    <div className={`flex gap-2 items-end ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
-                                                        {!isOwn && (
-                                                            <Link to={`/profile/${msg.sender?.username}`} className="flex-shrink-0 mb-1">
-                                                                <Avatar 
-                                                                    username={msg.sender?.username} 
-                                                                    avatar={msg.sender?.avatar} 
-                                                                    sizeClass="w-8 h-8" 
-                                                                    className="hover:ring-2 ring-green-500 transition-all"
-                                                                />
-                                                            </Link>
+                                                <div className={`flex max-w-[85%] md:max-w-[65%] gap-2 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
+                                                    
+                                                    {!isOwn && (
+                                                        <Link to={`/profile/${msg.sender?.username}`} className="flex-shrink-0 self-end mb-1">
+                                                            <Avatar username={msg.sender?.username} avatar={msg.sender?.avatar} sizeClass="w-8 h-8" />
+                                                        </Link>
+                                                    )}
+
+                                                    <div className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
+                                                        {msg.content && (
+                                                            <div 
+                                                                className={`
+                                                                    relative px-4 py-2.5 text-[15px] leading-relaxed shadow-sm
+                                                                    ${isOwn 
+                                                                        ? 'bg-gradient-to-br from-green-600 to-emerald-700 text-white rounded-2xl rounded-br-sm' 
+                                                                        : 'bg-gray-800 text-gray-100 border border-gray-700/50 rounded-2xl rounded-bl-sm'
+                                                                    }
+                                                                    ${isOptimistic ? 'opacity-70' : 'opacity-100'}
+                                                                `}
+                                                            >
+                                                                {msg.content}
+                                                            </div>
                                                         )}
 
-                                                        {/* Message Bubble */}
-                                                        <div className="flex flex-col">
-                                                            {/* Text Content */}
-                                                            {msg.content && (
-                                                                <div 
-                                                                    className={`
-                                                                        relative px-4 py-2 shadow-md text-sm md:text-base break-words
-                                                                        ${isOwn 
-                                                                            ? 'bg-green-600 text-white rounded-2xl rounded-br-sm' 
-                                                                            : 'bg-gray-700 text-gray-100 rounded-2xl rounded-bl-sm'
-                                                                        }
-                                                                        ${isOptimistic ? 'opacity-70' : 'opacity-100'}
-                                                                    `}
+                                                        {msg.sharedReview && (
+                                                            <div className="mt-2 w-full max-w-sm"><ReviewCard review={msg.sharedReview} /></div>
+                                                        )}
+                                                        {msg.sharedDiscussion && (
+                                                            <ChatDiscussionCard discussion={msg.sharedDiscussion} />
+                                                        )}
+
+                                                        <div className={`flex items-center gap-2 mt-1 px-1 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
+                                                            <span className="text-[10px] text-gray-500 font-medium">
+                                                                {formatTime(msg.createdAt)}
+                                                            </span>
+                                                            {isOwn && !isOptimistic && (
+                                                                <button 
+                                                                    onClick={() => handleDeleteMessage(msg._id)}
+                                                                    className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 transition-all"
                                                                 >
-                                                                    {msg.content}
-                                                                </div>
+                                                                    <Trash2 size={12} />
+                                                                </button>
                                                             )}
-
-                                                            {/* Shared Cards */}
-                                                            {msg.sharedReview && (
-                                                                <div className={`mt-1 transform scale-95 origin-${isOwn ? 'right' : 'left'}`}>
-                                                                    <ReviewCard review={msg.sharedReview} />
-                                                                </div>
-                                                            )}
-                                                            {msg.sharedDiscussion && (
-                                                                <ChatDiscussionCard discussion={msg.sharedDiscussion} />
-                                                            )}
-
-                                                            {/* Timestamp & Status */}
-                                                            <div className={`text-[10px] mt-1 flex items-center gap-1 ${isOwn ? 'text-gray-400 justify-end' : 'text-gray-400'}`}>
-                                                                {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                                {isOwn && !isOptimistic && (
-                                                                    <button 
-                                                                        onClick={() => handleDeleteMessage(msg._id)}
-                                                                        className="opacity-0 group-hover:opacity-100 hover:text-red-500 ml-2"
-                                                                        title="Delete"
-                                                                    >
-                                                                        <Trash2 size={12} />
-                                                                    </button>
-                                                                )}
-                                                                {isOwn && (
-                                                                    <span>{isOptimistic ? '🕒' : (msg.read ? '✓✓' : '✓')}</span>
-                                                                )}
-                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
                                             </div>
                                         );
                                     })}
+                                    </div>
                                 </div>
                             ))}
                             <div ref={scrollRef} />
                         </div>
 
-                        <form onSubmit={handleSendMessage} className="p-4 bg-gray-900 border-t border-gray-800 flex gap-2 items-end">
-                            <button type="button" className="p-3 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors">
-                                <MoreVertical size={20} />
-                            </button>
-                            
-                            <div className="flex-1 bg-gray-800 rounded-2xl flex items-center px-4 py-2 focus-within:ring-2 ring-green-500/50 transition-all">
+                        <div className="p-4 bg-gray-950 border-t border-gray-800/50 backdrop-blur-lg flex-shrink-0">
+                            <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto flex items-end gap-2 bg-gray-900 border border-gray-800 p-1.5 rounded-3xl shadow-lg focus-within:ring-1 focus-within:ring-green-500/50 focus-within:border-green-500/50 transition-all">
+                                
                                 <input
                                     ref={inputRef}
                                     type="text"
                                     value={newMessage}
                                     onChange={(e) => setNewMessage(e.target.value)}
-                                    placeholder={`Message ${currentChat.username}...`}
-                                    className="flex-1 bg-transparent border-none outline-none text-white placeholder-gray-500 max-h-32 py-1"
-                                    disabled={sending}
+                                    placeholder="Type a message..."
+                                    className="flex-1 bg-transparent border-none outline-none text-white placeholder-gray-500 max-h-32 py-2.5 px-4 text-[15px]"
+                                    /* FIX: Removed disabled={sending} so input stays active */
                                 />
-                            </div>
 
-                            <button 
-                                type="submit" 
-                                disabled={!newMessage.trim() || sending}
-                                className="p-3 bg-green-600 hover:bg-green-700 text-white rounded-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 active:scale-95"
-                            >
-                                <Send size={20} />
-                            </button>
-                        </form>
+                                <button 
+                                    type="submit" 
+                                    disabled={!newMessage.trim() || sending}
+                                    className={`
+                                        p-2.5 rounded-full shadow-md transition-all duration-200 flex items-center justify-center
+                                        ${newMessage.trim() 
+                                            ? 'bg-green-600 text-white hover:bg-green-500 transform hover:scale-105 active:scale-95' 
+                                            : 'bg-gray-800 text-gray-500 cursor-not-allowed'}
+                                    `}
+                                >
+                                    <Send size={18} fill={newMessage.trim() ? "currentColor" : "none"} />
+                                </button>
+                            </form>
+                        </div>
                     </>
                 ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center text-gray-500 p-8">
-                        <div className="w-24 h-24 bg-gray-800 rounded-full flex items-center justify-center mb-6 animate-pulse">
-                            <Send size={40} className="text-green-500 ml-2" />
+                    <div className="flex-1 flex flex-col items-center justify-center text-gray-500 p-8 bg-black/50">
+                        <div className="w-20 h-20 bg-gray-900 rounded-3xl flex items-center justify-center mb-6 shadow-2xl rotate-3">
+                            <MessageSquare size={40} className="text-green-500" />
                         </div>
-                        <h2 className="text-2xl font-bold text-white mb-2">Your Messages</h2>
-                        <p className="max-w-md text-center">
-                            Select a conversation to start chatting
+                        <h2 className="text-3xl font-bold text-white mb-2">MovieSocial Chat</h2>
+                        <p className="max-w-xs text-center text-gray-400">
+                            Connect with other movie buffs, share reviews, and discuss your favorites.
                         </p>
                     </div>
                 )}
