@@ -1,6 +1,7 @@
 const Message = require('../models/Message');
 const User = require('../models/User');
 
+// Helper to find user by ID or Username
 const findUserByIdOrUsername = async (identifier) => {
   const isObjectId = /^[0-9a-fA-F]{24}$/.test(identifier);
   if (isObjectId) {
@@ -19,6 +20,7 @@ exports.sendMessage = async (req, res) => {
       return res.status(400).json({ msg: 'Recipient and content/attachment are required' });
     }
 
+    // 1. Find the recipient object (contains _id, username, etc.)
     const recipient = await findUserByIdOrUsername(recipientId);
     if (!recipient) {
       return res.status(404).json({ msg: 'User not found' });
@@ -34,27 +36,31 @@ exports.sendMessage = async (req, res) => {
     });
 
     const savedMessage = await newMessage.save();
-    
-    // Populate all necessary fields for the frontend cards
+
+    // Populate fields for the frontend
     await savedMessage.populate([
       { path: 'sender', select: 'username avatar' },
-      { 
+      {
         path: 'sharedReview',
         populate: { path: 'user', select: 'username avatar badges' }
       },
-      { 
+      {
         path: 'sharedDiscussion',
         populate: { path: 'starter', select: 'username avatar' }
       }
     ]);
 
     const io = req.app.get('io');
-    
-    // Emit to the recipient's "room" (which is their User ID)
+
+    // --- FIX START ---
+    // Previously, this used `recipientId` (which is often a username).
+    // Now, we strictly use `recipient._id.toString()` because that is 
+    // the room name the client joins in server/index.js.
     if (io) {
-      io.to(recipientId).emit('receive_message', savedMessage);
+      io.to(recipient._id.toString()).emit('receive_message', savedMessage);
     }
-    
+    // --- FIX END ---
+
     res.status(201).json(savedMessage);
   } catch (err) {
     console.error('Error sending message:', err);
@@ -78,17 +84,17 @@ exports.getConversation = async (req, res) => {
         { sender: otherUser._id, recipient: currentUserId }
       ]
     })
-    .sort({ createdAt: 1 })
-    .populate('sender', 'username avatar')
-    .populate('recipient', 'username avatar')
-    .populate({
-      path: 'sharedReview',
-      populate: { path: 'user', select: 'username avatar badges' }
-    })
-    .populate({
-      path: 'sharedDiscussion',
-      populate: { path: 'starter', select: 'username avatar' }
-    });
+      .sort({ createdAt: 1 })
+      .populate('sender', 'username avatar')
+      .populate('recipient', 'username avatar')
+      .populate({
+        path: 'sharedReview',
+        populate: { path: 'user', select: 'username avatar badges' }
+      })
+      .populate({
+        path: 'sharedDiscussion',
+        populate: { path: 'starter', select: 'username avatar' }
+      });
 
     res.json(messages);
   } catch (err) {
@@ -104,17 +110,17 @@ exports.getConversationsList = async (req, res) => {
     const messages = await Message.find({
       $or: [{ sender: currentUserId }, { recipient: currentUserId }]
     })
-    .sort({ createdAt: -1 })
-    .populate('sender', 'username avatar')
-    .populate('recipient', 'username avatar');
+      .sort({ createdAt: -1 })
+      .populate('sender', 'username avatar')
+      .populate('recipient', 'username avatar');
 
     const conversationsMap = new Map();
 
     for (const msg of messages) {
-      const otherUser = msg.sender._id.toString() === currentUserId 
-        ? msg.recipient 
+      const otherUser = msg.sender._id.toString() === currentUserId
+        ? msg.recipient
         : msg.sender;
-      
+
       if (!otherUser) continue;
 
       const otherUserId = otherUser._id.toString();
@@ -123,9 +129,9 @@ exports.getConversationsList = async (req, res) => {
         // Determine preview text
         let previewText = msg.content;
         if (!previewText) {
-            if (msg.sharedReview) previewText = 'Shared a review';
-            else if (msg.sharedDiscussion) previewText = 'Shared a discussion';
-            else previewText = 'Sent an attachment';
+          if (msg.sharedReview) previewText = 'Shared a review';
+          else if (msg.sharedDiscussion) previewText = 'Shared a discussion';
+          else previewText = 'Sent an attachment';
         }
 
         conversationsMap.set(otherUserId, {
@@ -168,10 +174,10 @@ exports.markMessagesRead = async (req, res) => {
     }
 
     await Message.updateMany(
-      { 
-        sender: otherUser._id, 
-        recipient: currentUserId, 
-        read: false 
+      {
+        sender: otherUser._id,
+        recipient: currentUserId,
+        read: false
       },
       { $set: { read: true } }
     );
@@ -209,9 +215,9 @@ exports.deleteMessage = async (req, res) => {
 
 exports.getUnreadCount = async (req, res) => {
   try {
-    const count = await Message.countDocuments({ 
-      recipient: req.user.id, 
-      read: false 
+    const count = await Message.countDocuments({
+      recipient: req.user.id,
+      read: false
     });
     res.json({ count });
   } catch (err) {

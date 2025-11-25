@@ -42,8 +42,9 @@ const ReviewCard = ({ review, onEdit, onDelete }) => {
   const [fetchedBadges, setFetchedBadges] = useState(null);
   const [showShare, setShowShare] = useState(false);
 
-  // Compare IDs as strings to avoid type mismatches (ObjectId vs string)
-  const isAuthor = !!user && (
+  // FIX: Added '&& review.user' check to ensure we don't read properties of null
+  // if the review author is missing/deleted or not populated.
+  const isAuthor = !!user && !!review?.user && (
     String(user.id) === String(review.user._id) ||
     String(user._id) === String(review.user._id)
   );
@@ -105,9 +106,10 @@ const ReviewCard = ({ review, onEdit, onDelete }) => {
     }
   };
 
-  // Construct share content
+  // FIX: Safe access for username in case review.user is null
+  const authorName = review.user ? review.user.username : 'Unknown User';
   const shareUrl = `${window.location.origin}/movie/${review.movieId}`;
-  const shareText = `Check out ${review.user.username}'s review of ${review.movieTitle}:\n\n"${review.text.length > 100 ? review.text.substring(0, 100) + '...' : review.text}"\n\n${shareUrl}`;
+  const shareText = `Check out ${authorName}'s review of ${review.movieTitle}:\n\n"${review.text.length > 100 ? review.text.substring(0, 100) + '...' : review.text}"\n\n${shareUrl}`;
 
   return (
     <>
@@ -134,7 +136,15 @@ const ReviewCard = ({ review, onEdit, onDelete }) => {
               <div className="flex items-center gap-2 text-sm text-gray-400 mb-2">
                 {review.rating > 0 && <DisplayStars rating={review.rating} />}
                 <span className="mt-1 flex items-center gap-2">
-                  Reviewed by <Link to={`/profile/${review.user.username}`} className="font-semibold hover:underline">{review.user.username}</Link>
+                  {/* FIX: Handle missing review.user gracefully */}
+                  Reviewed by{' '}
+                  {review.user ? (
+                    <Link to={`/profile/${review.user.username}`} className="font-semibold hover:underline">
+                      {review.user.username}
+                    </Link>
+                  ) : (
+                    <span className="italic text-gray-500">Deleted User</span>
+                  )}
                   
                   {/* Badge display logic */}
                   {((review.user?.badges && review.user.badges.length > 0) || (fetchedBadges && fetchedBadges.length > 0)) && (() => {
@@ -199,7 +209,7 @@ const ReviewCard = ({ review, onEdit, onDelete }) => {
         onClose={() => setShowShare(false)} 
         defaultMessage={shareText}
         title="Share Review"
-        review={review} // <--- Added this prop
+        review={review}
       />
     </>
   );
