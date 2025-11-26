@@ -14,7 +14,6 @@ const MessageSchema = new mongoose.Schema({
   content: { 
     type: String, 
     trim: true
-    // Removed required: true, validation handled below
   },
   read: { 
     type: Boolean, 
@@ -27,18 +26,22 @@ const MessageSchema = new mongoose.Schema({
   sharedDiscussion: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Discussion'
+  },
+  // --- ADD THIS FIELD ---
+  sharedRank: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Rank'
   }
 }, { timestamps: true });
 
-// Validate that at least content OR a shared item is present
 MessageSchema.pre('validate', function(next) {
-  if (!this.content && !this.sharedReview && !this.sharedDiscussion) {
+  // Check sharedRank here too
+  if (!this.content && !this.sharedReview && !this.sharedDiscussion && !this.sharedRank) {
     this.invalidate('content', 'Message must have text content or a shared item');
   }
   next();
 });
 
-// Index for faster queries on conversations
 MessageSchema.index({ sender: 1, recipient: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Message', MessageSchema);

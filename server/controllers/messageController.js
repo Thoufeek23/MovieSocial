@@ -13,14 +13,15 @@ const findUserByIdOrUsername = async (identifier) => {
 
 exports.sendMessage = async (req, res) => {
   try {
-    const { recipientId, content, reviewId, discussionId } = req.body;
+    // 1. Extract rankId
+    const { recipientId, content, reviewId, discussionId, rankId } = req.body;
     const senderId = req.user.id;
 
-    if (!content && !reviewId && !discussionId && !recipientId) {
+    // 2. Validate rankId presence
+    if (!recipientId || (!content && !reviewId && !discussionId && !rankId)) {
       return res.status(400).json({ msg: 'Recipient and content/attachment are required' });
     }
 
-    // 1. Find the recipient object (contains _id, username, etc.)
     const recipient = await findUserByIdOrUsername(recipientId);
     if (!recipient) {
       return res.status(404).json({ msg: 'User not found' });
@@ -32,12 +33,13 @@ exports.sendMessage = async (req, res) => {
       content: content || '',
       sharedReview: reviewId || null,
       sharedDiscussion: discussionId || null,
+      sharedRank: rankId || null, // 3. Save sharedRank
       read: false
     });
 
     const savedMessage = await newMessage.save();
 
-    // Populate fields for the frontend
+    // 4. Populate sharedRank for the response
     await savedMessage.populate([
       { path: 'sender', select: 'username avatar' },
       {
@@ -47,19 +49,17 @@ exports.sendMessage = async (req, res) => {
       {
         path: 'sharedDiscussion',
         populate: { path: 'starter', select: 'username avatar' }
+      },
+      {
+        path: 'sharedRank', // Populate rank
+        populate: { path: 'user', select: 'username avatar' }
       }
     ]);
 
     const io = req.app.get('io');
-
-    // --- FIX START ---
-    // Previously, this used `recipientId` (which is often a username).
-    // Now, we strictly use `recipient._id.toString()` because that is 
-    // the room name the client joins in server/index.js.
     if (io) {
       io.to(recipient._id.toString()).emit('receive_message', savedMessage);
     }
-    // --- FIX END ---
 
     res.status(201).json(savedMessage);
   } catch (err) {
@@ -94,6 +94,10 @@ exports.getConversation = async (req, res) => {
       .populate({
         path: 'sharedDiscussion',
         populate: { path: 'starter', select: 'username avatar' }
+      })
+      .populate({ // 5. Populate rank in conversation view
+        path: 'sharedRank',
+        populate: { path: 'user', select: 'username avatar' }
       });
 
     res.json(messages);
@@ -126,11 +130,12 @@ exports.getConversationsList = async (req, res) => {
       const otherUserId = otherUser._id.toString();
 
       if (!conversationsMap.has(otherUserId)) {
-        // Determine preview text
+        // 6. Update preview text for ranks
         let previewText = msg.content;
         if (!previewText) {
           if (msg.sharedReview) previewText = 'Shared a review';
           else if (msg.sharedDiscussion) previewText = 'Shared a discussion';
+          else if (msg.sharedRank) previewText = 'Shared a ranking list'; // Added rank preview
           else previewText = 'Sent an attachment';
         }
 

@@ -1,18 +1,75 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { Send, MoreVertical, ArrowLeft, Trash2, MessageSquare } from 'lucide-react'; 
+import { Send, MoreVertical, ArrowLeft, Trash2, MessageSquare, Star } from 'lucide-react'; 
 import { AuthContext } from '../context/AuthContext';
 import Avatar from '../components/Avatar';
-import ReviewCard from '../components/ReviewCard';
 import * as api from '../api';
 import toast from 'react-hot-toast';
 import { io } from 'socket.io-client';
 
-// Enhanced Discussion Card for Chat
+// --- 1. NEW: CHAT REVIEW CARD (Compact version) ---
+const ChatReviewCard = ({ review }) => {
+    const { user } = useContext(AuthContext);
+    const [myVote, setMyVote] = useState(null);
+    
+    // Initialize vote state
+    useEffect(() => {
+        if (user && review.agreementVotes) {
+            const mine = review.agreementVotes.find(v => 
+                String(v.user) === String(user._id) || String(v.user) === String(user.id)
+            );
+            setMyVote(mine ? Number(mine.value) : null);
+        }
+    }, [review, user]);
+
+    const handleVote = async (e, value) => {
+        e.preventDefault(); // Prevent navigation to movie page
+        if (!user) return toast.error('Login to vote');
+        try {
+            setMyVote(value); // Optimistic update
+            await api.voteReview(review._id, value);
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    if (!review) return null;
+
+    return (
+        <div className="bg-gray-900/50 border border-gray-700/50 rounded-xl overflow-hidden mt-2 max-w-sm shadow-md transition-all hover:bg-gray-800 group/card">
+            <Link to={`/movie/${review.movieId}`} className="block">
+                <div className="flex p-3 gap-3">
+                    <img 
+                        src={review.moviePoster ? `https://image.tmdb.org/t/p/w154${review.moviePoster}` : '/default_dp.png'} 
+                        alt={review.movieTitle}
+                        className="w-12 h-18 object-cover rounded shadow-sm"
+                    />
+                    <div className="flex-1 min-w-0 flex flex-col">
+                        <h4 className="font-bold text-gray-100 text-sm leading-tight truncate">{review.movieTitle}</h4>
+                        <div className="flex items-center gap-1 my-1">
+                            <Star size={12} className="text-yellow-500 fill-yellow-500" />
+                            <span className="text-xs text-yellow-500 font-bold">{review.rating}/10</span>
+                        </div>
+                        <p className="text-xs text-gray-400 line-clamp-2 italic">"{review.text}"</p>
+                    </div>
+                </div>
+                
+                {/* --- VOTE BUTTONS ADDED HERE --- */}
+                <div className="flex gap-1 p-2 pt-0">
+                    <button onClick={(e) => handleVote(e, 1)} className={`flex-1 py-1 text-[10px] rounded ${myVote === 1 ? 'bg-green-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>Agree</button>
+                    <button onClick={(e) => handleVote(e, 0.5)} className={`flex-1 py-1 text-[10px] rounded ${myVote === 0.5 ? 'bg-yellow-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>Partial</button>
+                    <button onClick={(e) => handleVote(e, 0)} className={`flex-1 py-1 text-[10px] rounded ${myVote === 0 ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>Disagree</button>
+                </div>
+            </Link>
+        </div>
+    );
+};
+
+// --- 2. EXISTING: CHAT DISCUSSION CARD ---
 const ChatDiscussionCard = ({ discussion }) => {
     if (!discussion) return null;
     return (
-        <div className="bg-gray-900/50 border border-gray-700/50 rounded-xl overflow-hidden mt-2 max-w-sm shadow-md transition-all hover:bg-gray-800">
+        <div className="bg-gray-900/50 border border-gray-700/50 rounded-xl overflow-hidden mt-2 max-w-sm shadow-md transition-all hover:bg-gray-800 group/card">
             <Link to={`/discussion/${discussion._id}`} className="flex p-3 gap-3">
                 <img 
                     src={discussion.poster_path ? `https://image.tmdb.org/t/p/w154${discussion.poster_path}` : '/default_dp.png'} 
@@ -27,6 +84,44 @@ const ChatDiscussionCard = ({ discussion }) => {
                         <Avatar username={discussion.starter?.username} avatar={discussion.starter?.avatar} sizeClass="w-4 h-4" />
                         <span className="text-xs text-gray-400">{discussion.starter?.username}</span>
                     </div>
+                </div>
+            </Link>
+        </div>
+    );
+};
+
+// --- 3. NEW: CHAT RANK CARD ---
+const ChatRankCard = ({ rank }) => {
+    if (!rank) return null;
+    // Get top 3 posters for preview
+    const previewMovies = rank.movies?.slice(0, 3) || [];
+    
+    return (
+        <div className="bg-gray-900/50 border border-gray-700/50 rounded-xl overflow-hidden mt-2 max-w-sm shadow-md transition-all hover:bg-gray-800 group/card">
+            <Link to={`/rank/${rank._id}`} className="block p-3">
+                <div className="flex items-start justify-between mb-2">
+                    <h4 className="font-bold text-gray-100 text-sm leading-tight truncate pr-2">{rank.title}</h4>
+                    <span className="text-[10px] bg-green-900/30 text-green-400 px-1.5 py-0.5 rounded border border-green-800/30 whitespace-nowrap">
+                        {rank.movies?.length || 0} movies
+                    </span>
+                </div>
+                
+                <div className="flex gap-1.5 overflow-hidden">
+                    {previewMovies.map((movie, i) => (
+                        <div key={i} className="relative w-12 aspect-[2/3] flex-shrink-0 bg-gray-800 rounded overflow-hidden">
+                             <img 
+                                src={movie.posterPath ? `https://image.tmdb.org/t/p/w154${movie.posterPath}` : '/default_dp.png'} 
+                                alt={movie.title}
+                                className="w-full h-full object-cover"
+                             />
+                             <div className="absolute top-0 left-0 bg-black/60 text-white text-[8px] px-1 font-bold">{movie.rank}</div>
+                        </div>
+                    ))}
+                    {rank.movies?.length > 3 && (
+                        <div className="w-12 aspect-[2/3] flex-shrink-0 bg-gray-800 rounded flex items-center justify-center text-xs text-gray-400 border border-gray-700 border-dashed">
+                            +{rank.movies.length - 3}
+                        </div>
+                    )}
                 </div>
             </Link>
         </div>
@@ -61,7 +156,8 @@ const MessagesPage = () => {
     }, [currentChat]);
 
     useEffect(() => {
-        const socketUrl = process.env.REACT_APP_API_URL || 'https://moviesocial-backend-khd2.onrender.com';
+        //const socketUrl = process.env.REACT_APP_API_URL || 'https://moviesocial-backend-khd2.onrender.com';
+        const socketUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
         socketRef.current = io(socketUrl);
         const userId = user?._id || user?.id;
 
@@ -142,7 +238,6 @@ const MessagesPage = () => {
                         }
                     }
                 } else if (convs.length > 0 && window.innerWidth > 768) {
-                    // Only auto-select on desktop
                     handleSelectChat(convs[0].otherUser);
                 }
             } catch (error) {
@@ -186,12 +281,8 @@ const MessagesPage = () => {
         const tempId = Date.now();
         const msgContent = newMessage;
         
-        // 1. Clear message immediately
         setNewMessage('');
-        
-        // 2. KEEP FOCUS: Do not wait, refocus immediately
         inputRef.current?.focus();
-        
         setSending(true);
 
         try {
@@ -221,7 +312,6 @@ const MessagesPage = () => {
             setNewMessage(msgContent);
         } finally {
             setSending(false);
-            // 3. Ensure focus again just in case
             setTimeout(() => inputRef.current?.focus(), 0);
         }
     };
@@ -389,10 +479,13 @@ const MessagesPage = () => {
                                                         )}
 
                                                         {msg.sharedReview && (
-                                                            <div className="mt-2 w-full max-w-sm"><ReviewCard review={msg.sharedReview} /></div>
+                                                            <ChatReviewCard review={msg.sharedReview} />
                                                         )}
                                                         {msg.sharedDiscussion && (
                                                             <ChatDiscussionCard discussion={msg.sharedDiscussion} />
+                                                        )}
+                                                        {msg.sharedRank && (
+                                                            <ChatRankCard rank={msg.sharedRank} />
                                                         )}
 
                                                         <div className={`flex items-center gap-2 mt-1 px-1 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -429,7 +522,6 @@ const MessagesPage = () => {
                                     onChange={(e) => setNewMessage(e.target.value)}
                                     placeholder="Type a message..."
                                     className="flex-1 bg-transparent border-none outline-none text-white placeholder-gray-500 max-h-32 py-2.5 px-4 text-[15px]"
-                                    /* FIX: Removed disabled={sending} so input stays active */
                                 />
 
                                 <button 
