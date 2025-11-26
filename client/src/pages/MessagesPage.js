@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { Send, ArrowLeft, Trash2, MessageSquare, Star } from 'lucide-react'; 
+import { Send, ArrowLeft, Trash2, MessageSquare, Star } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import Avatar from '../components/Avatar';
 import * as api from '../api';
@@ -11,11 +11,11 @@ import { io } from 'socket.io-client';
 const ChatReviewCard = ({ review }) => {
     const { user } = useContext(AuthContext);
     const [myVote, setMyVote] = useState(null);
-    
+
     // Initialize vote state
     useEffect(() => {
         if (user && review.agreementVotes) {
-            const mine = review.agreementVotes.find(v => 
+            const mine = review.agreementVotes.find(v =>
                 String(v.user) === String(user._id) || String(v.user) === String(user.id)
             );
             setMyVote(mine ? Number(mine.value) : null);
@@ -39,8 +39,8 @@ const ChatReviewCard = ({ review }) => {
         <div className="bg-gray-900/50 border border-gray-700/50 rounded-xl overflow-hidden mt-2 max-w-sm shadow-md transition-all hover:bg-gray-800 group/card">
             <Link to={`/movie/${review.movieId}`} className="block">
                 <div className="flex p-3 gap-3">
-                    <img 
-                        src={review.moviePoster ? `https://image.tmdb.org/t/p/w154${review.moviePoster}` : '/default_dp.png'} 
+                    <img
+                        src={review.moviePoster ? `https://image.tmdb.org/t/p/w154${review.moviePoster}` : '/default_dp.png'}
                         alt={review.movieTitle}
                         className="w-12 h-18 object-cover rounded shadow-sm"
                     />
@@ -48,12 +48,12 @@ const ChatReviewCard = ({ review }) => {
                         <h4 className="font-bold text-gray-100 text-sm leading-tight truncate">{review.movieTitle}</h4>
                         <div className="flex items-center gap-1 my-1">
                             <Star size={12} className="text-yellow-500 fill-yellow-500" />
-                            <span className="text-xs text-yellow-500 font-bold">{review.rating}/10</span>
+                            <span className="text-xs text-yellow-500 font-bold">{review.rating}/5</span>
                         </div>
                         <p className="text-xs text-gray-400 line-clamp-2 italic">"{review.text}"</p>
                     </div>
                 </div>
-                
+
                 {/* --- VOTE BUTTONS ADDED HERE --- */}
                 <div className="flex gap-1 p-2 pt-0">
                     <button onClick={(e) => handleVote(e, 1)} className={`flex-1 py-1 text-[10px] rounded ${myVote === 1 ? 'bg-green-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>Agree</button>
@@ -71,15 +71,15 @@ const ChatDiscussionCard = ({ discussion }) => {
     return (
         <div className="bg-gray-900/50 border border-gray-700/50 rounded-xl overflow-hidden mt-2 max-w-sm shadow-md transition-all hover:bg-gray-800 group/card">
             <Link to={`/discussion/${discussion._id}`} className="flex p-3 gap-3">
-                <img 
-                    src={discussion.poster_path ? `https://image.tmdb.org/t/p/w154${discussion.poster_path}` : '/default_dp.png'} 
+                <img
+                    src={discussion.poster_path ? `https://image.tmdb.org/t/p/w154${discussion.poster_path}` : '/default_dp.png'}
                     alt="poster"
                     className="w-14 h-20 object-cover rounded-lg shadow-sm"
                 />
                 <div className="flex-1 min-w-0 flex flex-col justify-center">
                     <h4 className="font-semibold text-gray-100 text-sm leading-tight mb-1 line-clamp-2">{discussion.title}</h4>
                     <div className="text-xs text-green-400 font-medium mb-2">{discussion.movieTitle}</div>
-                    
+
                     <div className="flex items-center gap-2 mt-auto">
                         <Avatar username={discussion.starter?.username} avatar={discussion.starter?.avatar} sizeClass="w-4 h-4" />
                         <span className="text-xs text-gray-400">{discussion.starter?.username}</span>
@@ -95,7 +95,7 @@ const ChatRankCard = ({ rank }) => {
     if (!rank) return null;
     // Get top 3 posters for preview
     const previewMovies = rank.movies?.slice(0, 3) || [];
-    
+
     return (
         <div className="bg-gray-900/50 border border-gray-700/50 rounded-xl overflow-hidden mt-2 max-w-sm shadow-md transition-all hover:bg-gray-800 group/card">
             <Link to={`/rank/${rank._id}`} className="block p-3">
@@ -105,16 +105,16 @@ const ChatRankCard = ({ rank }) => {
                         {rank.movies?.length || 0} movies
                     </span>
                 </div>
-                
+
                 <div className="flex gap-1.5 overflow-hidden">
                     {previewMovies.map((movie, i) => (
                         <div key={i} className="relative w-12 aspect-[2/3] flex-shrink-0 bg-gray-800 rounded overflow-hidden">
-                             <img 
-                                src={movie.posterPath ? `https://image.tmdb.org/t/p/w154${movie.posterPath}` : '/default_dp.png'} 
+                            <img
+                                src={movie.posterPath ? `https://image.tmdb.org/t/p/w154${movie.posterPath}` : '/default_dp.png'}
                                 alt={movie.title}
                                 className="w-full h-full object-cover"
-                             />
-                             <div className="absolute top-0 left-0 bg-black/60 text-white text-[8px] px-1 font-bold">{movie.rank}</div>
+                            />
+                            <div className="absolute top-0 left-0 bg-black/60 text-white text-[8px] px-1 font-bold">{movie.rank}</div>
                         </div>
                     ))}
                     {rank.movies?.length > 3 && (
@@ -131,7 +131,7 @@ const ChatRankCard = ({ rank }) => {
 const MessagesPage = () => {
     const { user, updateUnreadCount } = useContext(AuthContext);
     const location = useLocation();
-    
+
     // State
     const [conversations, setConversations] = useState([]);
     const [currentChat, setCurrentChat] = useState(null);
@@ -139,12 +139,12 @@ const MessagesPage = () => {
     const [newMessage, setNewMessage] = useState('');
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
-    
+
     // Refs
     const scrollRef = useRef();
     const inputRef = useRef();
     const socketRef = useRef();
-    const currentChatRef = useRef(); 
+    const currentChatRef = useRef();
 
     // Parse query params
     const queryParams = new URLSearchParams(location.search);
@@ -171,7 +171,7 @@ const MessagesPage = () => {
             const senderId = incomingMsg.sender._id || incomingMsg.sender;
 
             const isChattingWithSender = activeChat && (
-                activeChat._id === senderId || 
+                activeChat._id === senderId ||
                 activeChat.username === senderUsername
             );
 
@@ -184,7 +184,7 @@ const MessagesPage = () => {
             setConversations(prev => {
                 const otherConvs = prev.filter(c => c.otherUser.username !== senderUsername);
                 const existingConv = prev.find(c => c.otherUser.username === senderUsername);
-                
+
                 const newConv = {
                     otherUser: existingConv ? existingConv.otherUser : incomingMsg.sender,
                     lastMessage: incomingMsg,
@@ -202,7 +202,7 @@ const MessagesPage = () => {
 
     // Format helpers
     const formatTime = (date) => new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
+
     const formatConversationDate = (dateString) => {
         if (!dateString) return '';
         const date = new Date(dateString);
@@ -222,7 +222,7 @@ const MessagesPage = () => {
         const loadData = async () => {
             try {
                 setLoading(true);
-                const { data: convs } = await api.getConversations(); 
+                const { data: convs } = await api.getConversations();
                 setConversations(convs);
 
                 if (initialChatUser) {
@@ -256,7 +256,7 @@ const MessagesPage = () => {
 
     const handleSelectChat = async (chatUser) => {
         setCurrentChat(chatUser);
-        setConversations(prev => prev.map(c => 
+        setConversations(prev => prev.map(c =>
             c.otherUser.username === chatUser.username ? { ...c, unreadCount: 0 } : c
         ));
 
@@ -280,7 +280,7 @@ const MessagesPage = () => {
 
         const tempId = Date.now();
         const msgContent = newMessage;
-        
+
         setNewMessage('');
         inputRef.current?.focus();
         setSending(true);
@@ -296,14 +296,14 @@ const MessagesPage = () => {
             setMessages(prev => [...prev, optimisticMsg]);
 
             const { data: sentMsg } = await api.sendMessage(currentChat.username, msgContent);
-            
+
             setMessages(prev => prev.map(m => m._id === tempId ? sentMsg : m));
             setConversations(prev => {
                 const filtered = prev.filter(c => c.otherUser.username !== currentChat.username);
-                return [{ 
-                    otherUser: currentChat, 
+                return [{
+                    otherUser: currentChat,
                     lastMessage: sentMsg,
-                    unreadCount: 0 
+                    unreadCount: 0
                 }, ...filtered];
             });
         } catch (error) {
@@ -347,7 +347,7 @@ const MessagesPage = () => {
 
     return (
         <div className="flex h-[calc(100dvh-64px)] w-full bg-gray-950 text-gray-100 overflow-hidden relative">
-            
+
             {/* --- LEFT SIDEBAR (List) --- */}
             <div className={`
                 ${currentChat ? 'hidden md:flex' : 'flex'} 
@@ -356,7 +356,7 @@ const MessagesPage = () => {
                 <div className="p-5 border-b border-gray-800 flex justify-between items-center bg-gray-950 flex-shrink-0">
                     <h1 className="text-2xl font-bold text-white tracking-tight">Messages</h1>
                 </div>
-                
+
                 <div className="flex-1 overflow-y-auto no-scrollbar">
                     {loading && !conversations.length ? (
                         <div className="p-4 flex justify-center mt-10"><div className="w-6 h-6 border-2 border-green-600 border-t-transparent rounded-full animate-spin"></div></div>
@@ -366,13 +366,13 @@ const MessagesPage = () => {
                         </div>
                     ) : (
                         conversations.map(conv => (
-                            <div 
+                            <div
                                 key={conv.otherUser._id}
                                 onClick={() => handleSelectChat(conv.otherUser)}
                                 className={`
                                     group flex items-center gap-4 p-4 cursor-pointer transition-all duration-200 border-b border-gray-900/50
-                                    ${currentChat?.username === conv.otherUser.username 
-                                        ? 'bg-gray-900 border-l-4 border-l-green-600' 
+                                    ${currentChat?.username === conv.otherUser.username
+                                        ? 'bg-gray-900 border-l-4 border-l-green-600'
                                         : 'hover:bg-gray-900/50 border-l-4 border-l-transparent'}
                                 `}
                             >
@@ -386,7 +386,7 @@ const MessagesPage = () => {
                                             {conv.lastMessage && formatConversationDate(conv.lastMessage.createdAt)}
                                         </span>
                                     </div>
-                                    
+
                                     <div className="flex justify-between items-center">
                                         <p className={`text-sm truncate pr-2 ${conv.unreadCount > 0 ? 'text-gray-100 font-medium' : 'text-gray-500'}`}>
                                             {isMessageFromMe({ sender: conv.lastMessage?.sender }) && <span className="text-gray-400">You: </span>}
@@ -414,13 +414,13 @@ const MessagesPage = () => {
                     <>
                         <div className="h-16 px-4 md:px-6 flex items-center justify-between border-b border-gray-800 bg-gray-950/80 backdrop-blur-md sticky top-0 z-30 flex-shrink-0">
                             <div className="flex items-center gap-3">
-                                <button 
+                                <button
                                     onClick={() => setCurrentChat(null)}
                                     className="md:hidden p-2 -ml-2 text-gray-400 hover:text-white transition-colors"
                                 >
                                     <ArrowLeft size={20} />
                                 </button>
-                                
+
                                 <Link to={`/profile/${currentChat.username}`} className="flex items-center gap-3 group">
                                     <Avatar username={currentChat.username} avatar={currentChat.avatar} sizeClass="w-10 h-10" />
                                     <div>
@@ -445,67 +445,67 @@ const MessagesPage = () => {
                                     </div>
 
                                     <div className="space-y-1">
-                                    {dateMessages.map((msg, index) => {
-                                        const isOwn = isMessageFromMe(msg);
-                                        const isOptimistic = msg.isOptimistic;
+                                        {dateMessages.map((msg, index) => {
+                                            const isOwn = isMessageFromMe(msg);
+                                            const isOptimistic = msg.isOptimistic;
 
-                                        return (
-                                            <div 
-                                                key={msg._id || index} 
-                                                className={`flex w-full group ${isOwn ? 'justify-end' : 'justify-start'}`}
-                                            >
-                                                <div className={`flex max-w-[85%] md:max-w-[65%] gap-2 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
-                                                    
-                                                    {!isOwn && (
-                                                        <Link to={`/profile/${msg.sender?.username}`} className="flex-shrink-0 self-end mb-1">
-                                                            <Avatar username={msg.sender?.username} avatar={msg.sender?.avatar} sizeClass="w-8 h-8" />
-                                                        </Link>
-                                                    )}
+                                            return (
+                                                <div
+                                                    key={msg._id || index}
+                                                    className={`flex w-full group ${isOwn ? 'justify-end' : 'justify-start'}`}
+                                                >
+                                                    <div className={`flex max-w-[85%] md:max-w-[65%] gap-2 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
 
-                                                    <div className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
-                                                        {msg.content && (
-                                                            <div 
-                                                                className={`
+                                                        {!isOwn && (
+                                                            <Link to={`/profile/${msg.sender?.username}`} className="flex-shrink-0 self-end mb-1">
+                                                                <Avatar username={msg.sender?.username} avatar={msg.sender?.avatar} sizeClass="w-8 h-8" />
+                                                            </Link>
+                                                        )}
+
+                                                        <div className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
+                                                            {msg.content && (
+                                                                <div
+                                                                    className={`
                                                                     relative px-4 py-2.5 text-[15px] leading-relaxed shadow-sm
-                                                                    ${isOwn 
-                                                                        ? 'bg-gradient-to-br from-green-600 to-emerald-700 text-white rounded-2xl rounded-br-sm' 
-                                                                        : 'bg-gray-800 text-gray-100 border border-gray-700/50 rounded-2xl rounded-bl-sm'
-                                                                    }
+                                                                    ${isOwn
+                                                                            ? 'bg-gradient-to-br from-green-600 to-emerald-700 text-white rounded-2xl rounded-br-sm'
+                                                                            : 'bg-gray-800 text-gray-100 border border-gray-700/50 rounded-2xl rounded-bl-sm'
+                                                                        }
                                                                     ${isOptimistic ? 'opacity-70' : 'opacity-100'}
                                                                 `}
-                                                            >
-                                                                {msg.content}
-                                                            </div>
-                                                        )}
-
-                                                        {msg.sharedReview && (
-                                                            <ChatReviewCard review={msg.sharedReview} />
-                                                        )}
-                                                        {msg.sharedDiscussion && (
-                                                            <ChatDiscussionCard discussion={msg.sharedDiscussion} />
-                                                        )}
-                                                        {msg.sharedRank && (
-                                                            <ChatRankCard rank={msg.sharedRank} />
-                                                        )}
-
-                                                        <div className={`flex items-center gap-2 mt-1 px-1 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
-                                                            <span className="text-[10px] text-gray-500 font-medium">
-                                                                {formatTime(msg.createdAt)}
-                                                            </span>
-                                                            {isOwn && !isOptimistic && (
-                                                                <button 
-                                                                    onClick={() => handleDeleteMessage(msg._id)}
-                                                                    className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 transition-all"
                                                                 >
-                                                                    <Trash2 size={12} />
-                                                                </button>
+                                                                    {msg.content}
+                                                                </div>
                                                             )}
+
+                                                            {msg.sharedReview && (
+                                                                <ChatReviewCard review={msg.sharedReview} />
+                                                            )}
+                                                            {msg.sharedDiscussion && (
+                                                                <ChatDiscussionCard discussion={msg.sharedDiscussion} />
+                                                            )}
+                                                            {msg.sharedRank && (
+                                                                <ChatRankCard rank={msg.sharedRank} />
+                                                            )}
+
+                                                            <div className={`flex items-center gap-2 mt-1 px-1 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
+                                                                <span className="text-[10px] text-gray-500 font-medium">
+                                                                    {formatTime(msg.createdAt)}
+                                                                </span>
+                                                                {isOwn && !isOptimistic && (
+                                                                    <button
+                                                                        onClick={() => handleDeleteMessage(msg._id)}
+                                                                        className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 transition-all"
+                                                                    >
+                                                                        <Trash2 size={12} />
+                                                                    </button>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        );
-                                    })}
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             ))}
@@ -514,7 +514,7 @@ const MessagesPage = () => {
 
                         <div className="p-4 bg-gray-950 border-t border-gray-800/50 backdrop-blur-lg flex-shrink-0">
                             <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto flex items-end gap-2 bg-gray-900 border border-gray-800 p-1.5 rounded-3xl shadow-lg focus-within:ring-1 focus-within:ring-green-500/50 focus-within:border-green-500/50 transition-all">
-                                
+
                                 <input
                                     ref={inputRef}
                                     type="text"
@@ -524,13 +524,13 @@ const MessagesPage = () => {
                                     className="flex-1 bg-transparent border-none outline-none text-white placeholder-gray-500 max-h-32 py-2.5 px-4 text-[15px]"
                                 />
 
-                                <button 
-                                    type="submit" 
+                                <button
+                                    type="submit"
                                     disabled={!newMessage.trim() || sending}
                                     className={`
                                         p-2.5 rounded-full shadow-md transition-all duration-200 flex items-center justify-center
-                                        ${newMessage.trim() 
-                                            ? 'bg-green-600 text-white hover:bg-green-500 transform hover:scale-105 active:scale-95' 
+                                        ${newMessage.trim()
+                                            ? 'bg-green-600 text-white hover:bg-green-500 transform hover:scale-105 active:scale-95'
                                             : 'bg-gray-800 text-gray-500 cursor-not-allowed'}
                                     `}
                                 >
