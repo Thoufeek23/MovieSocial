@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import * as api from '../api';
-import { Plus, X, Pencil, Heart, MessageCircle, Share2 } from 'lucide-react'; // Added Share2
+import { Plus, X, Pencil, Heart, MessageCircle, Share2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import Avatar from '../components/Avatar';
 import { AnimatePresence, motion } from 'framer-motion';
 import CreateRank from '../components/CreateRank';
-import ShareModal from '../components/ShareModal'; // Added ShareModal
+import ShareModal from '../components/ShareModal';
 import Skeleton from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
 import { useAuth } from '../context/AuthContext';
@@ -40,11 +40,6 @@ const RanksPage = () => {
 
   const handleCreateOpen = () => {
     setEditingRank(null);
-    setIsModalOpen(true);
-  };
-
-  const handleEditOpen = (rank) => {
-    setEditingRank(rank);
     setIsModalOpen(true);
   };
 
@@ -155,17 +150,8 @@ const RanksPage = () => {
                         >
                           <Share2 size={18} />
                         </button>
-
-                        {/* EDIT BUTTON */}
-                        {user && rank.user && (user._id === rank.user._id || user.id === rank.user._id) && (
-                          <button 
-                            onClick={() => handleEditOpen(rank)}
-                            className="p-2 text-gray-500 hover:text-white hover:bg-white/10 rounded-full transition-colors"
-                            title="Edit Rank"
-                          >
-                            <Pencil size={18} />
-                          </button>
-                        )}
+                        
+                        {/* Edit button removed from here */}
                       </div>
                     </div>
                     
@@ -250,6 +236,7 @@ const RanksPage = () => {
           isOpen={!!sharingRank} 
           onClose={() => setSharingRank(null)} 
           title="Share Rank"
+          rank={sharingRank} // Added rank prop here
           defaultMessage={`Check out this ranking list on MovieSocial:\n\n"${sharingRank.title}"\n\n${window.location.origin}/rank/${sharingRank._id}`}
         />
       )}

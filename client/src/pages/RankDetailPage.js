@@ -1,16 +1,19 @@
 import React, { useEffect, useState, useContext, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import * as api from '../api';
 import { AuthContext } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import Avatar from '../components/Avatar';
-import { Edit, Trash2, Heart, Share2 } from 'lucide-react';
+import { Edit, Trash2, Heart, Share2, Pencil, X } from 'lucide-react';
 import ShareModal from '../components/ShareModal';
+import CreateRank from '../components/CreateRank';
+import { AnimatePresence, motion } from 'framer-motion';
 import Skeleton from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
 
 const RankDetailPage = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [rank, setRank] = useState(null);
   const [loading, setLoading] = useState(true);
   const [commentText, setCommentText] = useState('');
@@ -29,6 +32,9 @@ const RankDetailPage = () => {
   const [replyBoxes, setReplyBoxes] = useState({}); 
   const [confirmState, setConfirmState] = useState({ open: false, title: '', onConfirm: null, loading: false });
   const [showShare, setShowShare] = useState(false);
+
+  // Edit Rank State
+  const [isEditOpen, setIsEditOpen] = useState(false);
 
   const loadRank = async () => {
     try {
@@ -82,6 +88,25 @@ const RankDetailPage = () => {
     } finally {
       setConfirmState({ open: false, title: '', onConfirm: null, loading: false });
     }
+  };
+
+  const handleDeleteRank = async () => {
+    if (!window.confirm('Are you sure you want to delete this ranking list? This cannot be undone.')) return;
+    
+    try {
+      await api.deleteRank(id);
+      toast.success('Rank deleted successfully');
+      navigate('/ranks'); 
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to delete rank');
+    }
+  };
+
+  const handleEditSuccess = () => {
+    setIsEditOpen(false);
+    loadRank();
+    toast.success('Rank updated');
   };
 
   const timeAgo = (date) => {
@@ -233,6 +258,26 @@ const RankDetailPage = () => {
                      >
                         <Share2 size={20} /> Share
                      </button>
+
+                     {/* --- OWNER ACTIONS (Edit & Delete) --- */}
+                     {user && rank.user && (user._id === rank.user._id || user.id === rank.user._id) && (
+                        <>
+                            <button 
+                                onClick={() => setIsEditOpen(true)}
+                                className="p-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-full transition-colors"
+                                title="Edit Rank"
+                            >
+                                <Pencil size={20} />
+                            </button>
+                            <button 
+                                onClick={handleDeleteRank}
+                                className="p-2 bg-gray-800 hover:bg-red-900/20 text-gray-300 hover:text-red-500 rounded-full transition-colors"
+                                title="Delete Rank"
+                            >
+                                <Trash2 size={20} />
+                            </button>
+                        </>
+                     )}
                 </div>
             </div>
         </div>
@@ -413,7 +458,13 @@ const RankDetailPage = () => {
     </div>
 
     {/* MODALS */}
-    <ShareModal isOpen={showShare} onClose={() => setShowShare(false)} defaultMessage={shareText} title="Share Rank" />
+    <ShareModal 
+        isOpen={showShare} 
+        onClose={() => setShowShare(false)} 
+        defaultMessage={shareText} 
+        title="Share Rank"
+        rank={rank} // Added rank prop here
+    />
     
     {confirmState.open && (
       <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm">
@@ -426,6 +477,41 @@ const RankDetailPage = () => {
         </div>
       </div>
     )}
+
+    {/* EDIT RANK MODAL */}
+    <AnimatePresence>
+        {isEditOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }} 
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto"
+            onClick={() => setIsEditOpen(false)}
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 20 }} 
+              animate={{ scale: 1, opacity: 1, y: 0 }} 
+              exit={{ scale: 0.95, opacity: 0, y: 20 }} 
+              onClick={(e) => e.stopPropagation()} 
+              className="bg-zinc-900 w-full max-w-2xl rounded-2xl shadow-2xl border border-gray-800 flex flex-col max-h-[90vh]"
+            >
+              <div className="flex justify-between items-center p-6 border-b border-gray-800 sticky top-0 bg-zinc-900 z-10 rounded-t-2xl">
+                <h2 className="text-2xl font-bold text-white">Edit Rank</h2>
+                <button onClick={() => setIsEditOpen(false)} className="p-2 hover:bg-gray-800 rounded-full text-gray-400 hover:text-white transition-colors">
+                  <X size={24} />
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto">
+                <CreateRank 
+                    initialData={rank} 
+                    onSuccess={handleEditSuccess} 
+                    onCancel={() => setIsEditOpen(false)} 
+                />
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+    </AnimatePresence>
     </>
   );
 };
