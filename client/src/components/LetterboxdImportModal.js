@@ -1,37 +1,67 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { IoMdClose } from 'react-icons/io';
 import * as api from '../api';
 import toast from 'react-hot-toast';
+import { List, BookOpen } from 'lucide-react';
 
-const LetterboxdImportModal = ({ isOpen, onClose, onImportComplete }) => {
-  const [username, setUsername] = useState('');
+const LetterboxdImportModal = ({ isOpen, onClose, onImportComplete, defaultTab = 'reviews' }) => {
+  const [activeTab, setActiveTab] = useState(defaultTab); // 'reviews' or 'list'
+  const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Reset state when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTab(defaultTab);
+      setInputValue('');
+    }
+  }, [isOpen, defaultTab]);
 
   if (!isOpen) return null;
 
   const handleImport = async (e) => {
     e.preventDefault();
-    if (!username.trim()) {
-      toast.error('Please enter a Letterboxd username');
+    if (!inputValue.trim()) {
+      toast.error('Please enter a username');
       return;
     }
 
     setLoading(true);
-    const toastId = toast.loading('Importing reviews... this may take a moment.');
+    const toastId = toast.loading(
+      activeTab === 'reviews' ? 'Importing reviews...' : 'Importing lists...'
+    );
 
     try {
-      const { data } = await api.importLetterboxd(username.trim());
+      let data;
       
-      if (data.count === 0) {
-        toast.success(data.msg || 'No new reviews found.', { id: toastId });
+      if (activeTab === 'reviews') {
+        // --- IMPORT REVIEWS ---
+        const res = await api.importLetterboxd(inputValue.trim());
+        data = res.data;
+        
+        if (data.count === 0) {
+          toast.success(data.msg || 'No new reviews found.', { id: toastId });
+        } else {
+          toast.success(`Imported ${data.imported} reviews!`, { id: toastId });
+        }
       } else {
-        toast.success(`Imported ${data.imported} reviews! (${data.skipped} skipped)`, { id: toastId });
-        onImportComplete?.();
-        onClose();
-        setUsername('');
+        // --- IMPORT RANK (LIST) ---
+        // Automatically construct URL from username
+        const username = inputValue.trim();
+        const constructedUrl = `https://letterboxd.com/${username}`;
+
+        const res = await api.importLetterboxdRank(constructedUrl);
+        data = res.data;
+        
+        toast.success(data.msg, { id: toastId });
+        if (data.note) toast(data.note, { icon: 'ℹ️', duration: 5000 });
       }
+
+      onImportComplete?.();
+      onClose();
+      setInputValue('');
     } catch (error) {
-      const msg = error.response?.data?.msg || 'Failed to import reviews.';
+      const msg = error.response?.data?.msg || 'Failed to import.';
       toast.error(msg, { id: toastId });
     } finally {
       setLoading(false);
@@ -39,55 +69,83 @@ const LetterboxdImportModal = ({ isOpen, onClose, onImportComplete }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 p-4 animate-in fade-in duration-200">
-      <div className="bg-card border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
-        <button 
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
-        >
-          <IoMdClose size={24} />
-        </button>
-
-        <div className="text-center mb-6">
-            <div className="flex justify-center gap-2 mb-4">
-                <div className="w-3 h-3 rounded-full bg-[#40bcf4]"></div>
-                <div className="w-3 h-3 rounded-full bg-[#00e054]"></div>
-                <div className="w-3 h-3 rounded-full bg-[#ff8000]"></div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-0 shadow-2xl relative overflow-hidden flex flex-col">
+        
+        {/* Header with Close Button */}
+        <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-950">
+           <h2 className="text-xl font-bold text-white flex items-center gap-2">
+             <div className="flex gap-1">
+                <div className="w-2.5 h-2.5 rounded-full bg-[#40bcf4]"></div>
+                <div className="w-2.5 h-2.5 rounded-full bg-[#00e054]"></div>
+                <div className="w-2.5 h-2.5 rounded-full bg-[#ff8000]"></div>
             </div>
-          <h2 className="text-2xl font-bold mb-2">Import from Letterboxd</h2>
-          <p className="text-gray-400 text-sm">
-            Enter your Letterboxd username to import your recent reviews (from your public RSS feed).
-          </p>
+            Letterboxd Import
+           </h2>
+           <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+             <IoMdClose size={24} />
+           </button>
         </div>
 
-        <form onSubmit={handleImport}>
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-400 mb-2">
-              Letterboxd Username
-            </label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="username"
-              className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
-              autoFocus
-              disabled={loading}
-            />
-          </div>
+        {/* Tabs */}
+        <div className="flex border-b border-gray-800">
+            <button 
+                onClick={() => setActiveTab('reviews')}
+                className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
+                    activeTab === 'reviews' 
+                    ? 'bg-gray-800 text-white border-b-2 border-green-500' 
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'
+                }`}
+            >
+                <BookOpen size={16} /> Import Reviews
+            </button>
+            <button 
+                onClick={() => setActiveTab('list')}
+                className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
+                    activeTab === 'list' 
+                    ? 'bg-gray-800 text-white border-b-2 border-green-500' 
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'
+                }`}
+            >
+                <List size={16} /> Import List
+            </button>
+        </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className={`w-full btn btn-primary py-3 font-semibold text-lg ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
-          >
-            {loading ? 'Importing...' : 'Import Reviews'}
-          </button>
-          
-          <p className="mt-4 text-xs text-center text-gray-500">
-            Note: Only reviews with star ratings will be imported. We only fetch the latest 10 items from your public feed.
-          </p>
-        </form>
+        <div className="p-6">
+            <form onSubmit={handleImport}>
+                <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-400 mb-2">
+                    Letterboxd Username
+                    </label>
+                    <input
+                    type="text"
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    placeholder="username"
+                    className="w-full bg-gray-950 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 transition-all placeholder:text-gray-600"
+                    autoFocus
+                    disabled={loading}
+                    />
+                </div>
+
+                <div className="bg-gray-800/50 rounded-lg p-3 mb-6 border border-gray-800">
+                    <p className="text-xs text-gray-400 text-center leading-relaxed">
+                        {activeTab === 'reviews' 
+                            ? "Imports your latest star rated films as Reviews. Perfect for keeping your feed up to date." 
+                            : "Imports the first 10 films of your lists. Perfect for keeping your feed up to date."
+                        }
+                    </p>
+                </div>
+
+                <button
+                    type="submit"
+                    disabled={loading}
+                    className={`w-full bg-green-600 hover:bg-green-700 text-white rounded-xl py-3 font-semibold text-lg transition-all transform active:scale-95 ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
+                >
+                    {loading ? 'Processing...' : (activeTab === 'reviews' ? 'Import Reviews' : 'Import Lists')}
+                </button>
+            </form>
+        </div>
       </div>
     </div>
   );

@@ -125,6 +125,7 @@ export const updateRank = (id, rankData) => API.put(`/ranks/${id}`, rankData); /
 export const likeRank = (id) => API.put(`/ranks/${id}/like`);
 export const getRank = (id) => API.get(`/ranks/${id}`);
 export const deleteRank = (id) => API.delete(`/ranks/${id}`);
+export const importLetterboxdRank = (url) => API.post('/ranks/import/letterboxd', { url });
 
 // Rank Comments
 export const postRankComment = (id, commentData) => API.post(`/ranks/${id}/comments`, commentData);

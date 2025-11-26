@@ -4,6 +4,7 @@ const router = express.Router();
 const { 
   getRanks, 
   createRank, 
+  importLetterboxdRank, // Added import
   updateRank, 
   toggleLikeRank, 
   getRankById, 
@@ -18,6 +19,7 @@ const { protect } = require('../middleware/authMiddleware');
 
 router.get('/', getRanks);
 router.post('/', protect, createRank);
+router.post('/import/letterboxd', protect, importLetterboxdRank); // New Import Route
 router.put('/:id', protect, updateRank);
 router.put('/:id/like', protect, toggleLikeRank);
 router.get('/:id', getRankById);

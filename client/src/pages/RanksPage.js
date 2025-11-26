@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import * as api from '../api';
-import { Plus, X, Pencil, Heart, MessageCircle, Share2 } from 'lucide-react';
+import { Plus, X, Pencil, Heart, MessageCircle, Share2, Download } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import Avatar from '../components/Avatar';
 import { AnimatePresence, motion } from 'framer-motion';
 import CreateRank from '../components/CreateRank';
 import ShareModal from '../components/ShareModal';
+import LetterboxdImportModal from '../components/LetterboxdImportModal';
 import Skeleton from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
 import { useAuth } from '../context/AuthContext';
@@ -17,9 +18,8 @@ const RanksPage = () => {
   const [loading, setLoading] = useState(true);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [editingRank, setEditingRank] = useState(null);
-  
-  // Share State
   const [sharingRank, setSharingRank] = useState(null);
 
   const loadRanks = async () => {
@@ -87,13 +87,22 @@ const RanksPage = () => {
           <h1 className="text-3xl font-bold text-white">Community Ranks</h1>
           <p className="text-gray-400 mt-1">Discover and create custom movie lists</p>
         </div>
-        <button 
-          onClick={handleCreateOpen}
-          className="bg-primary hover:bg-primary/90 text-white px-5 py-2.5 rounded-full flex items-center gap-2 font-medium transition-all transform hover:scale-105 shadow-lg shadow-primary/20"
-        >
-          <Plus size={20} />
-          <span>Create Rank</span>
-        </button>
+        <div className="flex gap-2">
+            <button 
+                onClick={() => setIsImportOpen(true)}
+                className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2.5 rounded-full flex items-center gap-2 font-medium transition-all"
+            >
+                <Download size={20} />
+                <span className="hidden sm:inline">Import</span>
+            </button>
+            <button 
+                onClick={handleCreateOpen}
+                className="bg-primary hover:bg-primary/90 text-white px-5 py-2.5 rounded-full flex items-center gap-2 font-medium transition-all transform hover:scale-105 shadow-lg shadow-primary/20"
+            >
+                <Plus size={20} />
+                <span className="hidden sm:inline">Create Rank</span>
+            </button>
+        </div>
       </div>
 
       {/* Ranks List or Skeleton */}
@@ -150,20 +159,28 @@ const RanksPage = () => {
                         >
                           <Share2 size={18} />
                         </button>
-                        
-                        {/* Edit button removed from here */}
                       </div>
                     </div>
                     
                     {rank.description && (
                       <p className="text-gray-400 text-sm mb-4 line-clamp-2">{rank.description}</p>
                     )}
+                    
+                    {/* --- UPDATED PROFILE LINK SECTION --- */}
                     <div className="flex items-center gap-2 mt-auto">
-                      <Avatar user={rank.user} size="sm" />
-                      <span className="text-sm text-gray-300 font-medium">{rank.user?.username || 'Unknown'}</span>
+                      <Link 
+                        to={`/profile/${rank.user?.username}`} 
+                        className="flex items-center gap-2 group/author hover:opacity-80 transition-opacity"
+                      >
+                        <Avatar user={rank.user} size="sm" />
+                        <span className="text-sm text-gray-300 font-medium group-hover/author:text-primary transition-colors">
+                          {rank.user?.username || 'Unknown'}
+                        </span>
+                      </Link>
                       <span className="text-gray-600 text-xs">•</span>
                       <span className="text-gray-500 text-xs">{new Date(rank.createdAt).toLocaleDateString()}</span>
                     </div>
+                    
                   </div>
                 </div>
 
@@ -230,13 +247,21 @@ const RanksPage = () => {
         )}
       </AnimatePresence>
 
+      {/* UNIFIED IMPORT MODAL */}
+      <LetterboxdImportModal 
+        isOpen={isImportOpen} 
+        onClose={() => setIsImportOpen(false)} 
+        onImportComplete={loadRanks}
+        defaultTab="list"
+      />
+
       {/* Share Modal */}
       {sharingRank && (
         <ShareModal 
           isOpen={!!sharingRank} 
           onClose={() => setSharingRank(null)} 
           title="Share Rank"
-          rank={sharingRank} // Added rank prop here
+          rank={sharingRank}
           defaultMessage={`Check out this ranking list on MovieSocial:\n\n"${sharingRank.title}"\n\n${window.location.origin}/rank/${sharingRank._id}`}
         />
       )}
