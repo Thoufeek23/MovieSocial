@@ -1,4 +1,4 @@
-import React, { createContext, useReducer, useState, useEffect } from 'react'; // Added useEffect
+import React, { createContext, useReducer, useState, useEffect, useContext } from 'react'; // Added useContext
 import { jwtDecode } from 'jwt-decode';
 import * as api from '../api';
 
@@ -24,8 +24,8 @@ const AuthContext = createContext({
   setJustLoggedIn: () => {},
   isNewUser: false,
   setNewUser: () => {},
-  unreadCount: 0,           // New
-  updateUnreadCount: () => {} // New
+  unreadCount: 0,
+  updateUnreadCount: () => {}
 });
 
 function authReducer(state, action) {
@@ -44,9 +44,8 @@ function authReducer(state, action) {
 function AuthProvider(props) {
   const [state, dispatch] = useReducer(authReducer, initialState);
   const [isJustLoggedIn, setJustLoggedIn] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0); // Local state for count
+  const [unreadCount, setUnreadCount] = useState(0);
 
-  // Function to fetch fresh count
   const updateUnreadCount = async () => {
     if (!state.user) return;
     try {
@@ -57,7 +56,6 @@ function AuthProvider(props) {
     }
   };
 
-  // Fetch count on initial load if user is logged in
   useEffect(() => {
     if (state.user) {
       updateUnreadCount();
@@ -78,8 +76,6 @@ function AuthProvider(props) {
     }
     
     setJustLoggedIn(true);
-    
-    // Fetch stuff after login
     updateUnreadCount(); 
     
     (async () => {
@@ -95,7 +91,7 @@ function AuthProvider(props) {
 
   const setUser = (user) => {
     dispatch({ type: 'LOGIN', payload: user });
-    updateUnreadCount(); // Refresh count when user updates
+    updateUnreadCount();
     try {
       const token = localStorage.getItem('token');
     } catch (e) {}
@@ -123,12 +119,15 @@ function AuthProvider(props) {
         setJustLoggedIn,
         isNewUser: state.isNewUser,
         setNewUser,
-        unreadCount,      // Expose state
-        updateUnreadCount // Expose updater
+        unreadCount,
+        updateUnreadCount
       }}
       {...props}
     />
   );
 }
 
-export { AuthContext, AuthProvider };
+// --- ADDED THIS HOOK ---
+const useAuth = () => useContext(AuthContext);
+
+export { AuthContext, AuthProvider, useAuth };

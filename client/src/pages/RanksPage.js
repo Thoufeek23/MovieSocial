@@ -1,16 +1,22 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom'; // Added Link import
 import * as api from '../api';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Pencil } from 'lucide-react';
 import Avatar from '../components/Avatar';
 import { AnimatePresence, motion } from 'framer-motion';
 import CreateRank from '../components/CreateRank';
 import Skeleton from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
+import { useAuth } from '../context/AuthContext';
 
 const RanksPage = () => {
+  const { user } = useAuth();
   const [ranks, setRanks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  
+  // Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingRank, setEditingRank] = useState(null);
 
   const loadRanks = async () => {
     try {
@@ -28,8 +34,23 @@ const RanksPage = () => {
     loadRanks();
   }, []);
 
-  const handleCreateSuccess = (newRank) => {
-    setIsCreateOpen(false);
+  const handleCreateOpen = () => {
+    setEditingRank(null);
+    setIsModalOpen(true);
+  };
+
+  const handleEditOpen = (rank) => {
+    setEditingRank(rank);
+    setIsModalOpen(true);
+  };
+
+  const handleModalClose = () => {
+    setIsModalOpen(false);
+    setEditingRank(null);
+  };
+
+  const handleSuccess = (newRank) => {
+    handleModalClose();
     loadRanks();
   };
 
@@ -42,7 +63,7 @@ const RanksPage = () => {
           <p className="text-gray-400 mt-1">Discover and create custom movie lists</p>
         </div>
         <button 
-          onClick={() => setIsCreateOpen(true)}
+          onClick={handleCreateOpen}
           className="bg-primary hover:bg-primary/90 text-white px-5 py-2.5 rounded-full flex items-center gap-2 font-medium transition-all transform hover:scale-105 shadow-lg shadow-primary/20"
         >
           <Plus size={20} />
@@ -74,35 +95,52 @@ const RanksPage = () => {
         ) : (
           // Actual Ranks Data
           ranks.map((rank) => (
-            <div key={rank._id} className="bg-card p-6 rounded-xl border border-white/5 hover:border-white/10 transition-all hover:bg-card/80">
+            <div key={rank._id} className="bg-card p-6 rounded-xl border border-white/5 hover:border-white/10 transition-all hover:bg-card/80 group">
               <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h2 className="text-xl font-bold text-white mb-2">{rank.title}</h2>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-bold text-white mb-2">{rank.title}</h2>
+                    {/* EDIT BUTTON (Only for owner) */}
+                    {user && rank.user && (user._id === rank.user._id || user.id === rank.user._id) && (
+                      <button 
+                        onClick={() => handleEditOpen(rank)}
+                        className="p-2 text-gray-500 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+                        title="Edit Rank"
+                      >
+                        <Pencil size={18} />
+                      </button>
+                    )}
+                  </div>
+                  
                   {rank.description && (
                     <p className="text-gray-400 text-sm mb-4 line-clamp-2">{rank.description}</p>
                   )}
                   <div className="flex items-center gap-2 mt-auto">
                     <Avatar user={rank.user} size="sm" />
-                    <span className="text-sm text-gray-300 font-medium">{rank.user.username}</span>
+                    <span className="text-sm text-gray-300 font-medium">{rank.user?.username || 'Unknown'}</span>
                     <span className="text-gray-600 text-xs">•</span>
                     <span className="text-gray-500 text-xs">{new Date(rank.createdAt).toLocaleDateString()}</span>
                   </div>
                 </div>
               </div>
 
-              {/* Movie Strip Preview */}
+              {/* Movie Strip Preview - Wrapped in Link */}
               <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide snap-x">
                 {rank.movies.slice(0, 6).map((movie, idx) => (
-                  <div key={idx} className="relative flex-shrink-0 w-20 aspect-[2/3] bg-gray-800 rounded-md overflow-hidden shadow-md snap-start group">
+                  <Link 
+                    key={idx} 
+                    to={`/movie/${movie.movieId}`} // Redirect to movie detail
+                    className="relative flex-shrink-0 w-20 aspect-[2/3] bg-gray-800 rounded-md overflow-hidden shadow-md snap-start group/poster block hover:opacity-90 transition-opacity"
+                  >
                      <img 
                        src={movie.posterPath ? `https://image.tmdb.org/t/p/w200${movie.posterPath}` : '/assets/images/poster1.png'} 
                        alt={movie.title}
-                       className="w-full h-full object-cover transition-transform group-hover:scale-110"
+                       className="w-full h-full object-cover transition-transform group-hover/poster:scale-110"
                      />
                      <div className="absolute top-0 left-0 bg-black/70 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-br-md">
                        #{movie.rank}
                      </div>
-                  </div>
+                  </Link>
                 ))}
                 {rank.movies.length > 6 && (
                   <div className="flex-shrink-0 w-20 aspect-[2/3] bg-gray-800/50 border-2 border-dashed border-gray-700 rounded-md flex flex-col items-center justify-center text-gray-400 hover:text-white transition-colors cursor-pointer">
@@ -123,7 +161,7 @@ const RanksPage = () => {
             <h3 className="text-xl font-bold text-white mb-2">No ranks yet</h3>
             <p className="text-gray-400 mb-6">Be the first to create a ranked list!</p>
             <button 
-              onClick={() => setIsCreateOpen(true)}
+              onClick={handleCreateOpen}
               className="text-primary font-medium hover:underline"
             >
               Start Ranking
@@ -132,15 +170,15 @@ const RanksPage = () => {
         )}
       </div>
 
-      {/* Create Rank Modal */}
+      {/* Create/Edit Rank Modal */}
       <AnimatePresence>
-        {isCreateOpen && (
+        {isModalOpen && (
           <motion.div 
             initial={{ opacity: 0 }} 
             animate={{ opacity: 1 }} 
             exit={{ opacity: 0 }} 
             className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto"
-            onClick={() => setIsCreateOpen(false)}
+            onClick={handleModalClose}
           >
             <motion.div 
               initial={{ scale: 0.95, opacity: 0, y: 20 }} 
@@ -149,22 +187,23 @@ const RanksPage = () => {
               onClick={(e) => e.stopPropagation()} 
               className="bg-zinc-900 w-full max-w-2xl rounded-2xl shadow-2xl border border-gray-800 flex flex-col max-h-[90vh]"
             >
-              {/* Modal Header */}
               <div className="flex justify-between items-center p-6 border-b border-gray-800 sticky top-0 bg-zinc-900 z-10 rounded-t-2xl">
-                <h2 className="text-2xl font-bold text-white">Create New Rank</h2>
+                <h2 className="text-2xl font-bold text-white">
+                  {editingRank ? 'Edit Rank' : 'Create New Rank'}
+                </h2>
                 <button 
-                  onClick={() => setIsCreateOpen(false)}
+                  onClick={handleModalClose}
                   className="p-2 hover:bg-gray-800 rounded-full text-gray-400 hover:text-white transition-colors"
                 >
                   <X size={24} />
                 </button>
               </div>
 
-              {/* Modal Body (Scrollable) */}
               <div className="p-6 overflow-y-auto">
                 <CreateRank 
-                  onSuccess={handleCreateSuccess} 
-                  onCancel={() => setIsCreateOpen(false)}
+                  initialData={editingRank}
+                  onSuccess={handleSuccess} 
+                  onCancel={handleModalClose}
                 />
               </div>
             </motion.div>

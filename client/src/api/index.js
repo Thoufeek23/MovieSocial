@@ -121,5 +121,6 @@ export const getUnreadMessageCount = () => API.get('/messages/unread-count');
 // Ranks
 export const fetchRanks = () => API.get('/ranks');
 export const createRank = (rankData) => API.post('/ranks', rankData);
+export const updateRank = (id, rankData) => API.put(`/ranks/${id}`, rankData); // Added
 export const getRank = (id) => API.get(`/ranks/${id}`);
 export const deleteRank = (id) => API.delete(`/ranks/${id}`);
