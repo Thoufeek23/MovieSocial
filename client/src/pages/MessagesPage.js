@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { Send, MoreVertical, ArrowLeft, Trash2, MessageSquare, Star } from 'lucide-react'; 
+import { Send, ArrowLeft, Trash2, MessageSquare, Star } from 'lucide-react'; 
 import { AuthContext } from '../context/AuthContext';
 import Avatar from '../components/Avatar';
 import * as api from '../api';
@@ -156,8 +156,8 @@ const MessagesPage = () => {
     }, [currentChat]);
 
     useEffect(() => {
-        //const socketUrl = process.env.REACT_APP_API_URL || 'https://moviesocial-backend-khd2.onrender.com';
-        const socketUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+        const socketUrl = process.env.REACT_APP_API_URL || 'https://moviesocial-backend-khd2.onrender.com';
+        //const socketUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
         socketRef.current = io(socketUrl);
         const userId = user?._id || user?.id;
 
@@ -431,7 +431,7 @@ const MessagesPage = () => {
                                 </Link>
                             </div>
                             <button className="text-gray-500 hover:text-white transition p-2">
-                                <MoreVertical size={20} />
+                                {/*<MoreVertical size={20} />*/}
                             </button>
                         </div>
 
