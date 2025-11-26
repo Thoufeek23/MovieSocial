@@ -1,8 +1,8 @@
 import axios from 'axios';
 
 // In production the client should be built with REACT_APP_API_URL set to your API root 
-//const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://localhost:5001';
-const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'https://moviesocial-backend-khd2.onrender.com';
+const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://localhost:5001';
+//const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'https://moviesocial-backend-khd2.onrender.com';
 const API = axios.create({ baseURL: `${apiRoot}/api` });
 
 
@@ -117,3 +117,9 @@ export const sendMessage = (recipientId, content, attachments = {}) =>
 export const markMessagesRead = (username) => API.put(`/messages/${username}/read`);
 export const deleteMessage = (messageId) => API.delete(`/messages/${messageId}`);
 export const getUnreadMessageCount = () => API.get('/messages/unread-count');
+
+// Ranks
+export const fetchRanks = () => API.get('/ranks');
+export const createRank = (rankData) => API.post('/ranks', rankData);
+export const getRank = (id) => API.get(`/ranks/${id}`);
+export const deleteRank = (id) => API.delete(`/ranks/${id}`);

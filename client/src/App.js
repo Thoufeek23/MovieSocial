@@ -27,6 +27,7 @@ import Curtain from './components/Curtain';
 import React, { useContext } from 'react';
 import { AuthContext } from './context/AuthContext';
 import MessagesPage from './pages/MessagesPage';
+import RanksPage from './pages/RanksPage';
 
 const PageWrapper = ({ children }) => {
   const location = useLocation();
@@ -85,6 +86,12 @@ const AppRoutes = () => {
             <Route path="/messages" element={
               <ProtectedRoute>
                 <PageWrapper><MessagesPage /></PageWrapper>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/ranks" element={
+              <ProtectedRoute>
+                <PageWrapper><RanksPage /></PageWrapper>
               </ProtectedRoute>
             } />
             

@@ -209,6 +209,7 @@ app.use('/api/users', require('./routes/users'));
 app.use('/api/reviews', require('./routes/reviews'));
 app.use('/api/movies', require('./routes/movies'));
 app.use('/api/discussions', require('./routes/discussions'));
+app.use('/api/ranks', require('./routes/ranks'));
 app.use('/api/puzzles', require('./routes/puzzles'));
 app.use('/api/ai', require('./routes/ai'));
 // Stats and leaderboards
