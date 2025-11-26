@@ -38,7 +38,8 @@ const createRank = async (req, res) => {
       user: req.user.id,
       title,
       description,
-      movies: rankedMovies
+      movies: rankedMovies,
+      comments: []
     });
 
     await newRank.populate('user', 'username avatar');
@@ -95,21 +96,15 @@ const toggleLikeRank = async (req, res) => {
     const rank = await Rank.findById(req.params.id);
     if (!rank) return res.status(404).json({ msg: 'Rank list not found' });
 
-    // Check if the rank has already been liked by this user
-    // The likes array contains ObjectIds, so we compare strings
     const index = rank.likes.findIndex(id => id.toString() === req.user.id);
 
     if (index !== -1) {
-      // User has liked it -> Unlike (remove)
       rank.likes.splice(index, 1);
     } else {
-      // User hasn't liked it -> Like (add)
       rank.likes.push(req.user.id);
     }
 
     await rank.save();
-    
-    // Return the updated rank (with user populated to maintain frontend consistency)
     await rank.populate('user', 'username avatar');
     
     res.json(rank);
@@ -122,7 +117,10 @@ const toggleLikeRank = async (req, res) => {
 // Get a single rank by ID
 const getRankById = async (req, res) => {
   try {
-    const rank = await Rank.findById(req.params.id).populate('user', 'username avatar');
+    const rank = await Rank.findById(req.params.id)
+      .populate('user', 'username avatar')
+      .populate('comments.user', 'username avatar')
+      .populate('comments.replies.user', 'username avatar');
     if (!rank) return res.status(404).json({ msg: 'Rank list not found' });
     res.json(rank);
   } catch (err) {
@@ -149,4 +147,158 @@ const deleteRank = async (req, res) => {
   }
 };
 
-module.exports = { getRanks, createRank, updateRank, toggleLikeRank, getRankById, deleteRank };
+// --- COMMENT LOGIC ---
+
+// Add Comment
+const addRankComment = async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ msg: 'Comment text required' });
+    const rank = await Rank.findById(req.params.id);
+    if (!rank) return res.status(404).json({ msg: 'Rank not found' });
+    
+    rank.comments.push({ user: req.user.id, text });
+    await rank.save();
+    
+    await rank.populate([
+      { path: 'user', select: 'username avatar' },
+      { path: 'comments.user', select: 'username avatar' },
+      { path: 'comments.replies.user', select: 'username avatar' }
+    ]);
+    res.json(rank);
+  } catch (err) {
+    logger.error(err);
+    res.status(500).json({ msg: 'Server Error' });
+  }
+};
+
+// Delete Comment
+const deleteRankComment = async (req, res) => {
+  try {
+    const rank = await Rank.findById(req.params.id);
+    if (!rank) return res.status(404).json({ msg: 'Rank not found' });
+
+    const idx = rank.comments.findIndex(c => String(c._id) === String(req.params.commentId));
+    if (idx === -1) return res.status(404).json({ msg: 'Comment not found' });
+
+    const comment = rank.comments[idx];
+    if (String(comment.user) !== String(req.user.id) && String(rank.user) !== String(req.user.id)) {
+      return res.status(403).json({ msg: 'Not authorized' });
+    }
+
+    rank.comments = rank.comments.filter(c => String(c._id) !== String(req.params.commentId));
+    await rank.save();
+    
+    await rank.populate([
+      { path: 'user', select: 'username avatar' },
+      { path: 'comments.user', select: 'username avatar' }
+    ]);
+    res.json(rank);
+  } catch (err) {
+    logger.error(err);
+    res.status(500).json({ msg: 'Server Error' });
+  }
+};
+
+// Edit Comment
+const editRankComment = async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ msg: 'Comment text required' });
+    const rank = await Rank.findById(req.params.id);
+    if (!rank) return res.status(404).json({ msg: 'Rank not found' });
+
+    const idx = rank.comments.findIndex(c => String(c._id) === String(req.params.commentId));
+    if (idx === -1) return res.status(404).json({ msg: 'Comment not found' });
+
+    const comment = rank.comments[idx];
+    if (String(comment.user) !== String(req.user.id)) return res.status(403).json({ msg: 'Not authorized' });
+
+    rank.comments[idx].text = text;
+    await rank.save();
+    
+    await rank.populate([
+      { path: 'user', select: 'username avatar' },
+      { path: 'comments.user', select: 'username avatar' },
+      { path: 'comments.replies.user', select: 'username avatar' }
+    ]);
+    res.json(rank);
+  } catch (err) {
+    logger.error(err);
+    res.status(500).json({ msg: 'Server Error' });
+  }
+};
+
+// Add Reply
+const addRankReply = async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ msg: 'Reply text required' });
+    const rank = await Rank.findById(req.params.id);
+    if (!rank) return res.status(404).json({ msg: 'Rank not found' });
+
+    const idx = rank.comments.findIndex(c => String(c._id) === String(req.params.commentId));
+    if (idx === -1) return res.status(404).json({ msg: 'Comment not found' });
+
+    rank.comments[idx].replies = rank.comments[idx].replies || [];
+    rank.comments[idx].replies.push({ user: req.user.id, text });
+    await rank.save();
+
+    await rank.populate([
+      { path: 'user', select: 'username avatar' },
+      { path: 'comments.user', select: 'username avatar' },
+      { path: 'comments.replies.user', select: 'username avatar' }
+    ]);
+    res.json(rank);
+  } catch (err) {
+    logger.error(err);
+    res.status(500).json({ msg: 'Server Error' });
+  }
+};
+
+// Delete Reply
+const deleteRankReply = async (req, res) => {
+  try {
+    const rank = await Rank.findById(req.params.id);
+    if (!rank) return res.status(404).json({ msg: 'Rank not found' });
+
+    const cidx = rank.comments.findIndex(c => String(c._id) === String(req.params.commentId));
+    if (cidx === -1) return res.status(404).json({ msg: 'Comment not found' });
+
+    const replies = rank.comments[cidx].replies || [];
+    const ridx = replies.findIndex(r => String(r._id) === String(req.params.replyId));
+    if (ridx === -1) return res.status(404).json({ msg: 'Reply not found' });
+
+    const reply = replies[ridx];
+    if (String(reply.user) !== String(req.user.id) && String(rank.user) !== String(req.user.id)) {
+      return res.status(403).json({ msg: 'Not authorized' });
+    }
+
+    rank.comments[cidx].replies = replies.filter(r => String(r._id) !== String(req.params.replyId));
+    await rank.save();
+
+    await rank.populate([
+      { path: 'user', select: 'username avatar' },
+      { path: 'comments.user', select: 'username avatar' },
+      { path: 'comments.replies.user', select: 'username avatar' }
+    ]);
+    res.json(rank);
+  } catch (err) {
+    logger.error(err);
+    res.status(500).json({ msg: 'Server Error' });
+  }
+};
+
+module.exports = { 
+  getRanks, 
+  createRank, 
+  updateRank, 
+  toggleLikeRank, 
+  getRankById, 
+  deleteRank,
+  addRankComment,
+  deleteRankComment,
+  editRankComment,
+  addRankReply,
+  deleteRankReply
+};

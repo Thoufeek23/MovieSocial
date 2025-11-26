@@ -28,6 +28,7 @@ import React, { useContext } from 'react';
 import { AuthContext } from './context/AuthContext';
 import MessagesPage from './pages/MessagesPage';
 import RanksPage from './pages/RanksPage';
+import RankDetailPage from './pages/RankDetailPage';
 
 const PageWrapper = ({ children }) => {
   const location = useLocation();
@@ -88,6 +89,8 @@ const AppRoutes = () => {
                 <PageWrapper><MessagesPage /></PageWrapper>
               </ProtectedRoute>
             } />
+
+            <Route path="/rank/:id" element={<RankDetailPage />} />
 
             <Route path="/ranks" element={
               <ProtectedRoute>

@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import * as api from '../api';
-import { Plus, X, Pencil, Heart } from 'lucide-react'; // Added Heart
-import { toast } from 'react-hot-toast'; // Added toast
+import { Plus, X, Pencil, Heart, MessageCircle, Share2 } from 'lucide-react'; // Added Share2
+import { toast } from 'react-hot-toast';
 import Avatar from '../components/Avatar';
 import { AnimatePresence, motion } from 'framer-motion';
 import CreateRank from '../components/CreateRank';
+import ShareModal from '../components/ShareModal'; // Added ShareModal
 import Skeleton from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
 import { useAuth } from '../context/AuthContext';
@@ -15,9 +16,11 @@ const RanksPage = () => {
   const [ranks, setRanks] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRank, setEditingRank] = useState(null);
+  
+  // Share State
+  const [sharingRank, setSharingRank] = useState(null);
 
   const loadRanks = async () => {
     try {
@@ -52,8 +55,6 @@ const RanksPage = () => {
 
   const handleSuccess = (newRank) => {
     handleModalClose();
-    // For updates, we replace the specific rank. For creates, we reload or prepend.
-    // Simplest is to reload to ensure consistent sort order.
     loadRanks();
   };
 
@@ -62,17 +63,13 @@ const RanksPage = () => {
     
     // Optimistic update
     const originalRanks = [...ranks];
-    
-    // Find the rank and toggle the like locally for instant feedback
     setRanks(prevRanks => prevRanks.map(rank => {
       if (rank._id === rankId) {
         const userId = user._id || user.id;
         const hasLiked = rank.likes.includes(userId);
         return {
           ...rank,
-          likes: hasLiked 
-            ? rank.likes.filter(id => id !== userId) 
-            : [...rank.likes, userId]
+          likes: hasLiked ? rank.likes.filter(id => id !== userId) : [...rank.likes, userId]
         };
       }
       return rank;
@@ -80,12 +77,10 @@ const RanksPage = () => {
 
     try {
       await api.likeRank(rankId);
-      // We don't need to do anything else as we optimistically updated.
-      // If we wanted to be perfectly safe, we could re-fetch or use the response data.
     } catch (error) {
       console.error(error);
       toast.error('Failed to like rank');
-      setRanks(originalRanks); // Revert on error
+      setRanks(originalRanks);
     }
   };
 
@@ -109,26 +104,16 @@ const RanksPage = () => {
       {/* Ranks List or Skeleton */}
       <div className="grid gap-6">
         {loading && !ranks.length ? (
-          // Skeleton Loading State
           [1, 2, 3].map((i) => (
             <div key={i} className="bg-card p-6 rounded-xl border border-white/5">
-              <div className="mb-4">
-                <Skeleton height={28} width={`60%`} baseColor="#202020" highlightColor="#444" />
-                <Skeleton height={16} width={`40%`} className="mt-2" baseColor="#202020" highlightColor="#444" />
-                <div className="flex items-center gap-2 mt-4">
-                  <Skeleton circle height={24} width={24} baseColor="#202020" highlightColor="#444" />
-                  <Skeleton height={16} width={100} baseColor="#202020" highlightColor="#444" />
-                </div>
-              </div>
-              <div className="flex gap-3 overflow-hidden">
-                {[1, 2, 3, 4, 5].map((j) => (
-                  <Skeleton key={j} height={120} width={80} baseColor="#202020" highlightColor="#444" />
-                ))}
+              <Skeleton height={28} width={`60%`} baseColor="#202020" highlightColor="#444" />
+              <Skeleton height={16} width={`40%`} className="mt-2" baseColor="#202020" highlightColor="#444" />
+              <div className="flex items-center gap-2 mt-4">
+                 <Skeleton circle height={24} width={24} baseColor="#202020" highlightColor="#444" />
               </div>
             </div>
           ))
         ) : (
-          // Actual Ranks Data
           ranks.map((rank) => {
             const isLiked = user && rank.likes.includes(user._id || user.id);
             return (
@@ -136,22 +121,42 @@ const RanksPage = () => {
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
                     <div className="flex items-center justify-between">
-                      <h2 className="text-xl font-bold text-white mb-2">{rank.title}</h2>
+                      {/* Title Link to Details */}
+                      <Link to={`/rank/${rank._id}`} className="text-xl font-bold text-white mb-2 hover:text-primary transition-colors">
+                          {rank.title}
+                      </Link>
+                      
                       <div className="flex items-center gap-2">
                         {/* LIKE BUTTON */}
                         <button 
                           onClick={() => handleLike(rank._id)}
                           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                            isLiked 
-                              ? 'text-red-500 bg-red-500/10' 
-                              : 'text-gray-500 hover:text-red-400 hover:bg-white/5'
+                            isLiked ? 'text-red-500 bg-red-500/10' : 'text-gray-500 hover:text-red-400 hover:bg-white/5'
                           }`}
                         >
                           <Heart size={18} fill={isLiked ? "currentColor" : "none"} />
                           <span>{rank.likes.length}</span>
                         </button>
 
-                        {/* EDIT BUTTON (Only for owner) */}
+                        {/* COMMENT BUTTON */}
+                        <Link 
+                          to={`/rank/${rank._id}`}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium text-gray-500 hover:text-white hover:bg-white/5 transition-colors"
+                        >
+                          <MessageCircle size={18} />
+                          <span>{rank.comments?.length || 0}</span>
+                        </Link>
+
+                        {/* SHARE BUTTON */}
+                        <button 
+                          onClick={() => setSharingRank(rank)}
+                          className="p-2 text-gray-500 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+                          title="Share Rank"
+                        >
+                          <Share2 size={18} />
+                        </button>
+
+                        {/* EDIT BUTTON */}
                         {user && rank.user && (user._id === rank.user._id || user.id === rank.user._id) && (
                           <button 
                             onClick={() => handleEditOpen(rank)}
@@ -181,7 +186,7 @@ const RanksPage = () => {
                   {rank.movies.slice(0, 6).map((movie, idx) => (
                     <Link 
                       key={idx} 
-                      to={`/movie/${movie.movieId}`}
+                      to={`/movie/${movie.movieId}`} 
                       className="relative flex-shrink-0 w-20 aspect-[2/3] bg-gray-800 rounded-md overflow-hidden shadow-md snap-start group/poster block hover:opacity-90 transition-opacity"
                     >
                        <img 
@@ -195,35 +200,18 @@ const RanksPage = () => {
                     </Link>
                   ))}
                   {rank.movies.length > 6 && (
-                    <div className="flex-shrink-0 w-20 aspect-[2/3] bg-gray-800/50 border-2 border-dashed border-gray-700 rounded-md flex flex-col items-center justify-center text-gray-400 hover:text-white transition-colors cursor-pointer">
+                    <Link to={`/rank/${rank._id}`} className="flex-shrink-0 w-20 aspect-[2/3] bg-gray-800/50 border-2 border-dashed border-gray-700 rounded-md flex flex-col items-center justify-center text-gray-400 hover:text-white transition-colors cursor-pointer">
                       <span className="text-lg font-bold">+{rank.movies.length - 6}</span>
                       <span className="text-[10px]">more</span>
-                    </div>
+                    </Link>
                   )}
                 </div>
               </div>
             );
           })
         )}
-
-        {!loading && ranks.length === 0 && (
-          <div className="text-center py-20 bg-card/30 rounded-xl border border-dashed border-gray-700">
-            <div className="bg-gray-800 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Plus size={32} className="text-gray-500" />
-            </div>
-            <h3 className="text-xl font-bold text-white mb-2">No ranks yet</h3>
-            <p className="text-gray-400 mb-6">Be the first to create a ranked list!</p>
-            <button 
-              onClick={handleCreateOpen}
-              className="text-primary font-medium hover:underline"
-            >
-              Start Ranking
-            </button>
-          </div>
-        )}
       </div>
 
-      {/* Create/Edit Rank Modal */}
       <AnimatePresence>
         {isModalOpen && (
           <motion.div 
@@ -244,25 +232,27 @@ const RanksPage = () => {
                 <h2 className="text-2xl font-bold text-white">
                   {editingRank ? 'Edit Rank' : 'Create New Rank'}
                 </h2>
-                <button 
-                  onClick={handleModalClose}
-                  className="p-2 hover:bg-gray-800 rounded-full text-gray-400 hover:text-white transition-colors"
-                >
+                <button onClick={handleModalClose} className="p-2 hover:bg-gray-800 rounded-full text-gray-400 hover:text-white transition-colors">
                   <X size={24} />
                 </button>
               </div>
-
               <div className="p-6 overflow-y-auto">
-                <CreateRank 
-                  initialData={editingRank}
-                  onSuccess={handleSuccess} 
-                  onCancel={handleModalClose}
-                />
+                <CreateRank initialData={editingRank} onSuccess={handleSuccess} onCancel={handleModalClose} />
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Share Modal */}
+      {sharingRank && (
+        <ShareModal 
+          isOpen={!!sharingRank} 
+          onClose={() => setSharingRank(null)} 
+          title="Share Rank"
+          defaultMessage={`Check out this ranking list on MovieSocial:\n\n"${sharingRank.title}"\n\n${window.location.origin}/rank/${sharingRank._id}`}
+        />
+      )}
     </div>
   );
 };

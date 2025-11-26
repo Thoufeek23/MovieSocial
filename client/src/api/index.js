@@ -125,3 +125,10 @@ export const updateRank = (id, rankData) => API.put(`/ranks/${id}`, rankData); /
 export const likeRank = (id) => API.put(`/ranks/${id}/like`);
 export const getRank = (id) => API.get(`/ranks/${id}`);
 export const deleteRank = (id) => API.delete(`/ranks/${id}`);
+
+// Rank Comments
+export const postRankComment = (id, commentData) => API.post(`/ranks/${id}/comments`, commentData);
+export const editRankComment = (id, commentId, commentData) => API.put(`/ranks/${id}/comments/${commentId}`, commentData);
+export const deleteRankComment = (id, commentId) => API.delete(`/ranks/${id}/comments/${commentId}`);
+export const postRankReply = (rankId, commentId, replyData) => API.post(`/ranks/${rankId}/comments/${commentId}/replies`, replyData);
+export const deleteRankReply = (rankId, commentId, replyId) => API.delete(`/ranks/${rankId}/comments/${commentId}/replies/${replyId}`);
