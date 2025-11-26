@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom'; // Added Link import
+import { Link } from 'react-router-dom';
 import * as api from '../api';
-import { Plus, X, Pencil } from 'lucide-react';
+import { Plus, X, Pencil, Heart } from 'lucide-react'; // Added Heart
+import { toast } from 'react-hot-toast'; // Added toast
 import Avatar from '../components/Avatar';
 import { AnimatePresence, motion } from 'framer-motion';
 import CreateRank from '../components/CreateRank';
@@ -51,7 +52,41 @@ const RanksPage = () => {
 
   const handleSuccess = (newRank) => {
     handleModalClose();
+    // For updates, we replace the specific rank. For creates, we reload or prepend.
+    // Simplest is to reload to ensure consistent sort order.
     loadRanks();
+  };
+
+  const handleLike = async (rankId) => {
+    if (!user) return toast.error('Please login to like this list');
+    
+    // Optimistic update
+    const originalRanks = [...ranks];
+    
+    // Find the rank and toggle the like locally for instant feedback
+    setRanks(prevRanks => prevRanks.map(rank => {
+      if (rank._id === rankId) {
+        const userId = user._id || user.id;
+        const hasLiked = rank.likes.includes(userId);
+        return {
+          ...rank,
+          likes: hasLiked 
+            ? rank.likes.filter(id => id !== userId) 
+            : [...rank.likes, userId]
+        };
+      }
+      return rank;
+    }));
+
+    try {
+      await api.likeRank(rankId);
+      // We don't need to do anything else as we optimistically updated.
+      // If we wanted to be perfectly safe, we could re-fetch or use the response data.
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to like rank');
+      setRanks(originalRanks); // Revert on error
+    }
   };
 
   return (
@@ -94,63 +129,81 @@ const RanksPage = () => {
           ))
         ) : (
           // Actual Ranks Data
-          ranks.map((rank) => (
-            <div key={rank._id} className="bg-card p-6 rounded-xl border border-white/5 hover:border-white/10 transition-all hover:bg-card/80 group">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-bold text-white mb-2">{rank.title}</h2>
-                    {/* EDIT BUTTON (Only for owner) */}
-                    {user && rank.user && (user._id === rank.user._id || user.id === rank.user._id) && (
-                      <button 
-                        onClick={() => handleEditOpen(rank)}
-                        className="p-2 text-gray-500 hover:text-white hover:bg-white/10 rounded-full transition-colors"
-                        title="Edit Rank"
-                      >
-                        <Pencil size={18} />
-                      </button>
+          ranks.map((rank) => {
+            const isLiked = user && rank.likes.includes(user._id || user.id);
+            return (
+              <div key={rank._id} className="bg-card p-6 rounded-xl border border-white/5 hover:border-white/10 transition-all hover:bg-card/80 group">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-xl font-bold text-white mb-2">{rank.title}</h2>
+                      <div className="flex items-center gap-2">
+                        {/* LIKE BUTTON */}
+                        <button 
+                          onClick={() => handleLike(rank._id)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                            isLiked 
+                              ? 'text-red-500 bg-red-500/10' 
+                              : 'text-gray-500 hover:text-red-400 hover:bg-white/5'
+                          }`}
+                        >
+                          <Heart size={18} fill={isLiked ? "currentColor" : "none"} />
+                          <span>{rank.likes.length}</span>
+                        </button>
+
+                        {/* EDIT BUTTON (Only for owner) */}
+                        {user && rank.user && (user._id === rank.user._id || user.id === rank.user._id) && (
+                          <button 
+                            onClick={() => handleEditOpen(rank)}
+                            className="p-2 text-gray-500 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+                            title="Edit Rank"
+                          >
+                            <Pencil size={18} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {rank.description && (
+                      <p className="text-gray-400 text-sm mb-4 line-clamp-2">{rank.description}</p>
                     )}
-                  </div>
-                  
-                  {rank.description && (
-                    <p className="text-gray-400 text-sm mb-4 line-clamp-2">{rank.description}</p>
-                  )}
-                  <div className="flex items-center gap-2 mt-auto">
-                    <Avatar user={rank.user} size="sm" />
-                    <span className="text-sm text-gray-300 font-medium">{rank.user?.username || 'Unknown'}</span>
-                    <span className="text-gray-600 text-xs">•</span>
-                    <span className="text-gray-500 text-xs">{new Date(rank.createdAt).toLocaleDateString()}</span>
+                    <div className="flex items-center gap-2 mt-auto">
+                      <Avatar user={rank.user} size="sm" />
+                      <span className="text-sm text-gray-300 font-medium">{rank.user?.username || 'Unknown'}</span>
+                      <span className="text-gray-600 text-xs">•</span>
+                      <span className="text-gray-500 text-xs">{new Date(rank.createdAt).toLocaleDateString()}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Movie Strip Preview - Wrapped in Link */}
-              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide snap-x">
-                {rank.movies.slice(0, 6).map((movie, idx) => (
-                  <Link 
-                    key={idx} 
-                    to={`/movie/${movie.movieId}`} // Redirect to movie detail
-                    className="relative flex-shrink-0 w-20 aspect-[2/3] bg-gray-800 rounded-md overflow-hidden shadow-md snap-start group/poster block hover:opacity-90 transition-opacity"
-                  >
-                     <img 
-                       src={movie.posterPath ? `https://image.tmdb.org/t/p/w200${movie.posterPath}` : '/assets/images/poster1.png'} 
-                       alt={movie.title}
-                       className="w-full h-full object-cover transition-transform group-hover/poster:scale-110"
-                     />
-                     <div className="absolute top-0 left-0 bg-black/70 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-br-md">
-                       #{movie.rank}
-                     </div>
-                  </Link>
-                ))}
-                {rank.movies.length > 6 && (
-                  <div className="flex-shrink-0 w-20 aspect-[2/3] bg-gray-800/50 border-2 border-dashed border-gray-700 rounded-md flex flex-col items-center justify-center text-gray-400 hover:text-white transition-colors cursor-pointer">
-                    <span className="text-lg font-bold">+{rank.movies.length - 6}</span>
-                    <span className="text-[10px]">more</span>
-                  </div>
-                )}
+                {/* Movie Strip Preview */}
+                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide snap-x">
+                  {rank.movies.slice(0, 6).map((movie, idx) => (
+                    <Link 
+                      key={idx} 
+                      to={`/movie/${movie.movieId}`}
+                      className="relative flex-shrink-0 w-20 aspect-[2/3] bg-gray-800 rounded-md overflow-hidden shadow-md snap-start group/poster block hover:opacity-90 transition-opacity"
+                    >
+                       <img 
+                         src={movie.posterPath ? `https://image.tmdb.org/t/p/w200${movie.posterPath}` : '/assets/images/poster1.png'} 
+                         alt={movie.title}
+                         className="w-full h-full object-cover transition-transform group-hover/poster:scale-110"
+                       />
+                       <div className="absolute top-0 left-0 bg-black/70 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-br-md">
+                         #{movie.rank}
+                       </div>
+                    </Link>
+                  ))}
+                  {rank.movies.length > 6 && (
+                    <div className="flex-shrink-0 w-20 aspect-[2/3] bg-gray-800/50 border-2 border-dashed border-gray-700 rounded-md flex flex-col items-center justify-center text-gray-400 hover:text-white transition-colors cursor-pointer">
+                      <span className="text-lg font-bold">+{rank.movies.length - 6}</span>
+                      <span className="text-[10px]">more</span>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
 
         {!loading && ranks.length === 0 && (

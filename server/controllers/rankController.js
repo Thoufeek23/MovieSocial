@@ -89,6 +89,36 @@ const updateRank = async (req, res) => {
   }
 };
 
+// Toggle Like on a Rank
+const toggleLikeRank = async (req, res) => {
+  try {
+    const rank = await Rank.findById(req.params.id);
+    if (!rank) return res.status(404).json({ msg: 'Rank list not found' });
+
+    // Check if the rank has already been liked by this user
+    // The likes array contains ObjectIds, so we compare strings
+    const index = rank.likes.findIndex(id => id.toString() === req.user.id);
+
+    if (index !== -1) {
+      // User has liked it -> Unlike (remove)
+      rank.likes.splice(index, 1);
+    } else {
+      // User hasn't liked it -> Like (add)
+      rank.likes.push(req.user.id);
+    }
+
+    await rank.save();
+    
+    // Return the updated rank (with user populated to maintain frontend consistency)
+    await rank.populate('user', 'username avatar');
+    
+    res.json(rank);
+  } catch (err) {
+    logger.error(err);
+    res.status(500).json({ msg: 'Server Error' });
+  }
+};
+
 // Get a single rank by ID
 const getRankById = async (req, res) => {
   try {
@@ -119,4 +149,4 @@ const deleteRank = async (req, res) => {
   }
 };
 
-module.exports = { getRanks, createRank, updateRank, getRankById, deleteRank };
+module.exports = { getRanks, createRank, updateRank, toggleLikeRank, getRankById, deleteRank };
