@@ -1,16 +1,19 @@
-import React, { createContext, useState, useEffect } from 'react';
+import React, { createContext, useState, useEffect, useContext } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import * as api from '../api';
 
 export const AuthContext = createContext();
 
+// ✅ MISSING PART: Export the custom hook
+export const useAuth = () => useContext(AuthContext);
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
-  const [isLoading, setIsLoading] = useState(true); // Loading state for initial check
+  const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
-
+  
   // Load user from storage on app start
   useEffect(() => {
     const loadUser = async () => {
@@ -19,12 +22,15 @@ export const AuthProvider = ({ children }) => {
         if (storedToken) {
           setToken(storedToken);
           // Verify token and get fresh user data
+          // Ensure api.getCurrentUser() is implemented in your api/index.js
           const { data } = await api.getCurrentUser();
           setUser(data);
         }
       } catch (error) {
         console.log("No valid session found", error);
         await AsyncStorage.removeItem('token');
+        setToken(null);
+        setUser(null);
       } finally {
         setIsLoading(false);
       }
@@ -38,7 +44,11 @@ export const AuthProvider = ({ children }) => {
       setUser(data.user);
       setToken(data.token);
       await AsyncStorage.setItem('token', data.token);
-      router.replace('/(tabs)'); // Navigate to main tabs after login
+      
+      // Optional: Set default headers if your API setup supports it
+      // api.setAuthToken(data.token); 
+
+      router.replace('/(tabs)'); 
       return data;
     } catch (error) {
       throw error;
@@ -62,7 +72,7 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     setToken(null);
     await AsyncStorage.removeItem('token');
-    router.replace('/login');
+    router.replace('/(auth)/login');
   };
 
   return (

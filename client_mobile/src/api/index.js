@@ -39,6 +39,7 @@ export const searchMovies = (query, filters = {}) => {
 export const getMovieDetails = (id) => API.get(`/movies/${id}`);
 export const getPopularMovies = () => API.get('/movies/popular');
 export const getPersonalizedMovies = () => API.get('/movies/personalized');
+export const getTrendingMovies = () => API.get('/movies/trending')
 
 //  REVIEWS
 export const fetchFeed = () => API.get('/reviews/feed');

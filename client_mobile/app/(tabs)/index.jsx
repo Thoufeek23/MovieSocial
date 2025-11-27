@@ -40,7 +40,7 @@ export default function HomePage() {
   const fetchData = useCallback(async () => {
     try {
       const [trendingRes, reviewsRes, discussionsRes] = await Promise.all([
-        api.getTrendingMovies(),
+        api.getPopularMovies(),
         api.getRecentReviews(),
         api.fetchDiscussions({ sort: '-createdAt', limit: 5 })
       ]);
