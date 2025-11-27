@@ -18,8 +18,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../../src/context/AuthContext';
 import * as api from '../../src/api';
-import Avatar from '../../components/Avatar';
-import LoadingSpinner from '../../components/LoadingSpinner';
+
+// CHANGED: Corrected import paths to point to src/components/common/...
+import Avatar from '../../src/components/common/Avatar';
+import LoadingSpinner from '../../src/components/common/LoadingSpinner';
 
 export default function RankDetailPage() {
   const { id } = useLocalSearchParams();
@@ -225,7 +227,7 @@ export default function RankDetailPage() {
   return (
     <SafeAreaView className="flex-1 bg-zinc-950">
       {/* Header */}
-      <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-800">
+      <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-800 bg-zinc-950">
         <TouchableOpacity onPress={() => router.back()} className="p-2">
           <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
@@ -370,6 +372,7 @@ export default function RankDetailPage() {
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         className="bg-zinc-950 border-t border-gray-800"
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         {replyingTo && (
           <View className="flex-row justify-between items-center px-4 py-2 bg-gray-800/50">

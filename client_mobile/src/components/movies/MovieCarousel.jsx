@@ -1,12 +1,13 @@
 import React from 'react';
 import { View, Text, FlatList } from 'react-native';
 import { MotiView } from 'moti';
-import MovieCard from '../MovieCard';
+// CHANGED: Changed '../MovieCard' to './MovieCard' since they are in the same directory
+import MovieCard from './MovieCard';
 
 const MovieCarousel = ({ title, movies, showRating = false }) => {
   return (
     <View className="mb-6">
-      <Text className="text-xl font-bold text-foreground mb-4 px-4">{title}</Text>
+      {title && <Text className="text-xl font-bold text-white mb-4 px-4">{title}</Text>}
       
       <FlatList
         horizontal

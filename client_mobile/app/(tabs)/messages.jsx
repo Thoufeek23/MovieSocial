@@ -9,7 +9,8 @@ import {
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { AuthContext } from '../../src/context/AuthContext';
-import Avatar from '../../components/Avatar';
+// CHANGED: Corrected import path to src/components/common/Avatar
+import Avatar from '../../src/components/common/Avatar';
 import * as api from '../../src/api';
 import { useScrollToTop } from './_layout';
 import { Ionicons } from '@expo/vector-icons';

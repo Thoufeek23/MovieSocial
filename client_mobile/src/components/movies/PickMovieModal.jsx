@@ -1,192 +1,167 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, Modal, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, TextInput, FlatList, TouchableOpacity, Modal, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import * as api from '../../api';
-import MovieCard from '../MovieCard';
+// CHANGED: Corrected import path from '../MovieCard' to './MovieCard'
+import MovieCard from './MovieCard';
 
 const LANGUAGES = [
   { code: 'en', label: 'English' },
-  { code: 'hi', label: 'Hindi' },
   { code: 'es', label: 'Spanish' },
   { code: 'fr', label: 'French' },
-  { code: 'ko', label: 'Korean' },
+  { code: 'de', label: 'German' },
+  { code: 'it', label: 'Italian' },
   { code: 'ja', label: 'Japanese' },
-  { code: 'ta', label: 'Tamil' },
-  { code: 'te', label: 'Telugu' },
-  { code: 'ml', label: 'Malayalam' },
+  { code: 'ko', label: 'Korean' },
+  { code: 'hi', label: 'Hindi' },
+  // Add more languages as needed
 ];
 
-const DECADES = [
-  { value: '2020', label: '2020s' },
-  { value: '2010', label: '2010s' },
-  { value: '2000', label: '2000s' },
-  { value: '1990', label: '1990s' },
-  { value: '1980', label: '1980s' },
-  { value: '1970', label: '1970s' },
-  { value: '1960', label: '1960s' },
-];
-
-const FilterChip = ({ label, selected, onPress }) => (
-  <TouchableOpacity
-    onPress={onPress}
-    className={`px-3 py-1.5 rounded-full mr-2 border ${
-      selected 
-        ? 'bg-primary/20 border-primary' 
-        : 'bg-zinc-800 border-zinc-700'
-    }`}
-  >
-    <Text className={`text-xs font-medium ${selected ? 'text-primary' : 'text-gray-400'}`}>
-      {label}
-    </Text>
-  </TouchableOpacity>
-);
-
-const PickMovieModal = ({ isOpen, setIsOpen, onMoviePicked }) => {
-  const [query, setQuery] = useState('');
-  const [language, setLanguage] = useState('');
-  const [decade, setDecade] = useState('');
-  const [results, setResults] = useState([]);
+const PickMovieModal = ({ visible, onClose, onSelect }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [language, setLanguage] = useState('en'); // Default language
+  const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
 
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (query.trim().length > 1) {
-        fetchResults(query);
-      } else {
-        setResults([]);
-      }
-    }, 400);
+  const searchMovies = useCallback(async () => {
+    if (!searchQuery.trim()) {
+      setMovies([]);
+      return;
+    }
 
-    return () => clearTimeout(timeoutId);
-  }, [query, language, decade]);
-
-  const fetchResults = async (searchQuery) => {
     setLoading(true);
     try {
-      const { data } = await api.searchMovies(searchQuery, { language, decade });
-      setResults(data.results || []);
+      const response = await api.searchMovies(searchQuery, { language }); // Pass language to API
+      setMovies(response.data.results || []);
     } catch (error) {
-      console.error(error);
-      setResults([]);
+      console.error("Failed to search movies:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [searchQuery, language]);
+
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      searchMovies();
+    }, 500); // Debounce search by 500ms
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery, searchMovies]);
 
   const handleClose = () => {
-    setIsOpen(false);
-    setQuery('');
-    setLanguage('');
-    setDecade('');
-    setResults([]);
+    setSearchQuery('');
+    setMovies([]);
+    onClose();
+  };
+
+  const handleLanguageSelect = (langCode) => {
+    setLanguage(langCode);
+    setShowLanguageDropdown(false);
   };
 
   return (
-    <Modal
-      visible={isOpen}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={handleClose}
-    >
-      <View className="flex-1 bg-black/80 justify-end sm:justify-center">
-        <View className="bg-card w-full h-[90%] rounded-t-2xl sm:rounded-xl sm:h-[85%] sm:max-w-5xl sm:mx-auto border-t border-border overflow-hidden flex flex-col">
-          
-          {/* Header */}
-          <View className="flex-row justify-between items-center p-4 border-b border-border">
-            <Text className="text-xl font-bold text-foreground">Pick a movie</Text>
-            <TouchableOpacity onPress={handleClose}>
-              <Text className="text-gray-400 text-base">Close</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Search & Filters */}
-          <View className="p-4 space-y-4 bg-background/50">
-            <View className="flex-row items-center bg-input rounded-xl border border-border px-3">
-              <Feather name="search" size={18} color="#9ca3af" />
-              <TextInput
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Search movies..."
-                placeholderTextColor="#6b7280"
-                className="flex-1 p-3 text-white text-base"
-                autoFocus
-              />
-            </View>
-
-            {/* Filter Chips */}
-            <View>
-              <Text className="text-xs text-gray-500 mb-2 font-bold uppercase">Filters</Text>
-              <FlatList
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                data={[{ type: 'reset' }, ...LANGUAGES, ...DECADES]}
-                keyExtractor={(item) => item.code || item.value || 'reset'}
-                renderItem={({ item }) => {
-                  if (item.type === 'reset') {
-                     if (!language && !decade) return null;
-                     return (
-                        <TouchableOpacity onPress={() => { setLanguage(''); setDecade(''); }} className="mr-2 justify-center">
-                           <Feather name="x-circle" size={20} color="#ef4444" />
-                        </TouchableOpacity>
-                     );
-                  }
-                  
-                  const isLang = !!item.code;
-                  const val = item.code || item.value;
-                  const isSelected = isLang ? language === val : decade === val;
-                  
-                  return (
-                    <FilterChip 
-                      label={item.label} 
-                      selected={isSelected} 
-                      onPress={() => isLang ? setLanguage(isSelected ? '' : val) : setDecade(isSelected ? '' : val)} 
-                    />
-                  );
-                }}
-              />
-            </View>
-          </View>
-
-          {/* Results */}
-          <View className="flex-1 bg-background px-2">
-            {loading && (
-              <View className="flex-1 justify-center items-center">
-                <ActivityIndicator size="large" color="#16a34a" />
-              </View>
-            )}
-
-            {!loading && results.length > 0 && (
-              <FlatList
-                data={results}
-                numColumns={2}
-                keyExtractor={(item) => item.id.toString()}
-                contentContainerStyle={{ paddingVertical: 10 }}
-                renderItem={({ item }) => (
-                  <View className="flex-1 m-1">
-                    <MovieCard 
-                      movie={item} 
-                      disabledLink={true}
-                      onClick={() => {
-                        onMoviePicked(item);
-                        handleClose();
-                      }}
-                    />
-                  </View>
-                )}
-              />
-            )}
-
-            {!loading && results.length === 0 && (
-              <View className="flex-1 justify-center items-center opacity-50">
-                <Feather name={query.length > 1 ? "search" : "film"} size={48} color="white" />
-                <Text className="text-gray-400 mt-4 text-center">
-                  {query.length > 1 ? `No movies found for "${query}"` : "Start typing to search"}
-                </Text>
-              </View>
-            )}
-          </View>
-
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
+      <View className="flex-1 bg-zinc-950 pt-4">
+        {/* Header */}
+        <View className="px-4 pb-4 flex-row items-center justify-between border-b border-gray-800">
+          <Text className="text-white text-lg font-bold">Select a Movie</Text>
+          <TouchableOpacity onPress={handleClose}>
+            <Feather name="x" size={24} color="white" />
+          </TouchableOpacity>
         </View>
+
+        {/* Search & Filter */}
+        <View className="px-4 py-3 gap-3">
+          {/* Search Bar */}
+          <View className="flex-row items-center bg-gray-900 rounded-xl px-3 border border-gray-800 h-12">
+            <Feather name="search" size={20} color="#9ca3af" />
+            <TextInput
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search movies..."
+              placeholderTextColor="#6b7280"
+              className="flex-1 ml-3 text-white text-base"
+              autoFocus
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Feather name="x-circle" size={18} color="#6b7280" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Language Filter */}
+          <View className="relative z-10">
+            <TouchableOpacity 
+              onPress={() => setShowLanguageDropdown(!showLanguageDropdown)}
+              className="flex-row items-center bg-gray-900 self-start px-3 py-2 rounded-lg border border-gray-800"
+            >
+              <Feather name="globe" size={16} color="#9ca3af" />
+              <Text className="text-gray-300 ml-2 mr-1 text-sm">
+                {LANGUAGES.find(l => l.code === language)?.label || 'Language'}
+              </Text>
+              <Feather name="chevron-down" size={16} color="#9ca3af" />
+            </TouchableOpacity>
+
+            {/* Dropdown */}
+            {showLanguageDropdown && (
+              <View className="absolute top-10 left-0 bg-gray-800 rounded-lg border border-gray-700 w-40 py-1 shadow-xl">
+                <FlatList 
+                  data={LANGUAGES}
+                  keyExtractor={item => item.code}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity 
+                      onPress={() => handleLanguageSelect(item.code)}
+                      className={`px-3 py-2 flex-row items-center justify-between ${language === item.code ? 'bg-gray-700' : ''}`}
+                    >
+                      <Text className={`text-sm ${language === item.code ? 'text-white font-semibold' : 'text-gray-300'}`}>
+                        {item.label}
+                      </Text>
+                      {language === item.code && <Feather name="check" size={14} color="#10b981" />}
+                    </TouchableOpacity>
+                  )}
+                  style={{ maxHeight: 200 }}
+                />
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Results */}
+        {loading ? (
+          <View className="flex-1 justify-center items-center">
+            <ActivityIndicator size="large" color="#10b981" />
+          </View>
+        ) : (
+          <FlatList
+            data={movies}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={({ item }) => (
+              <View className="flex-1 p-2 items-center">
+                <MovieCard 
+                  movie={item} 
+                  disabledLink={true} 
+                  onClick={() => {
+                    onSelect(item);
+                    handleClose();
+                  }}
+                />
+              </View>
+            )}
+            numColumns={2} // Grid layout
+            contentContainerStyle={{ padding: 8, paddingBottom: 40 }}
+            columnWrapperStyle={{ justifyContent: 'space-between' }}
+            ListEmptyComponent={
+              !loading && searchQuery ? (
+                <View className="items-center mt-20">
+                  <Feather name="film" size={48} color="#374151" />
+                  <Text className="text-gray-500 mt-4 text-center px-10">No movies found matching "{searchQuery}"</Text>
+                </View>
+              ) : null
+            }
+          />
+        )}
       </View>
     </Modal>
   );

@@ -13,9 +13,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../../src/context/AuthContext';
 import * as api from '../../src/api';
-import ReviewCard from '../../components/ReviewCard';
-import LoadingSpinner from '../../components/LoadingSpinner';
-import EmptyState from '../../components/EmptyState';
+
+// CHANGED: Corrected import paths to point to src/components/...
+import ReviewCard from '../../src/components/movies/ReviewCard';
+import LoadingSpinner from '../../src/components/common/LoadingSpinner';
+import EmptyState from '../../src/components/common/EmptyState';
 
 export default function ReviewsPage() {
   const { movieId } = useLocalSearchParams();

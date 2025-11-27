@@ -17,8 +17,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AuthContext } from '../../src/context/AuthContext';
 import * as api from '../../src/api';
-import ReviewCard from '../../components/ReviewCard';
-import LoadingSpinner from '../../components/LoadingSpinner';
+
+// CHANGED: Corrected import paths to point to correct src/components/... locations
+import ReviewCard from '../../src/components/movies/ReviewCard';
+import LoadingSpinner from '../../src/components/common/LoadingSpinner';
 
 const { width } = Dimensions.get('window');
 const IMG_BASE_URL = 'https://image.tmdb.org/t/p/';

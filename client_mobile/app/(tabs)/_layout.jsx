@@ -3,8 +3,10 @@ import { Tabs } from 'expo-router';
 import { Home, Search, BookOpen, Puzzle, FileText, MessageSquare } from 'lucide-react-native';
 import { View, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import CustomHeader from '../../components/CustomHeader';
 import { usePathname } from 'expo-router';
+
+// CHANGED: Corrected import path
+import CustomHeader from '../../src/components/common/CustomHeader';
 
 // Create context for scroll refs
 const ScrollToTopContext = createContext(null);
@@ -53,6 +55,7 @@ export default function TabsLayout() {
   };
   
   const getHeaderProps = () => {
+    // Logic to show Logo on Home and Tab root, Title elsewhere
     if (pathname === '/' || pathname === '/(tabs)' || pathname === '/(tabs)/' || pathname.endsWith('/index')) {
       return { showLogo: true };
     }
@@ -67,7 +70,7 @@ export default function TabsLayout() {
 
   return (
     <ScrollToTopContext.Provider value={{ scrollToTop, registerScrollRef }}>
-      <View className="flex-1">
+      <View className="flex-1 bg-zinc-950">
         <CustomHeader {...getHeaderProps()} />
         <Tabs
           screenOptions={{

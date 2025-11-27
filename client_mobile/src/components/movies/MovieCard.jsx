@@ -1,188 +1,122 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, Image, TouchableOpacity, Pressable } from 'react-native';
+import React from 'react';
+import { View, Text, TouchableOpacity, Image, Pressable } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import Svg, { Circle, Text as SvgText } from 'react-native-svg';
-import * as api from '../api';
-import { Ionicons } from '@expo/vector-icons'; // Using Expo built-in icons
+// CHANGED: Corrected import path from '../api' to '../../api'
+import * as api from '../../api';
+import { Ionicons } from '@expo/vector-icons'; 
 
 const MovieCard = ({ movie, showDelete = false, onDelete, onClick, disabledLink = false }) => {
   const router = useRouter();
-  const IMG_BASE_URL = 'https://image.tmdb.org/t/p/w500';
-  
-  // State to handle image loading errors
-  const [imgSrc, setImgSrc] = useState(
-    movie.poster_path ? { uri: `${IMG_BASE_URL}${movie.poster_path}` } : require('../../assets/images/default_dp.png')
-  );
+  const IMG_BASE_URL = 'https://image.tmdb.org/t/p/w342';
 
-  const SocialRating = ({ movieId }) => {
-    const [avg, setAvg] = useState(null);
-    const [count, setCount] = useState(0);
+  const getRatingColor = (rating) => {
+    if (rating >= 7) return '#10b981'; // emerald-500
+    if (rating >= 5) return '#eab308'; // yellow-500
+    return '#ef4444'; // red-500
+  };
 
-    const radius = 18;
+  const handlePress = () => {
+    if (onClick) {
+      onClick(movie);
+    } else if (!disabledLink) {
+      router.push(`/movie/${movie.id}`);
+    }
+  };
+
+  const RatingCircle = ({ rating }) => {
+    const radius = 14;
+    const strokeWidth = 2.5;
     const circumference = 2 * Math.PI * radius;
-    const strokeWidth = 3;
-
-    useEffect(() => {
-      let mounted = true;
-      (async () => {
-        try {
-          const res = await api.getMovieStats(movieId);
-          const data = res.data || {};
-          if (!mounted) return;
-          if (typeof data.movieSocialRating === 'undefined' || data.movieSocialRating === null) {
-            setAvg(null);
-            setCount(data.reviewCount || 0);
-          } else {
-            setAvg(Number(data.movieSocialRating).toFixed(1));
-            setCount(data.reviewCount || 0);
-          }
-        } catch (err) {
-          console.error('Failed to load social rating', err);
-        }
-      })();
-      return () => { mounted = false; };
-    }, [movieId]);
-
-    const progressOffset = circumference - (avg / 10) * circumference;
+    const strokeDashoffset = circumference - (rating / 10) * circumference;
+    const color = getRatingColor(rating);
 
     return (
-      <View className="mt-2 h-[44px] flex-row items-center">
-        {count > 0 ? (
-          <View className="flex-row items-center gap-3">
-            <View className="h-10 w-10 relative">
-              <Svg height="40" width="40" viewBox="0 0 40 40">
-                {/* Background Circle */}
-                <Circle
-                  cx="20"
-                  cy="20"
-                  r={radius}
-                  fill="none"
-                  stroke="#374151" // gray-700
-                  strokeOpacity={0.5}
-                  strokeWidth={strokeWidth}
-                />
-                {/* Progress Circle */}
-                <Circle
-                  cx="20"
-                  cy="20"
-                  r={radius}
-                  fill="none"
-                  stroke="#16a34a" // text-primary (green-600)
-                  strokeWidth={strokeWidth}
-                  strokeLinecap="round"
-                  strokeDasharray={circumference}
-                  strokeDashoffset={progressOffset}
-                  rotation="-90"
-                  origin="20, 20"
-                />
-                <SvgText
-                  x="20"
-                  y="22" // Adjusted slightly for vertical centering
-                  fill="white"
-                  fontSize="12"
-                  fontWeight="bold"
-                  textAnchor="middle"
-                >
-                  {avg}
-                </SvgText>
-              </Svg>
-            </View>
-            
-            <View className="flex-row items-center gap-1.5">
-              <Ionicons name="person" size={14} color="#9ca3af" />
-              <Text className="text-gray-400 text-xs font-medium">
-                {count}
-              </Text>
-            </View>
-          </View>
-        ) : (
-          <View className="flex-row items-center gap-1.5">
-            <Ionicons name="star-outline" size={14} color="#16a34a" />
-            <Text className="text-primary text-xs font-medium italic">
-              Be the first to rate
-            </Text>
-          </View>
-        )}
+      <View className="absolute top-1 right-1 bg-black/60 rounded-full w-9 h-9 items-center justify-center">
+        <Svg height="36" width="36" viewBox="0 0 36 36">
+          <Circle
+            cx="18"
+            cy="18"
+            r={radius}
+            stroke="#374151"
+            strokeWidth={strokeWidth}
+            fill="transparent"
+          />
+          <Circle
+            cx="18"
+            cy="18"
+            r={radius}
+            stroke={color}
+            strokeWidth={strokeWidth}
+            fill="transparent"
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            rotation="-90"
+            origin="18, 18"
+          />
+          <SvgText
+            x="18"
+            y="22" // Adjusted for vertical centering
+            fontSize="10"
+            fontWeight="bold"
+            fill="white"
+            textAnchor="middle"
+          >
+            {rating.toFixed(1)}
+          </SvgText>
+        </Svg>
       </View>
     );
   };
 
-  const CardContent = (
-    <View className="flex-1 bg-card rounded-lg overflow-hidden border border-border">
-      <Image
-        source={imgSrc}
-        className="w-full aspect-[2/3]"
-        resizeMode="cover"
-        onError={() => setImgSrc(require('../../assets/images/default_dp.png'))}
-      />
-      
-      <View className="p-3 flex-1 flex-col">
+  return (
+    <Pressable 
+      onPress={handlePress}
+      className="w-[160px] bg-card rounded-xl overflow-hidden shadow-sm border border-white/5 mb-4"
+    >
+      <View className="relative">
+        <Image
+          source={{ 
+            uri: movie.poster_path 
+              ? `${IMG_BASE_URL}${movie.poster_path}` 
+              : 'https://via.placeholder.com/342x513?text=No+Poster'
+          }}
+          className="w-full h-[240px] bg-zinc-800"
+          resizeMode="cover"
+        />
+        
+        {/* Rating Badge */}
+        {movie.vote_average > 0 && <RatingCircle rating={movie.vote_average} />}
+
+        {/* Delete Button (Optional) */}
+        {showDelete && (
+          <TouchableOpacity 
+            onPress={(e) => {
+              e.stopPropagation(); // Prevent card click
+              onDelete(movie.id);
+            }}
+            className="absolute top-1 left-1 bg-red-500/90 w-8 h-8 rounded-full items-center justify-center z-10"
+          >
+            <Ionicons name="trash-outline" size={18} color="white" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <View className="p-3">
         <Text 
-          numberOfLines={1} 
-          className="text-foreground font-bold text-base mb-1"
+          className="text-white font-bold text-sm leading-5" 
+          numberOfLines={2}
         >
           {movie.title}
         </Text>
-        <Text className="text-muted-foreground text-xs mb-1">
-          {movie.release_date?.substring(0, 4) || '—'}
-        </Text>
-        
-        <View className="flex-1" />
-        
-        {typeof movie.id !== 'undefined' && (
-          <SocialRating movieId={movie.id} />
+        {movie.release_date && (
+          <Text className="text-gray-400 text-xs mt-1">
+            {new Date(movie.release_date).getFullYear()}
+          </Text>
         )}
       </View>
-    </View>
-  );
-
-  // If interactive (for selection modes like "Pick a Movie")
-  if (onClick || disabledLink) {
-    return (
-      <TouchableOpacity 
-        className="flex-1 m-1 relative"
-        onPress={() => onClick && onClick(movie)}
-        activeOpacity={0.7}
-      >
-        {showDelete && (
-          <TouchableOpacity
-            onPress={(e) => {
-              e.stopPropagation();
-              if (onDelete) onDelete();
-            }}
-            className="absolute top-2 right-2 z-20 bg-red-600 p-1.5 rounded-full"
-          >
-            <Ionicons name="close" size={16} color="white" />
-          </TouchableOpacity>
-        )}
-        {CardContent}
-      </TouchableOpacity>
-    );
-  }
-
-  // Standard Link Mode
-  return (
-    <View className="flex-1 m-1 relative">
-      {showDelete && (
-        <TouchableOpacity
-          onPress={(e) => {
-            // e.stopPropagation() doesn't exist on all View events in RN, 
-            // but since this is outside the Link, it's safe.
-            if (onDelete) onDelete();
-          }}
-          className="absolute top-2 right-2 z-20 bg-red-600 p-1.5 rounded-full elevation-5"
-        >
-          <Ionicons name="close" size={16} color="white" />
-        </TouchableOpacity>
-      )}
-
-      {/* asChild allows the Link to wrap the TouchableOpacity correctly */}
-      <Link href={`/movie/${movie.id}`} asChild>
-        <TouchableOpacity activeOpacity={0.8} className="flex-1">
-          {CardContent}
-        </TouchableOpacity>
-      </Link>
-    </View>
+    </Pressable>
   );
 };
 

@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
-import LoadingSpinner from '../../components/LoadingSpinner';
+// CHANGED: Corrected import path to src/components/common/LoadingSpinner
+import LoadingSpinner from '../../src/components/common/LoadingSpinner';
 
 export default function ProfileTab() {
   const { user } = useAuth();

@@ -3,7 +3,8 @@ import { View, Text, TouchableOpacity, Image, Alert } from 'react-native';
 import { useRouter, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../../context/AuthContext';
-import Avatar from '../Avatar';
+// CHANGED: Corrected import path to point to ../common/Avatar
+import Avatar from '../common/Avatar';
 
 const DiscussionCard = ({ discussion, onEdit, onDelete, showActions = false }) => {
   const router = useRouter();
@@ -77,7 +78,7 @@ const DiscussionCard = ({ discussion, onEdit, onDelete, showActions = false }) =
             {discussion.movieTitle && (
               <Link href={`/movie/${discussion.movieId}`} asChild>
                 <TouchableOpacity>
-                  <Text className="text-xs text-primary mb-3 font-medium">
+                  <Text className="text-xs text-emerald-500 mb-3 font-medium">
                     {discussion.movieTitle}
                   </Text>
                 </TouchableOpacity>

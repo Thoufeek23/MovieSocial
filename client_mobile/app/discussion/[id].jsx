@@ -17,8 +17,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../../src/context/AuthContext';
 import * as api from '../../src/api';
-import Avatar from '../../components/Avatar';
-import LoadingSpinner from '../../components/LoadingSpinner';
+
+// CHANGED: Corrected import paths to point to src/components/common/...
+import Avatar from '../../src/components/common/Avatar';
+import LoadingSpinner from '../../src/components/common/LoadingSpinner';
 
 export default function DiscussionPage() {
   const { id } = useLocalSearchParams();

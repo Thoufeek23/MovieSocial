@@ -7,9 +7,12 @@ import {
   Alert
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import DiscussionCard from '../../components/DiscussionCard';
-import LoadingSpinner from '../../components/LoadingSpinner';
-import EmptyState from '../../components/EmptyState';
+
+// CHANGED: Corrected import paths to point to src/components/...
+import DiscussionCard from '../../src/components/social/DiscussionCard';
+import LoadingSpinner from '../../src/components/common/LoadingSpinner';
+import EmptyState from '../../src/components/common/EmptyState';
+
 import * as api from '../../src/api';
 import { useScrollToTop } from './_layout';
 

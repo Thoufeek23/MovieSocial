@@ -14,10 +14,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, useRouter } from 'expo-router';
 import { MotiView } from 'moti';
 
+// CHANGED: Fixed imports to point to correct src location
 import { useAuth } from '../../src/context/AuthContext';
 import * as api from '../../src/api';
-import { FloatingLabelInput } from '../../components/FloatingLabelInput';
-import { OTPInput } from '../../components/OTPInput';
+import { AuthInput } from '../../src/components/auth/AuthInput'; 
+import { OTPInput } from '../../src/components/auth/OTPInput';
 
 export default function SignupPage() {
   const [formData, setFormData] = useState({ 
@@ -32,9 +33,6 @@ export default function SignupPage() {
   const { login } = useAuth();
   const staticPoster = require('../../assets/images/poster1.png');
 
-  // ... (keep logic handlers: handleChange, handleSubmit, handleVerifyOtp, handleCompleteSignup same as before) ...
-  // For brevity, I'm assuming you paste the logic handlers here. 
-  // Just focusing on the render return for the styling refactor.
   const handleChange = (field, value) => {
     setFormData({ ...formData, [field]: value });
     if (error) setError('');
@@ -49,10 +47,20 @@ export default function SignupPage() {
     }
   };
   
-  // Logic handlers placeholders...
-  const handleSubmit = async () => { /* ... */ setSignupStep(2); };
-  const handleVerifyOtp = async () => { /* ... */ setSignupStep(3); };
-  const handleCompleteSignup = async () => { /* ... */ };
+  // Logic handlers (placeholders based on your existing code)
+  const handleSubmit = async () => { 
+    // Add your signup API logic here
+    setSignupStep(2); 
+  };
+  
+  const handleVerifyOtp = async () => { 
+    // Add your OTP verification logic here
+    setSignupStep(3); 
+  };
+  
+  const handleCompleteSignup = async () => { 
+    // Add your completion logic here
+  };
 
   return (
     <KeyboardAvoidingView 
@@ -73,11 +81,10 @@ export default function SignupPage() {
               className="items-center mt-5 mb-5"
             >
               <View className="items-center">
-                <Image 
-                  source={require('../../assets/images/MS_logo.png')} 
-                  className="w-[100px] h-[100px]" 
-                  resizeMode="contain" 
-                />
+                {/* Ensure this image exists, or remove/replace if causing errors */}
+                 <Text className="text-4xl font-bold text-emerald-500 tracking-tighter">
+                  MovieSocial
+                </Text>
               </View>
             </MotiView>
 
@@ -113,17 +120,48 @@ export default function SignupPage() {
 
                 {signupStep === 1 && (
                   <View className="mb-2.5">
-                    <FloatingLabelInput label="Full Name" value={formData.name} onChangeText={(v) => handleChange('name', v)} />
-                    <View className="h-4" />
-                    <FloatingLabelInput label="Age" value={formData.age} onChangeText={(v) => handleChange('age', v)} keyboardType="numeric" />
-                    <View className="h-4" />
-                    <FloatingLabelInput label="Username" value={formData.username} onChangeText={(v) => handleChange('username', v)} autoCapitalize="none" maxLength={10} />
-                    <View className="h-4" />
-                    <FloatingLabelInput label="Email" value={formData.email} onChangeText={(v) => handleChange('email', v)} keyboardType="email-address" autoCapitalize="none" />
-                    <View className="h-4" />
-                    <FloatingLabelInput label="Password" value={formData.password} onChangeText={(v) => handleChange('password', v)} isPassword={true} />
+                    {/* CHANGED: Replaced FloatingLabelInput with AuthInput */}
                     
-                    <View className="mt-2 pl-1.5">
+                    <AuthInput 
+                      icon="person-outline" 
+                      placeholder="Full Name" 
+                      value={formData.name} 
+                      onChangeText={(v) => handleChange('name', v)} 
+                    />
+                    
+                    <AuthInput 
+                      icon="calendar-number-outline" 
+                      placeholder="Age" 
+                      value={formData.age} 
+                      onChangeText={(v) => handleChange('age', v)} 
+                      keyboardType="numeric" 
+                    />
+                    
+                    <AuthInput 
+                      icon="at-outline" 
+                      placeholder="Username" 
+                      value={formData.username} 
+                      onChangeText={(v) => handleChange('username', v)} 
+                      autoCapitalize="none" 
+                    />
+                    
+                    <AuthInput 
+                      icon="mail-outline" 
+                      placeholder="Email" 
+                      value={formData.email} 
+                      onChangeText={(v) => handleChange('email', v)} 
+                      keyboardType="email-address"
+                    />
+                    
+                    <AuthInput 
+                      icon="lock-closed-outline" 
+                      placeholder="Password" 
+                      value={formData.password} 
+                      onChangeText={(v) => handleChange('password', v)} 
+                      isPassword={true} 
+                    />
+                    
+                    <View className="mt-2 pl-1.5 mb-4">
                       {['length', 'upper', 'lower', 'number', 'special'].map(check => (
                          <Text 
                            key={check} 
@@ -134,8 +172,13 @@ export default function SignupPage() {
                       ))}
                     </View>
                     
-                    <View className="h-4" />
-                    <FloatingLabelInput label="Confirm Password" value={formData.confirmPassword} onChangeText={(v) => handleChange('confirmPassword', v)} isPassword={true} />
+                    <AuthInput 
+                      icon="lock-closed-outline" 
+                      placeholder="Confirm Password" 
+                      value={formData.confirmPassword} 
+                      onChangeText={(v) => handleChange('confirmPassword', v)} 
+                      isPassword={true} 
+                    />
 
                     <Pressable 
                       onPress={handleSubmit} 
@@ -154,7 +197,15 @@ export default function SignupPage() {
                     <Text className="text-base text-gray-300 text-center mb-5">
                       Enter OTP sent to {formData.email}
                     </Text>
-                    <OTPInput length={6} value={otp} onChangeText={setOtp} onComplete={(code) => { setOtp(code); if (code.length === 6) setTimeout(handleVerifyOtp, 500); }} />
+                    <OTPInput 
+                      length={6} 
+                      value={otp} 
+                      onChangeText={setOtp} 
+                      onComplete={(code) => { 
+                        setOtp(code); 
+                        if (code.length === 6) setTimeout(handleVerifyOtp, 500); 
+                      }} 
+                    />
                     <View className="flex-row gap-2.5 mt-5 w-full">
                       <Pressable onPress={() => setSignupStep(1)} className="p-2.5"><Text className="text-white">Back</Text></Pressable>
                       <Pressable onPress={handleVerifyOtp} disabled={isLoading} className="flex-1 bg-emerald-500 py-3 rounded-xl items-center justify-center">

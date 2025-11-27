@@ -17,7 +17,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { io } from 'socket.io-client';
 import { AuthContext } from '../../src/context/AuthContext';
 import * as api from '../../src/api';
-import Avatar from '../../components/common/Avatar';
+// CHANGED: Added 'src' to the import path
+import Avatar from '../../src/components/common/Avatar';
 
 // --- Helper: Get API URL for Socket ---
 const getSocketUrl = () => {

@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, FlatList, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
-import SearchBar from '../../components/SearchBar';
-import MovieCard from '../../components/MovieCard';
-import LoadingSpinner from '../../components/LoadingSpinner';
-import EmptyState from '../../components/EmptyState';
+
+// CHANGED: Fixed all import paths to point to src/components/...
+import SearchBar from '../../src/components/common/SearchBar';
+import MovieCard from '../../src/components/movies/MovieCard';
+import LoadingSpinner from '../../src/components/common/LoadingSpinner';
+import EmptyState from '../../src/components/common/EmptyState';
+
 import * as api from '../../src/api';
 import { useScrollToTop } from './_layout';
 

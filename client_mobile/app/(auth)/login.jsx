@@ -7,8 +7,7 @@ import {
   KeyboardAvoidingView, 
   Platform, 
   TouchableOpacity,
-  Pressable,
-  Dimensions
+  Pressable
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, useRouter } from 'expo-router';
@@ -16,7 +15,8 @@ import { MotiView } from 'moti';
 
 import { useAuth } from '../../src/context/AuthContext';
 import * as api from '../../src/api';
-import { FloatingLabelInput } from '../../components/FloatingLabelInput';
+// CHANGED: Fixed import path and component name
+import { AuthInput } from '../../src/components/auth/AuthInput';
 
 export default function LoginPage() {
   const [formData, setFormData] = useState({ email: '', password: '' });
@@ -87,11 +87,15 @@ export default function LoginPage() {
               className="items-center pt-4 pb-2 flex-[0.25] justify-center"
             >
               <View className="items-center justify-center bg-transparent px-6 py-1 rounded-3xl">
-                <Image 
+                {/* Note: Ensure this image exists in your assets folder, or this will also error */}
+                {/* <Image 
                   source={require('../../assets/images/MS_logo.png')}
                   className="w-[200px] h-[200px]"
                   resizeMode="contain"
-                />
+                /> */}
+                 <Text className="text-4xl font-bold text-emerald-500 tracking-tighter">
+                  MovieSocial
+                </Text>
               </View>
             </MotiView>
 
@@ -129,12 +133,12 @@ export default function LoginPage() {
                     transition={{ type: 'spring', stiffness: 100, delay: 700 }}
                     className="bg-transparent rounded-2xl mb-1.5"
                   >
-                    <FloatingLabelInput
-                      label="Email"
+                    {/* CHANGED: Swapped FloatingLabelInput for AuthInput */}
+                    <AuthInput
+                      icon="mail"
+                      placeholder="Email"
                       value={formData.email}
                       onChangeText={(value) => handleChange('email', value)}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
                     />
                   </MotiView>
 
@@ -144,8 +148,10 @@ export default function LoginPage() {
                     transition={{ type: 'spring', stiffness: 100, delay: 800 }}
                     className="bg-transparent rounded-2xl mb-1.5"
                   >
-                    <FloatingLabelInput
-                      label="Password"
+                    {/* CHANGED: Swapped FloatingLabelInput for AuthInput */}
+                    <AuthInput
+                      icon="lock-closed"
+                      placeholder="Password"
                       value={formData.password}
                       onChangeText={(value) => handleChange('password', value)}
                       isPassword={true}
