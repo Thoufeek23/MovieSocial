@@ -1,7 +1,8 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = 'http://192.168.68.78:5001'; 
+// ✅ FIX: Added /api to match the Express server configuration (server/index.js)
+const API_URL = 'http://192.168.68.78:5001/api'; 
 
 const API = axios.create({ baseURL: API_URL });
 
@@ -43,6 +44,8 @@ export const getTrendingMovies = () => API.get('/movies/trending')
 
 //  REVIEWS
 export const fetchFeed = () => API.get('/reviews/feed');
+// ✅ FIX: Added missing function, mapping it to the existing /reviews/feed endpoint
+export const getRecentReviews = () => API.get('/reviews/feed');
 export const fetchPersonalizedFeed = () => API.get('/reviews/personalized');
 export const postReview = (reviewData) => API.post('/reviews', reviewData);
 export const getReviewsForMovie = (movieId) => API.get(`/reviews/movie/${movieId}`);

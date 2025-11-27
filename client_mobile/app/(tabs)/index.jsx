@@ -6,15 +6,13 @@ import {
   RefreshControl, 
   TouchableOpacity, 
   ImageBackground,
-  Dimensions,
-  Platform
+  Dimensions
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
-// CHANGED: Fixed all import paths to point to src/components/...
+// ✅ CORRECT PATHS for (tabs)/index.jsx (Double dot: ../../)
 import { useAuth } from '../../src/context/AuthContext';
 import * as api from '../../src/api';
 import { ModleContext } from '../../src/context/ModleContext';
@@ -27,7 +25,7 @@ import EmptyState from '../../src/components/common/EmptyState';
 const { width } = Dimensions.get('window');
 
 export default function HomePage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth(); // Destructure loading as authLoading
   const { gameStatus } = useContext(ModleContext);
   const router = useRouter();
   
@@ -38,6 +36,9 @@ export default function HomePage() {
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchData = useCallback(async () => {
+    // ✅ CRITICAL FIX: Do not run API calls if the user is null (fixes 401 error)
+    if (!user) return; 
+
     try {
       const [trendingRes, reviewsRes, discussionsRes] = await Promise.all([
         api.getPopularMovies(),
@@ -48,7 +49,6 @@ export default function HomePage() {
       setTrendingMovies(trendingRes.data.results || []);
       setRecentReviews(reviewsRes.data || []);
       
-      // Process discussions to add movie details if needed
       const discussions = discussionsRes.data || [];
       const discussionsWithPosters = await Promise.all(discussions.map(async (d) => {
         if (d.movieId && !d.poster_path) {
@@ -67,11 +67,14 @@ export default function HomePage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    // Only fetch if user is present
+    if (user) {
+      fetchData();
+    }
+  }, [fetchData, user]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -84,6 +87,15 @@ export default function HomePage() {
     if (hour < 18) return 'Good afternoon';
     return 'Good evening';
   };
+  
+  // Guard the rendering of the component itself when authentication is loading
+  if (authLoading || !user) {
+    return (
+      <View className="flex-1 bg-zinc-950 items-center justify-center">
+        <LoadingSpinner />
+      </View>
+    );
+  }
 
   if (loading) {
     return (
@@ -119,7 +131,7 @@ export default function HomePage() {
           className="mx-5 mb-8 rounded-2xl overflow-hidden h-40 relative border border-white/10"
         >
           <ImageBackground
-            source={require('../../assets/images/poster3.png')} // Make sure this asset exists
+            source={require('../../assets/images/poster3.png')}
             className="flex-1 justify-center px-5"
             resizeMode="cover"
           >

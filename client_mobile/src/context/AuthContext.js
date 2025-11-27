@@ -5,7 +5,6 @@ import * as api from '../api';
 
 export const AuthContext = createContext();
 
-// ✅ MISSING PART: Export the custom hook
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
@@ -22,7 +21,6 @@ export const AuthProvider = ({ children }) => {
         if (storedToken) {
           setToken(storedToken);
           // Verify token and get fresh user data
-          // Ensure api.getCurrentUser() is implemented in your api/index.js
           const { data } = await api.getCurrentUser();
           setUser(data);
         }
@@ -45,9 +43,6 @@ export const AuthProvider = ({ children }) => {
       setToken(data.token);
       await AsyncStorage.setItem('token', data.token);
       
-      // Optional: Set default headers if your API setup supports it
-      // api.setAuthToken(data.token); 
-
       router.replace('/(tabs)'); 
       return data;
     } catch (error) {
