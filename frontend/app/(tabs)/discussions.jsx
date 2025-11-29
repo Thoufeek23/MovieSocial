@@ -1,0 +1,185 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  View, 
+  Text, 
+  SafeAreaView, 
+  FlatList, 
+  TouchableOpacity, 
+  StyleSheet, 
+  RefreshControl,
+  Alert
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import DiscussionCard from '../../components/DiscussionCard';
+import LoadingSpinner from '../../components/LoadingSpinner';
+import EmptyState from '../../components/EmptyState';
+import * as api from '../../src/api';
+import { useScrollToTop } from './_layout';
+
+export default function DiscussionsPage() {
+  const router = useRouter();
+  const flatListRef = useRef(null);
+  const { registerScrollRef } = useScrollToTop();
+  const [discussions, setDiscussions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    loadDiscussions();
+  }, []);
+
+  // Register scroll ref for tab navigation
+  useEffect(() => {
+    if (registerScrollRef) {
+      registerScrollRef('discussions', flatListRef);
+    }
+  }, [registerScrollRef]);
+
+  const loadDiscussions = async () => {
+    try {
+      const response = await api.fetchDiscussions({ sort: '-createdAt' });
+      const discussionsData = response.data || [];
+      // Filter out any null/undefined items, use starter instead of user
+      const validDiscussions = discussionsData.filter(discussion => 
+        discussion && discussion._id && discussion.starter
+      );
+
+      // Fetch movie posters for the first 12 discussions (like client does)
+      const top = validDiscussions.slice(0, 12);
+      const withPosters = await Promise.all(top.map(async discussion => {
+        try {
+          if (discussion.movieId) {
+            const movieResponse = await api.getMovieDetails(discussion.movieId);
+            return { 
+              ...discussion, 
+              poster_path: movieResponse.data.poster_path,
+              backdrop_path: movieResponse.data.backdrop_path
+            };
+          }
+          return discussion;
+        } catch (e) {
+          console.log('Failed to fetch movie details for discussion:', discussion._id);
+          return discussion;
+        }
+      }));
+
+      // Combine discussions with posters (first 12) and remaining discussions
+      const allDiscussions = withPosters.concat(validDiscussions.slice(12));
+      setDiscussions(allDiscussions);
+    } catch (error) {
+      console.error('Failed to load discussions:', error);
+      setDiscussions([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadDiscussions();
+    setRefreshing(false);
+  };
+
+  const handleCreateDiscussion = () => {
+    // Navigate to create discussion screen
+    router.push('/create-discussion');
+  };
+
+  const handleEditDiscussion = (discussion) => {
+    // Navigate to edit discussion screen
+    router.push(`/edit-discussion/${discussion._id}`);
+  };
+
+  const handleDeleteDiscussion = async (discussionId) => {
+    Alert.alert(
+      'Delete Discussion',
+      'Are you sure you want to delete this discussion?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive', 
+          onPress: async () => {
+            try {
+              await api.deleteDiscussion(discussionId);
+              setDiscussions(prev => prev.filter(d => d._id !== discussionId));
+            } catch (error) {
+              console.error('Failed to delete discussion:', error);
+              Alert.alert('Error', 'Failed to delete discussion');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const renderDiscussion = ({ item }) => {
+    if (!item || !item._id) {
+      return null;
+    }
+    return (
+      <DiscussionCard 
+        discussion={item} 
+        onEdit={handleEditDiscussion}
+        onDelete={handleDeleteDiscussion}
+      />
+    );
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <LoadingSpinner text="Loading discussions..." animationType="bounce" />
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      {/* Content */}
+      <View style={styles.content}>
+        {discussions.length > 0 ? (
+          <FlatList
+            ref={flatListRef}
+            data={discussions}
+            renderItem={renderDiscussion}
+            keyExtractor={(item, index) => item?._id || `discussion-${index}`}
+            contentContainerStyle={styles.listContainer}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                tintColor="#10b981"
+              />
+            }
+          />
+        ) : (
+          <EmptyState
+            icon="chatbubbles-outline"
+            title="No discussions yet"
+            subtitle="Be the first to start a movie discussion!"
+          />
+        )}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#09090b',
+    paddingTop: 120,
+  },
+
+  content: {
+    flex: 1,
+  },
+  listContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 120, // Increased padding for Samsung navigation compatibility
+  },
+});
