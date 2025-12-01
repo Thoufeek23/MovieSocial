@@ -6,7 +6,7 @@ const getApiUrl = () => {
     return process.env.REACT_APP_API_URL.replace(/\/$/, '');
   }
   // Use 10.0.2.2 for Android Emulator, or your LAN IP for physical devices
-  return "http://192.168.68.88:5001"; 
+  return "http://192.168.68.54:5001"; 
 };
 
 const API = axios.create({ 

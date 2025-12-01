@@ -15,6 +15,7 @@ import ReviewCard from '../../components/ReviewCard';
 import ReviewModal from '../../components/ReviewModal';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import EmptyState from '../../components/EmptyState';
+import SkeletonLoader, { ReviewCardSkeleton } from '../../components/SkeletonLoader';
 import * as api from '../../src/api';
 import { useScrollToTop } from './_layout';
 
@@ -43,12 +44,18 @@ export default function ReviewsPage() {
     try {
       // Use personalized feed if user is logged in, otherwise regular feed
       const response = user ? await api.fetchPersonalizedFeed().catch(() => api.fetchFeed()) : await api.fetchFeed();
-      setReviews(response.data || []);
+      const reviewsData = response.data || [];
+      // Filter out reviews with null user
+      const validReviews = reviewsData.filter(r => r && r.user);
+      setReviews(validReviews);
     } catch (error) {
       // Fallback to regular feed if anything fails
       try {
         const response = await api.fetchFeed();
-        setReviews(response.data || []);
+        const reviewsData = response.data || [];
+        // Filter out reviews with null user
+        const validReviews = reviewsData.filter(r => r && r.user);
+        setReviews(validReviews);
       } catch (fallbackError) {
         console.error('Failed to load reviews:', fallbackError);
         setReviews([]);
@@ -122,9 +129,22 @@ export default function ReviewsPage() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <LoadingSpinner text="Loading reviews..." animationType="pulse" />
-      </SafeAreaView>
+      <View style={styles.container}>
+        {/* Header Skeleton */}
+        <View style={styles.header}>
+          <View style={{ marginBottom: 8 }}>
+            <SkeletonLoader width={150} height={24} borderRadius={4} />
+          </View>
+          <SkeletonLoader width={250} height={14} borderRadius={4} />
+        </View>
+        
+        {/* Reviews List Skeleton */}
+        <View style={styles.content}>
+          {[1, 2, 3, 4].map((i) => (
+            <ReviewCardSkeleton key={i} />
+          ))}
+        </View>
+      </View>
     );
   }
 

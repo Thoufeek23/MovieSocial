@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, SafeAreaView, ScrollView, Image, TouchableOpacity, Pressable } from 'react-native';
+import { View, Text, SafeAreaView, ScrollView, Image, TouchableOpacity, Pressable, FlatList } from 'react-native';
 import { useAuth } from '../../src/context/AuthContext';
 import { ModleContext } from '../../src/context/ModleContext';
 import { useRouter, Link, useFocusEffect } from 'expo-router';
@@ -9,6 +9,7 @@ import ReviewCard from '../../components/ReviewCard';
 import DiscussionCard from '../../components/DiscussionCard';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import EmptyState from '../../components/EmptyState';
+import SkeletonLoader, { ReviewCardSkeleton, DiscussionCardSkeleton } from '../../components/SkeletonLoader';
 import * as api from '../../src/api';
 import { useScrollToTop } from './_layout';
 
@@ -56,7 +57,10 @@ export default function HomePage() {
       }
 
       if (reviewsRes.status === 'fulfilled') {
-        setRecentReviews(reviewsRes.value.data.slice(0, 5) || []);
+        const reviews = reviewsRes.value.data || [];
+        // Filter out reviews with null user
+        const validReviews = reviews.filter(r => r && r.user);
+        setRecentReviews(validReviews.slice(0, 5));
       }
 
       if (discussionsRes.status === 'fulfilled') {
@@ -92,9 +96,46 @@ export default function HomePage() {
 
   if (loading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#09090b' }}>
-        <LoadingSpinner text="Loading your feed..." animationType="float" />
-      </SafeAreaView>
+      <View style={{ flex: 1, backgroundColor: '#09090b' }}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: 120, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+          {/* Movies Carousel Skeleton */}
+          <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
+            <SkeletonLoader width={150} height={24} borderRadius={4} style={{ marginBottom: 12 }} />
+            <View style={{ flexDirection: 'row', marginRight: 20 }}>
+              {[1, 2, 3].map((i) => (
+                <View key={i} style={{ marginRight: 12, marginBottom: 12, width: 160, flexShrink: 0 }}>
+                  <SkeletonLoader width={160} height={240} borderRadius={12} />
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* Quick Actions Skeleton */}
+          <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
+            <SkeletonLoader width={150} height={24} borderRadius={4} style={{ marginBottom: 12 }} />
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <SkeletonLoader width="47%" height={100} borderRadius={12} />
+              <SkeletonLoader width="47%" height={100} borderRadius={12} />
+            </View>
+          </View>
+
+          {/* Reviews Skeleton */}
+          <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
+            <SkeletonLoader width={150} height={24} borderRadius={4} style={{ marginBottom: 12 }} />
+            {[1, 2, 3].map((i) => (
+              <ReviewCardSkeleton key={i} />
+            ))}
+          </View>
+
+          {/* Discussions Skeleton */}
+          <View style={{ paddingHorizontal: 20 }}>
+            <SkeletonLoader width={150} height={24} borderRadius={4} style={{ marginBottom: 12 }} />
+            {[1, 2, 3].map((i) => (
+              <DiscussionCardSkeleton key={i} />
+            ))}
+          </View>
+        </ScrollView>
+      </View>
     );
   }
 

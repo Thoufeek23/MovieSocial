@@ -15,6 +15,11 @@ const ReviewCard = ({ review, onEdit, onDelete }) => {
   const [myVote, setMyVote] = useState(null);
   const [fetchedBadges, setFetchedBadges] = useState(null);
   
+  // Guard against null review.user
+  if (!review || !review.user) {
+    return null;
+  }
+  
   const isAuthor = !!user && (
     String(user.id) === String(review.user._id) ||
     String(user._id) === String(review.user._id)

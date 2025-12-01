@@ -272,7 +272,9 @@ const getFeedReviews = async (req, res) => {
             .populate('user', 'username avatar _id badges')
             .sort({ createdAt: -1 }) // Sort by most recent
             .limit(20); // Limit to the latest 20 reviews
-        res.json(reviews);
+        // Filter out reviews with null user (deleted user references)
+        const validReviews = reviews.filter(r => r.user);
+        res.json(validReviews);
     } catch (error) {
         res.status(500).json({ msg: 'Server Error' });
     }
@@ -327,10 +329,13 @@ const getPersonalizedFeedReviews = async (req, res) => {
             .sort({ createdAt: -1 })
             .limit(100); // Get more to filter from
         
+        // Filter out reviews with null user
+        const validReviews = allReviews.filter(r => r.user);
+        
         const reviewsByLanguage = {};
         
         // Group reviews by language
-        for (const review of allReviews) {
+        for (const review of validReviews) {
             try {
                 const movieResponse = await tmdbApi.get(`/movie/${review.movieId}`, {
                     params: { api_key: process.env.TMDB_API_KEY }
@@ -391,10 +396,10 @@ const getPersonalizedFeedReviews = async (req, res) => {
                 .sort({ createdAt: -1 })
                 .limit(20 - personalizedReviews.length);
             
-            // Add general reviews that aren't already included
+            // Filter out reviews with null user and add general reviews that aren't already included
             const personalizedIds = personalizedReviews.map(r => r._id.toString());
             const additionalReviews = generalReviews.filter(r => 
-                !personalizedIds.includes(r._id.toString())
+                r.user && !personalizedIds.includes(r._id.toString())
             );
             
             personalizedReviews.push(...additionalReviews);

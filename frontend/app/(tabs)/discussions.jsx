@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import DiscussionCard from '../../components/DiscussionCard';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import EmptyState from '../../components/EmptyState';
+import { DiscussionCardSkeleton } from '../../components/SkeletonLoader';
 import * as api from '../../src/api';
 import { useScrollToTop } from './_layout';
 
@@ -129,9 +130,15 @@ export default function DiscussionsPage() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <LoadingSpinner text="Loading discussions..." animationType="bounce" />
-      </SafeAreaView>
+      <View style={styles.container}>
+        <View style={styles.content}>
+          <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <DiscussionCardSkeleton key={i} />
+            ))}
+          </View>
+        </View>
+      </View>
     );
   }
 

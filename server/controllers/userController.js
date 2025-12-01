@@ -3,93 +3,119 @@ const logger = require('../utils/logger');
 const jwt = require('jsonwebtoken');
 const Discussion = require('../models/Discussion');
 const Review = require('../models/Review');
+const Comment = require('../models/Comment');
 
 // @desc    Get user profile
 // @route   GET /api/users/:username
 const getUserProfile = async (req, res) => {
+    const username = req.params.username;
+    
     try {
-        const user = await User.findOne({ username: req.params.username })
-            .select('-passwordHash')
-            .populate('followers', 'username avatar')
-            .populate('following', 'username avatar');
+        // Get user
+        const user = await User.findOne({ username: username }).select('-passwordHash');
+        
         if (!user) {
             return res.status(404).json({ msg: 'User not found' });
         }
-        const profile = user.toObject();
-        profile.followersCount = (user.followers || []).length;
-        profile.followingCount = (user.following || []).length;
-        profile.isFollowedByCurrentUser = false;
 
-        let currentUserId = null;
-        if (req.user) {
-            currentUserId = req.user.id;
-        } else if (req.headers && req.headers.authorization) {
-            try {
-                const auth = req.headers.authorization;
-                if (auth.startsWith('Bearer ')) {
-                    const token = auth.split(' ')[1];
-                    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-                    currentUserId = decoded.user && decoded.user.id ? decoded.user.id : null;
-                }
-            } catch (e) {}
+        // Build basic profile
+        const basicProfile = {
+            _id: String(user._id),
+            username: user.username,
+            email: user.email,
+            bio: user.bio || '',
+            avatar: user.avatar || '/default_dp.png',
+            interests: user.interests || [],
+            watched: (user.watched || []).map(entry => 
+              typeof entry === 'string' ? entry : entry.movieId || entry
+            ),
+            watchlist: (user.watchlist || []).filter(id => id),
+            followers: [],
+            following: [],
+            followersCount: 0,
+            followingCount: 0,
+            isFollowedByCurrentUser: false,
+            discussionsStarted: 0,
+            discussionsParticipated: 0,
+            communityAgreement: { average: null, breakdown: { agreePercent: 0, partialPercent: 0, disagreePercent: 0 }, totalVotes: 0 }
+        };
+
+        // Try to load followers
+        try {
+            if (user.followers && Array.isArray(user.followers) && user.followers.length > 0) {
+                const followers = await User.find({ _id: { $in: user.followers } }, 'username avatar');
+                basicProfile.followers = followers.map(f => ({ _id: f._id, username: f.username, avatar: f.avatar }));
+                basicProfile.followersCount = followers.length;
+            }
+        } catch (e) {
+            console.error(`[PROFILE] Error loading followers:`, e.message);
         }
 
-        if (currentUserId) {
-            profile.isFollowedByCurrentUser = (user.followers || []).some(f => String(f._id) === String(currentUserId));
+        // Try to load following
+        try {
+            if (user.following && Array.isArray(user.following) && user.following.length > 0) {
+                const following = await User.find({ _id: { $in: user.following } }, 'username avatar');
+                basicProfile.following = following.map(f => ({ _id: f._id, username: f.username, avatar: f.avatar }));
+                basicProfile.followingCount = following.length;
+            }
+        } catch (e) {
+            console.error(`[PROFILE] Error loading following:`, e.message);
         }
 
+        // Try to get discussions
         try {
             const startedCount = await Discussion.countDocuments({ starter: user._id });
-            const participatedCountAgg = await Discussion.aggregate([
-                { $match: { 'comments.user': user._id } },
-                { $group: { _id: '$_id' } },
-                { $count: 'count' }
-            ]);
-            const participatedCount = (participatedCountAgg[0] && participatedCountAgg[0].count) || 0;
-
-            profile.discussionsStarted = startedCount;
-            profile.discussionsParticipated = participatedCount;
+            basicProfile.discussionsStarted = startedCount;
         } catch (e) {
-            profile.discussionsStarted = 0;
-            profile.discussionsParticipated = 0;
+            console.error(`[PROFILE] Error counting discussions:`, e.message);
         }
-        
+
+        // Try to get community agreement
         try {
-            const reviews = await Review.find({ user: user._id }, 'agreementVotes');
-            let totalVotes = 0;
-            let sumValues = 0;
-            let agreeCount = 0;
-            let partialCount = 0;
-            let disagreeCount = 0;
+            const reviews = await Review.find({ user: user._id }).select('agreementVotes');
+            
+            if (reviews.length > 0) {
+                let totalVotes = 0;
+                let sumValues = 0;
+                let agreeCount = 0;
+                let partialCount = 0;
+                let disagreeCount = 0;
 
-            reviews.forEach(r => {
-                (r.agreementVotes || []).forEach(v => {
-                    totalVotes += 1;
-                    const val = Number(v.value) || 0;
-                    sumValues += val;
-                    if (val === 1) agreeCount += 1;
-                    else if (val === 0.5) partialCount += 1;
-                    else if (val === 0) disagreeCount += 1;
+                reviews.forEach(r => {
+                    if (!r.agreementVotes) return;
+                    r.agreementVotes.forEach(v => {
+                        if (typeof v.value === 'number') {
+                            totalVotes++;
+                            sumValues += v.value;
+                            if (v.value === 1) agreeCount++;
+                            else if (v.value === 0.5) partialCount++;
+                            else if (v.value === 0) disagreeCount++;
+                        }
+                    });
                 });
-            });
 
-            const average = totalVotes > 0 ? (sumValues / totalVotes) * 100 : null; 
-            const agreePercent = totalVotes > 0 ? Math.round((agreeCount / totalVotes) * 100) : 0;
-            const partialPercent = totalVotes > 0 ? Math.round((partialCount / totalVotes) * 100) : 0;
-            const disagreePercent = totalVotes > 0 ? Math.round((disagreeCount / totalVotes) * 100) : 0;
-
-            profile.communityAgreement = {
-                average: average === null ? null : Math.round(average),
-                breakdown: { agreePercent, partialPercent, disagreePercent },
-                totalVotes
-            };
+                if (totalVotes > 0) {
+                    basicProfile.communityAgreement = {
+                        average: Math.round((sumValues / totalVotes) * 100),
+                        breakdown: {
+                            agreePercent: Math.round((agreeCount / totalVotes) * 100),
+                            partialPercent: Math.round((partialCount / totalVotes) * 100),
+                            disagreePercent: Math.round((disagreeCount / totalVotes) * 100)
+                        },
+                        totalVotes
+                    };
+                }
+            }
         } catch (e) {
-            profile.communityAgreement = { average: null, breakdown: { agreePercent: 0, partialPercent: 0, disagreePercent: 0 }, totalVotes: 0 };
+            console.error(`[PROFILE] Error getting reviews:`, e.message);
         }
-        res.json(profile);
+
+        res.json(basicProfile);
+
     } catch (error) {
-        logger.error(error);
-        res.status(500).json({ msg: 'Server Error' });
+        console.error(`[PROFILE] ERROR:`, error.message);
+        console.error(error);
+        res.status(500).json({ msg: 'Server Error', details: error.message });
     }
 };
 
@@ -303,7 +329,6 @@ const deleteMyAccount = async (req, res) => {
         if (!user) return res.status(404).json({ msg: 'User not found' });
 
         try {
-            const Comment = require('../models/Comment');
             await Comment.deleteMany({ user: userId });
             await Review.updateMany({ likes: userId }, { $pull: { likes: userId } });
             await Review.updateMany({ 'agreementVotes.user': userId }, { $pull: { agreementVotes: { user: userId } } });

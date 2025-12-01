@@ -373,7 +373,7 @@ const ModleGame = ({ language = 'English' }) => {
           </View>
           {revealedHints < maxReveal && !(todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily)) && (
             <View style={styles.hintNote}>
-              <Ionicons name="lightbulb" size={14} color="#f59e0b" />
+              <Ionicons name="bulb" size={14} color="#f59e0b" />
               <Text style={styles.hintNoteText}>Submit a guess to reveal the next clue</Text>
             </View>
           )}

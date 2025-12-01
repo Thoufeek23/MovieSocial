@@ -23,6 +23,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import EmptyState from '../../components/EmptyState';
 import ReviewModal from '../../components/ReviewModal';
 import DiscussionFormModal from '../../components/DiscussionFormModal';
+import SkeletonLoader, { ReviewCardSkeleton } from '../../components/SkeletonLoader';
 
 const { width, height } = Dimensions.get('window');
 
@@ -56,7 +57,10 @@ const MovieDetailsPage = () => {
       setMovie(movieData);
 
       if (reviewsRes.status === 'fulfilled') {
-        setReviews(reviewsRes.value.data || []);
+        const reviewsData = reviewsRes.value.data || [];
+        // Filter out reviews with null user
+        const validReviews = reviewsData.filter(r => r && r.user);
+        setReviews(validReviews);
       } else {
         setReviews([]);
       }
@@ -197,9 +201,39 @@ const MovieDetailsPage = () => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <LoadingSpinner />
-      </View>
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        {/* Backdrop Skeleton */}
+        <SkeletonLoader width="100%" height={300} borderRadius={0} />
+        
+        {/* Movie Info Section Skeleton */}
+        <View style={{ paddingHorizontal: 20, paddingVertical: 20 }}>
+          <View style={{ flexDirection: 'row', marginBottom: 20 }}>
+            <SkeletonLoader width={100} height={150} borderRadius={12} style={{ marginRight: 16, flexShrink: 0 }} />
+            <View style={{ flex: 1, justifyContent: 'space-between' }}>
+              <SkeletonLoader width="100%" height={20} borderRadius={4} style={{ marginBottom: 8 }} />
+              <SkeletonLoader width="80%" height={14} borderRadius={4} style={{ marginBottom: 8 }} />
+              <SkeletonLoader width="60%" height={14} borderRadius={4} />
+            </View>
+          </View>
+
+          {/* Description Skeleton */}
+          <SkeletonLoader width="100%" height={14} borderRadius={4} style={{ marginBottom: 8 }} />
+          <SkeletonLoader width="95%" height={14} borderRadius={4} style={{ marginBottom: 8 }} />
+          <SkeletonLoader width="90%" height={14} borderRadius={4} style={{ marginBottom: 20 }} />
+
+          {/* Buttons Skeleton */}
+          <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20 }}>
+            <SkeletonLoader width="48%" height={44} borderRadius={12} />
+            <SkeletonLoader width="48%" height={44} borderRadius={12} />
+          </View>
+
+          {/* Reviews Section Skeleton */}
+          <SkeletonLoader width={150} height={20} borderRadius={4} style={{ marginBottom: 16 }} />
+          {[1, 2, 3].map((i) => (
+            <ReviewCardSkeleton key={i} />
+          ))}
+        </View>
+      </ScrollView>
     );
   }
 
@@ -362,7 +396,9 @@ const MovieDetailsPage = () => {
         <Text style={styles.sectionTitle}>Discussions</Text>
         {discussions.length > 0 ? (
           <View style={styles.discussionsList}>
-            {discussions.map(discussion => (
+            {discussions
+              .filter(d => d && d.starter) // Filter out discussions with null starter
+              .map(discussion => (
               <TouchableOpacity
                 key={discussion._id}
                 style={styles.discussionCard}
@@ -380,7 +416,7 @@ const MovieDetailsPage = () => {
                     {discussion.title}
                   </Text>
                   <Text style={styles.discussionMeta}>
-                    Started by {discussion.starter.username} • {discussion.comments.length} comments
+                    Started by {discussion.starter.username} • {(discussion.comments || []).length} comments
                   </Text>
                 </View>
                 <View style={styles.discussionActions}>

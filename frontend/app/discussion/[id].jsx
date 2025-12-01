@@ -18,6 +18,7 @@ import * as api from '../../src/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import EmptyState from '../../components/EmptyState';
 import Avatar from '../../components/Avatar';
+import SkeletonLoader, { ProfileHeaderSkeleton } from '../../components/SkeletonLoader';
 
 const DiscussionDetailPage = () => {
   const { id } = useLocalSearchParams();
@@ -110,7 +111,48 @@ const DiscussionDetailPage = () => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <LoadingSpinner animationType="float" />
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="white" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Discussion</Text>
+          <View style={styles.headerRight} />
+        </View>
+
+        <ScrollView style={styles.content} scrollEnabled={false}>
+          {/* Title Skeleton */}
+          <View style={{ paddingHorizontal: 16, paddingVertical: 16 }}>
+            <SkeletonLoader width="100%" height={24} borderRadius={4} style={{ marginBottom: 12 }} />
+            
+            {/* Starter Skeleton */}
+            <View style={{ flexDirection: 'row', marginBottom: 12 }}>
+              <SkeletonLoader width={32} height={32} borderRadius={16} style={{ marginRight: 10 }} />
+              <View style={{ flex: 1 }}>
+                <SkeletonLoader width={100} height={14} borderRadius={4} style={{ marginBottom: 4 }} />
+                <SkeletonLoader width={80} height={12} borderRadius={4} />
+              </View>
+            </View>
+
+            {/* Content Skeleton */}
+            <SkeletonLoader width="100%" height={14} borderRadius={4} style={{ marginBottom: 6 }} />
+            <SkeletonLoader width="95%" height={14} borderRadius={4} style={{ marginBottom: 20 }} />
+
+            {/* Comments Section */}
+            <SkeletonLoader width={150} height={18} borderRadius={4} style={{ marginBottom: 12 }} />
+            
+            {/* Comment Skeletons */}
+            {[1, 2, 3].map((i) => (
+              <View key={i} style={{ flexDirection: 'row', marginBottom: 12 }}>
+                <SkeletonLoader width={36} height={36} borderRadius={18} style={{ marginRight: 12 }} />
+                <View style={{ flex: 1 }}>
+                  <SkeletonLoader width={120} height={12} borderRadius={4} style={{ marginBottom: 6 }} />
+                  <SkeletonLoader width="100%" height={12} borderRadius={4} style={{ marginBottom: 6 }} />
+                  <SkeletonLoader width="80%" height={12} borderRadius={4} />
+                </View>
+              </View>
+            ))}
+          </View>
+        </ScrollView>
       </View>
     );
   }
@@ -149,15 +191,17 @@ const DiscussionDetailPage = () => {
         {/* Discussion Header */}
         <View style={styles.discussionHeader}>
           <Text style={styles.discussionTitle}>{discussion.title}</Text>
-          <View style={styles.discussionMeta}>
-            <Avatar user={discussion.starter} size={32} />
-            <View style={styles.discussionMetaText}>
-              <Text style={styles.starterName}>{discussion.starter.username}</Text>
-              <Text style={styles.discussionDate}>
-                {formatDate(discussion.createdAt)}
-              </Text>
+          {discussion.starter && (
+            <View style={styles.discussionMeta}>
+              <Avatar user={discussion.starter} size={32} />
+              <View style={styles.discussionMetaText}>
+                <Text style={styles.starterName}>{discussion.starter.username}</Text>
+                <Text style={styles.discussionDate}>
+                  {formatDate(discussion.createdAt)}
+                </Text>
+              </View>
             </View>
-          </View>
+          )}
           {discussion.content && (
             <Text style={styles.discussionContent}>{discussion.content}</Text>
           )}
@@ -171,7 +215,9 @@ const DiscussionDetailPage = () => {
           
           {discussion.comments && discussion.comments.length > 0 ? (
             <View style={styles.commentsList}>
-              {discussion.comments.map((comment) => (
+              {discussion.comments
+                .filter(c => c && c.user) // Filter out comments with null user
+                .map((comment) => (
                 <View key={comment._id} style={styles.commentCard}>
                   <Avatar user={comment.user} size={36} />
                   <View style={styles.commentContent}>
@@ -182,7 +228,7 @@ const DiscussionDetailPage = () => {
                       <Text style={styles.commentDate}>
                         {formatDate(comment.createdAt)}
                       </Text>
-                      {user && String(comment.user._id) === String(user.id) && (
+                      {user && comment.user && String(comment.user._id) === String(user.id) && (
                         <TouchableOpacity
                           onPress={() => handleDeleteComment(comment._id)}
                           style={styles.deleteCommentButton}

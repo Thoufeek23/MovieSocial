@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter, usePathname } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Home, Search, BookOpen, Puzzle, FileText, User } from 'lucide-react-native';
+import { Home, Search, BookOpen, Puzzle, FileText, MessageSquare } from 'lucide-react-native';
 import { useAuth } from '../../src/context/AuthContext';
 import * as api from '../../src/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -20,9 +20,10 @@ import MovieListSection from '../../components/MovieListSection';
 import DiscussionListSection from '../../components/DiscussionListSection';
 import EditProfileModal from '../../components/EditProfileModal';
 import FollowListModal from '../../components/FollowListModal';
+import SkeletonLoader, { ProfileHeaderSkeleton } from '../../components/SkeletonLoader';
 
-// Custom bottom navigation component moved outside to avoid hooks issues
-const CustomBottomNavigation = ({ currentUser }) => {
+// Bottom navigation component matching the tabs layout
+const StandardBottomNavigation = ({ currentUser }) => {
   const pathname = usePathname();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -33,7 +34,7 @@ const CustomBottomNavigation = ({ currentUser }) => {
     { name: 'discussions', icon: BookOpen, route: '/(tabs)/discussions', title: 'Discussions' },
     { name: 'modle', icon: Puzzle, route: '/(tabs)/modle', title: 'Modle' },
     { name: 'reviews', icon: FileText, route: '/(tabs)/reviews', title: 'Reviews' },
-    { name: 'profile', icon: User, route: '/(tabs)/profile', title: 'Profile' },
+    { name: 'messages', icon: MessageSquare, route: '/(tabs)/messages', title: 'Messages' },
   ];
 
   const isProfileActive = pathname.includes('/profile');
@@ -41,7 +42,7 @@ const CustomBottomNavigation = ({ currentUser }) => {
   return (
     <View style={[styles.bottomNavigation, { bottom: Math.max(20, insets.bottom + 10) }]}>
       {tabs.map((tab) => {
-        const isActive = tab.name === 'profile' ? isProfileActive : pathname === tab.route;
+        const isActive = pathname === tab.route || (tab.name === 'index' && pathname === '/(tabs)/');
         const IconComponent = tab.icon;
         
         return (
@@ -49,15 +50,7 @@ const CustomBottomNavigation = ({ currentUser }) => {
             key={tab.name}
             style={styles.tabItem}
             onPress={() => {
-              if (tab.name === 'profile' && currentUser?.username) {
-                // If we're already on this user's profile, don't navigate
-                if (pathname.includes(`/profile/${currentUser.username}`)) {
-                  return;
-                }
-                router.push(`/profile/${currentUser.username}`);
-              } else {
-                router.push(tab.route);
-              }
+              router.push(tab.route);
             }}
             activeOpacity={0.7}
           >
@@ -119,12 +112,20 @@ const ProfilePage = () => {
       setIsFollowing(!!data.isFollowedByCurrentUser);
 
       // Fetch watched and watchlist movies
-      const watchedDetails = await Promise.all(
-        data.watched.map(id => api.getMovieDetails(id))
-      );
-      const watchlistDetails = await Promise.all(
-        data.watchlist.map(id => api.getMovieDetails(id))
-      );
+      // Handle both legacy (array of IDs) and new format (array of objects with movieId)
+      const watchedIds = (data.watched || []).map(entry => 
+        typeof entry === 'string' ? entry : entry.movieId
+      ).filter(id => id);
+      
+      const watchlistIds = (data.watchlist || []).filter(id => id);
+
+      const watchedDetails = watchedIds.length > 0 ? await Promise.all(
+        watchedIds.map(id => api.getMovieDetails(id))
+      ) : [];
+      
+      const watchlistDetails = watchlistIds.length > 0 ? await Promise.all(
+        watchlistIds.map(id => api.getMovieDetails(id))
+      ) : [];
       
       setWatchedMovies(watchedDetails.map(res => res.data));
       setWatchlistMovies(watchlistDetails.map(res => res.data));
@@ -290,7 +291,36 @@ const ProfilePage = () => {
     return (
       <View style={styles.container}>
         <CustomHeader title="Profile" />
-        <LoadingSpinner />
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+          {/* Profile Header Skeleton */}
+          <ProfileHeaderSkeleton />
+          
+          {/* Movies Section Skeleton */}
+          <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
+            <SkeletonLoader width={200} height={20} borderRadius={4} style={{ marginBottom: 12 }} />
+            {[1, 2].map((i) => (
+              <View key={i} style={{ marginBottom: 12 }}>
+                <SkeletonLoader width={160} height={240} borderRadius={12} />
+              </View>
+            ))}
+          </View>
+
+          {/* Discussions Section Skeleton */}
+          <View style={{ paddingHorizontal: 20 }}>
+            <SkeletonLoader width={200} height={20} borderRadius={4} style={{ marginBottom: 12 }} />
+            {[1, 2].map((i) => (
+              <View key={i} style={{ paddingHorizontal: 12, paddingVertical: 12, marginBottom: 12, backgroundColor: '#1f2937', borderRadius: 12 }}>
+                <View style={{ flexDirection: 'row', marginBottom: 8 }}>
+                  <SkeletonLoader width={36} height={36} borderRadius={18} style={{ marginRight: 10 }} />
+                  <View style={{ flex: 1 }}>
+                    <SkeletonLoader width={120} height={14} borderRadius={4} />
+                  </View>
+                </View>
+                <SkeletonLoader width="100%" height={14} borderRadius={4} />
+              </View>
+            ))}
+          </View>
+        </ScrollView>
       </View>
     );
   }
@@ -410,8 +440,8 @@ const ProfilePage = () => {
         currentUser={currentUser}
       />
 
-      {/* Custom Bottom Navigation */}
-      <CustomBottomNavigation currentUser={currentUser} />
+      {/* Standard Bottom Navigation */}
+      <StandardBottomNavigation currentUser={currentUser} />
     </View>
   );
 };

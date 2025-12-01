@@ -5,6 +5,7 @@ import SearchBar from '../../components/SearchBar';
 import MovieCard from '../../components/MovieCard';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import EmptyState from '../../components/EmptyState';
+import SkeletonLoader, { MovieCardSkeleton } from '../../components/SkeletonLoader';
 import * as api from '../../src/api';
 import { useScrollToTop } from './_layout';
 
@@ -93,7 +94,15 @@ export default function SearchPage() {
       </View>
 
       {showLoading ? (
-        <LoadingSpinner text={query ? 'Searching...' : 'Loading popular movies...'} animationType="pulse" />
+        <View style={styles.loadingContainer}>
+          <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>
+            {[1, 2, 3, 4].map((i) => (
+              <View key={i} style={styles.cardWrapper}>
+                <MovieCardSkeleton />
+              </View>
+            ))}
+          </View>
+        </View>
       ) : (
         <View style={styles.content}>
           {query && (
@@ -149,6 +158,10 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    paddingTop: 20,
   },
   resultsText: {
     fontSize: 14,

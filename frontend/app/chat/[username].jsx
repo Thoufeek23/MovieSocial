@@ -9,7 +9,8 @@ import {
   KeyboardAvoidingView, 
   Platform, 
   ActivityIndicator,
-  Image
+  Image,
+  Alert
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,11 +19,14 @@ import * as api from '../../src/api';
 import Avatar from '../../components/Avatar';
 import ReviewCard from '../../components/ReviewCard';
 import DiscussionCard from '../../components/DiscussionCard';
+import { io } from 'socket.io-client';
 
 const ChatScreen = () => {
   const { username } = useLocalSearchParams();
   const router = useRouter();
   const { user } = useContext(AuthContext);
+  const socketRef = useRef(null);
+  const currentChatRef = useRef(username);
   
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -31,6 +35,40 @@ const ChatScreen = () => {
   const [otherUser, setOtherUser] = useState(null);
   
   const flatListRef = useRef(null);
+
+  // Initialize Socket.io
+  useEffect(() => {
+    if (!user) return;
+
+    const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.68.54:5001';
+    socketRef.current = io(apiUrl, {
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: 5,
+    });
+
+    const userId = user._id || user.id;
+    socketRef.current.emit('join_room', userId);
+
+    // Listen for incoming messages in this chat
+    socketRef.current.on('receive_message', (incomingMsg) => {
+      const senderUsername = incomingMsg.sender?.username;
+      const isFromCurrentChat = senderUsername === username;
+
+      if (isFromCurrentChat) {
+        setMessages(prev => [...prev, incomingMsg]);
+      }
+    });
+
+    return () => {
+      socketRef.current?.disconnect();
+    };
+  }, [user, username]);
+
+  useEffect(() => {
+    currentChatRef.current = username;
+  }, [username]);
 
   useEffect(() => {
     const initChat = async () => {
@@ -54,6 +92,20 @@ const ChatScreen = () => {
     
     if (username) initChat();
   }, [username]);
+
+  // Format date like client (Today, Yesterday, etc)
+  const formatDateHeader = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+    if (messageDate.getTime() === today.getTime()) return 'Today';
+    if (messageDate.getTime() === yesterday.getTime()) return 'Yesterday';
+    return date.toLocaleDateString();
+  };
 
   // Group messages by date for sticky headers
   const groupedMessages = useMemo(() => {
@@ -82,7 +134,7 @@ const ChatScreen = () => {
     const optimisticMsg = {
       _id: tempId,
       content: content,
-      sender: user._id || user.id, // Handle both ID formats
+      sender: { _id: user._id || user.id, username: user.username, avatar: user.avatar },
       createdAt: new Date().toISOString(),
       isOptimistic: true
     };
@@ -100,11 +152,34 @@ const ChatScreen = () => {
     }
   };
 
+  const handleDeleteMessage = async (msgId) => {
+    Alert.alert(
+      'Delete Message',
+      'Are you sure you want to delete this message?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setMessages(prev => prev.filter(m => m._id !== msgId));
+              await api.deleteMessage(msgId);
+            } catch (error) {
+              console.error('Failed to delete message', error);
+              Alert.alert('Error', 'Failed to delete message');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const renderMessage = ({ item }) => {
     if (item.type === 'date') {
       return (
         <View style={styles.dateHeader}>
-          <Text style={styles.dateText}>{item.date}</Text>
+          <Text style={styles.dateText}>{formatDateHeader(item.date)}</Text>
         </View>
       );
     }
@@ -121,7 +196,7 @@ const ChatScreen = () => {
         )}
         
         <View style={[styles.bubbleContainer, isMe ? styles.myBubbleContainer : styles.theirBubbleContainer]}>
-          <View style={[styles.bubble, isMe ? styles.myBubble : styles.theirBubble]}>
+          <View style={[styles.bubble, isMe ? styles.myBubble : styles.theirBubble, item.isOptimistic && styles.optimisticMessage]}>
             
             {/* Shared Content Rendering */}
             {item.sharedReview && (
@@ -129,7 +204,6 @@ const ChatScreen = () => {
                 <Text style={[styles.sharedLabel, isMe ? styles.mySharedLabel : styles.theirSharedLabel]}>
                   Shared a Review:
                 </Text>
-                {/* Pass a 'compact' prop to ReviewCard if you implement it, or just constrain width */}
                 <View style={{ pointerEvents: 'none' }}> 
                   <ReviewCard review={item.sharedReview} /> 
                 </View>
@@ -154,14 +228,30 @@ const ChatScreen = () => {
               </Text>
             ) : null}
 
-            {/* Metadata (Time + Read Status) */}
+            {/* Metadata (Time + Delete Button) */}
             <View style={styles.metaRow}>
               <Text style={[styles.timestamp, isMe ? styles.myTimestamp : styles.theirTimestamp]}>
                 {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </Text>
-              {isMe && (
+              {isMe && !item.isOptimistic && (
+                <TouchableOpacity 
+                  onPress={() => handleDeleteMessage(item._id)}
+                  style={styles.deleteButton}
+                >
+                  <Ionicons name="trash-outline" size={12} color="#dc2626" />
+                </TouchableOpacity>
+              )}
+              {isMe && item.isOptimistic && (
                 <Ionicons 
-                  name={item.isOptimistic ? "time-outline" : "checkmark-done"} 
+                  name="time-outline" 
+                  size={14} 
+                  color="rgba(255,255,255,0.7)" 
+                  style={{ marginLeft: 4 }} 
+                />
+              )}
+              {isMe && !item.isOptimistic && (
+                <Ionicons 
+                  name="checkmark-done" 
                   size={14} 
                   color="rgba(255,255,255,0.7)" 
                   style={{ marginLeft: 4 }} 
@@ -292,23 +382,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#374151', // Dark Gray
     borderBottomLeftRadius: 4,
   },
+  optimisticMessage: {
+    opacity: 0.7,
+  },
 
   // Text
   messageText: { fontSize: 16, lineHeight: 22 },
   myMessageText: { color: 'white' },
   theirMessageText: { color: '#f3f4f6' },
 
-  // Meta (Time + Icon)
+  // Meta (Time + Icon + Delete)
   metaRow: { 
     flexDirection: 'row', 
     alignItems: 'center', 
     justifyContent: 'flex-end', 
     marginTop: 4,
-    opacity: 0.8 
+    opacity: 0.8,
+    gap: 4
   },
   timestamp: { fontSize: 10 },
   myTimestamp: { color: 'rgba(255,255,255,0.9)' },
   theirTimestamp: { color: '#9ca3af' },
+  deleteButton: {
+    padding: 4,
+  },
 
   // Shared Content
   sharedContent: { marginBottom: 8 },

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback, useContext } from 'react'; // <-- Added useContext
+import React, { useEffect, useState, useRef, useCallback, useContext } from 'react';
 import { 
   View, 
   Text, 
@@ -7,20 +7,24 @@ import {
   StyleSheet, 
   ActivityIndicator,
   RefreshControl,
-  Button // <-- Added Button for login prompt
+  Button
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { AuthContext } from '../../src/context/AuthContext'; // Import AuthContext
+import { AuthContext } from '../../src/context/AuthContext';
 import Avatar from '../../components/Avatar';
+import { ConversationSkeleton } from '../../components/SkeletonLoader';
 import * as api from '../../src/api';
 import { useScrollToTop } from './_layout';
 import { Ionicons } from '@expo/vector-icons';
+import { io } from 'socket.io-client';
 
 const MessagesScreen = () => {
   const router = useRouter();
   const listRef = useRef(null);
   const { registerScrollRef } = useScrollToTop();
-  const { user } = useContext(AuthContext); // <-- Get user from context
+  const { user } = useContext(AuthContext);
+  const socketRef = useRef(null);
+  const currentConversationRef = useRef(null);
   
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -30,8 +34,48 @@ const MessagesScreen = () => {
     registerScrollRef('messages', listRef);
   }, [registerScrollRef]);
 
+  // Initialize Socket.io
+  useEffect(() => {
+    if (!user) return;
+
+    const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.68.54:5001';
+    socketRef.current = io(apiUrl, {
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: 5,
+    });
+
+    const userId = user._id || user.id;
+    socketRef.current.emit('join_room', userId);
+
+    // Listen for incoming messages
+    socketRef.current.on('receive_message', (incomingMsg) => {
+      const senderUsername = incomingMsg.sender?.username;
+      const senderId = incomingMsg.sender?._id || incomingMsg.sender;
+
+      // Update conversations list
+      setConversations(prev => {
+        const filtered = prev.filter(c => c.otherUser.username !== senderUsername);
+        const existingConv = prev.find(c => c.otherUser.username === senderUsername);
+
+        const newConv = {
+          otherUser: existingConv ? existingConv.otherUser : incomingMsg.sender,
+          lastMessage: incomingMsg,
+          unreadCount: existingConv ? existingConv.unreadCount + 1 : 1
+        };
+
+        return [newConv, ...filtered];
+      });
+    });
+
+    return () => {
+      socketRef.current?.disconnect();
+    };
+  }, [user]);
+
   const loadConversations = async () => {
-    if (!user) return; // <-- Don't fetch if not logged in
+    if (!user) return;
     try {
       const { data } = await api.getConversations();
       setConversations(data);
@@ -43,7 +87,6 @@ const MessagesScreen = () => {
     }
   };
 
-  // Reload when screen comes into focus
   useFocusEffect(
     useCallback(() => {
       if (user) {
@@ -59,16 +102,20 @@ const MessagesScreen = () => {
     loadConversations();
   };
 
-  // ... [keep formatTime and renderItem functions exactly as they were] ...
-  const formatTime = (dateString) => {
+  // Format time similar to client
+  const formatConversationDate = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
     const now = new Date();
-    const isToday = date.toDateString() === now.toDateString();
-    
-    if (isToday) {
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+    if (messageDate.getTime() === today.getTime()) {
       return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
+    if (messageDate.getTime() === yesterday.getTime()) return 'Yesterday';
     return date.toLocaleDateString();
   };
 
@@ -84,7 +131,7 @@ const MessagesScreen = () => {
             {item.otherUser.username}
           </Text>
           <Text style={[styles.time, item.unreadCount > 0 && styles.unreadTime]}>
-            {item.lastMessage && formatTime(item.lastMessage.createdAt)}
+            {item.lastMessage && formatConversationDate(item.lastMessage.createdAt)}
           </Text>
         </View>
         <View style={styles.messagePreviewRow}>
@@ -127,7 +174,7 @@ const MessagesScreen = () => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#10b981" />
+        <ConversationSkeleton />
       </View>
     );
   }
