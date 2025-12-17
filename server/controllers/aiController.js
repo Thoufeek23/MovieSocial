@@ -1,8 +1,68 @@
 const axios = require('axios');
 const logger = require('../utils/logger');
+const cache = require('../utils/cache');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+
+// Rate limiting: Track last request time and implement cooldown
+let lastGeminiRequest = 0;
+const MIN_REQUEST_INTERVAL = 2000; // 2 seconds between requests
+
+// Helper function to wait for rate limit cooldown
+const waitForRateLimit = async () => {
+    const now = Date.now();
+    const timeSinceLastRequest = now - lastGeminiRequest;
+    if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+        const waitTime = MIN_REQUEST_INTERVAL - timeSinceLastRequest;
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    lastGeminiRequest = Date.now();
+};
+
+// Helper function to call Gemini API with retry logic
+const callGeminiWithRetry = async (prompt, maxRetries = 3) => {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            await waitForRateLimit();
+            
+            const response = await axios.post(
+                GEMINI_API_URL,
+                {
+                    contents: [{
+                        parts: [{
+                            text: prompt
+                        }]
+                    }],
+                    generationConfig: {
+                        temperature: 0.7,
+                        topK: 40,
+                        topP: 0.95,
+                        maxOutputTokens: 2048,
+                    }
+                },
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-goog-api-key': GEMINI_API_KEY
+                    },
+                    timeout: 30000
+                }
+            );
+            
+            return response;
+        } catch (error) {
+            if (error.response?.status === 429 && attempt < maxRetries) {
+                // Exponential backoff: wait longer with each retry
+                const backoffTime = Math.min(1000 * Math.pow(2, attempt), 10000);
+                logger.info(`Rate limited, retrying in ${backoffTime}ms (attempt ${attempt}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, backoffTime));
+                continue;
+            }
+            throw error;
+        }
+    }
+};
 
 // @desc    Get AI-powered movie recommendations based on user preferences
 // @route   POST /api/ai/movie-recommendations
@@ -25,6 +85,18 @@ const getMovieRecommendations = async (req, res) => {
             watchWith,
             releasePeriod
         } = req.body;
+
+        // Create cache key from preferences
+        const cacheKey = `ai_recommendations:${JSON.stringify({
+            genres, mood, languages, endings, themes, enjoys, pace, characters, experience, watchWith, releasePeriod
+        })}`;
+        
+        // Check cache first (cache for 1 hour)
+        const cachedResult = cache.get(cacheKey);
+        if (cachedResult) {
+            logger.info('Returning cached AI recommendations');
+            return res.json(cachedResult);
+        }
 
         // Validate required fields
         if (!genres || !mood || !languages) {
@@ -76,30 +148,18 @@ Return ONLY a valid JSON array:
   }
 ]`;
 
-        // Call Gemini API
-        const response = await axios.post(
-            GEMINI_API_URL,
-            {
-                contents: [{
-                    parts: [{
-                        text: prompt
-                    }]
-                }],
-                generationConfig: {
-                    temperature: 0.7,
-                    topK: 40,
-                    topP: 0.95,
-                    maxOutputTokens: 2048,
-                }
-            },
-            {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-goog-api-key': GEMINI_API_KEY
-                },
-                timeout: 30000 // 30 second timeout
+        // Call Gemini API with retry logic
+        let response;
+        try {
+            response = await callGeminiWithRetry(prompt);
+        } catch (apiError) {
+            // If API fails completely, use fallback immediately
+            if (apiError.response?.status === 429) {
+                logger.warn('Gemini API rate limit exceeded, using fallback recommendations');
+                return await provideFallbackRecommendations(req, res, { genres, mood, languages, endings, themes, enjoys, pace, characters, experience, watchWith, releasePeriod });
             }
-        );
+            throw apiError;
+        }
 
         const aiResponse = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
         if (!aiResponse) {
@@ -353,7 +413,7 @@ Return ONLY a valid JSON array:
             });
         }
 
-        res.json({
+        const result = {
             recommendations: validMovies,
             total: validMovies.length,
             preferences_used: {
@@ -369,7 +429,12 @@ Return ONLY a valid JSON array:
                 watchWith,
                 releasePeriod
             }
-        });
+        };
+        
+        // Cache the result for 1 hour (3600 seconds)
+        cache.set(cacheKey, result, 3600);
+        
+        res.json(result);
 
     } catch (error) {
         if (error.response) {
@@ -388,10 +453,9 @@ Return ONLY a valid JSON array:
                     details: 'Please check API key configuration'
                 });
             } else if (status === 429) {
-                return res.status(429).json({ 
-                    msg: 'Too many requests to AI service',
-                    details: 'Please try again later'
-                });
+                // Return fallback recommendations instead of error
+                logger.warn('Rate limit hit, providing fallback recommendations');
+                return await provideFallbackRecommendations(req, res, req.body);
             }
             
             return res.status(500).json({ 
@@ -535,6 +599,79 @@ const getMoviesInLanguages = async (languageCodes, tmdbApiKey, tmdbBaseUrl, limi
     }
     
     return movies.slice(0, limit);
+};
+
+// Helper function to provide fallback recommendations when API fails
+const provideFallbackRecommendations = async (req, res, preferences) => {
+    const { genres, languages } = preferences;
+    
+    try {
+        const TMDB_API_KEY = process.env.TMDB_API_KEY;
+        const TMDB_API_BASE_URL = 'https://api.themoviedb.org/3';
+        
+        let movies = [];
+        
+        // If languages specified, get movies in those languages
+        if (Array.isArray(languages) && languages.length > 0 && !languages.includes('Any language is fine')) {
+            const languageMapping = {
+                'English': ['en'],
+                'Tamil': ['ta'],
+                'Telugu': ['te'],
+                'Malayalam': ['ml'],
+                'Hindi': ['hi'],
+                'Kannada': ['kn'],
+                'Korean': ['ko'],
+                'Japanese': ['ja'],
+                'French': ['fr'],
+                'Spanish': ['es'],
+                'German': ['de'],
+                'Italian': ['it'],
+                'Chinese': ['zh'],
+                'Russian': ['ru']
+            };
+            
+            const acceptedLanguageCodes = [];
+            languages.forEach(userLang => {
+                const codes = languageMapping[userLang];
+                if (codes) acceptedLanguageCodes.push(...codes);
+            });
+            
+            movies = await getMoviesInLanguages(acceptedLanguageCodes, TMDB_API_KEY, TMDB_API_BASE_URL, 10);
+        }
+        
+        // If no language-specific movies or no language preference, get popular movies
+        if (movies.length === 0) {
+            const fallbackResponse = await axios.get(`${TMDB_API_BASE_URL}/movie/popular`, {
+                params: { api_key: TMDB_API_KEY, page: 1 }
+            });
+            movies = fallbackResponse.data.results?.slice(0, 10) || [];
+        }
+        
+        // Add ratings and AI reason
+        movies.forEach(movie => {
+            if (typeof movie.vote_average !== 'undefined') {
+                movie.imdbRating = movie.vote_average;
+                movie.imdbRatingSource = 'TMDb';
+            }
+            movie.ai_reason = 'Popular recommendation (AI service temporarily unavailable)';
+            movie.ai_title = movie.title;
+            movie.ai_year = movie.release_date ? new Date(movie.release_date).getFullYear() : null;
+        });
+        
+        return res.json({
+            recommendations: movies,
+            total: movies.length,
+            fallback: true,
+            message: 'AI service is busy. Here are popular recommendations based on your preferences.',
+            preferences_used: preferences
+        });
+    } catch (fallbackError) {
+        logger.error('Fallback recommendations failed:', fallbackError);
+        return res.status(503).json({ 
+            msg: 'Service temporarily unavailable',
+            details: 'Both AI service and fallback recommendations are unavailable. Please try again in a few moments.'
+        });
+    }
 };
 
 module.exports = {
