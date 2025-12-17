@@ -7,7 +7,7 @@ const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/
 
 // Rate limiting: Track last request time and implement cooldown
 let lastGeminiRequest = 0;
-const MIN_REQUEST_INTERVAL = 2000; // 2 seconds between requests
+const MIN_REQUEST_INTERVAL = 60000; // 60 seconds (1 minute) between requests to avoid rate limits
 
 // Helper function to wait for rate limit cooldown
 const waitForRateLimit = async () => {
@@ -15,13 +15,14 @@ const waitForRateLimit = async () => {
     const timeSinceLastRequest = now - lastGeminiRequest;
     if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
         const waitTime = MIN_REQUEST_INTERVAL - timeSinceLastRequest;
+        logger.info(`Rate limiting: waiting ${Math.ceil(waitTime / 1000)} seconds before next Gemini API call`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
     }
     lastGeminiRequest = Date.now();
 };
 
 // Helper function to call Gemini API with retry logic
-const callGeminiWithRetry = async (prompt, maxRetries = 3) => {
+const callGeminiWithRetry = async (prompt, maxRetries = 2) => {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
             await waitForRateLimit();
@@ -52,12 +53,18 @@ const callGeminiWithRetry = async (prompt, maxRetries = 3) => {
             
             return response;
         } catch (error) {
-            if (error.response?.status === 429 && attempt < maxRetries) {
-                // Exponential backoff: wait longer with each retry
-                const backoffTime = Math.min(1000 * Math.pow(2, attempt), 10000);
-                logger.info(`Rate limited, retrying in ${backoffTime}ms (attempt ${attempt}/${maxRetries})`);
-                await new Promise(resolve => setTimeout(resolve, backoffTime));
-                continue;
+            if (error.response?.status === 429) {
+                if (attempt < maxRetries) {
+                    // Exponential backoff: wait much longer with each retry
+                    const backoffTime = 60000 * attempt; // 60s, 120s
+                    logger.info(`Rate limited, retrying in ${backoffTime / 1000}s (attempt ${attempt}/${maxRetries})`);
+                    await new Promise(resolve => setTimeout(resolve, backoffTime));
+                    continue;
+                } else {
+                    // Last attempt failed, throw to use fallback
+                    logger.warn('Max retries reached for rate limit, will use fallback');
+                    throw error;
+                }
             }
             throw error;
         }
@@ -76,30 +83,35 @@ const getMovieRecommendations = async (req, res) => {
             genres,
             mood,
             languages,
-            endings,
-            themes,
-            enjoys,
-            pace,
-            characters,
-            experience,
-            watchWith,
-            releasePeriod
+            storytelling,
+            matters,
+            era
         } = req.body;
 
-        // Create cache key from preferences
-        const cacheKey = `ai_recommendations:${JSON.stringify({
-            genres, mood, languages, endings, themes, enjoys, pace, characters, experience, watchWith, releasePeriod
-        })}`;
+        // Create cache key from preferences (sort arrays for consistent caching)
+        const normalizedPrefs = {
+            genres: Array.isArray(genres) ? [...genres].sort() : genres,
+            mood,
+            languages: Array.isArray(languages) ? [...languages].sort() : languages,
+            storytelling,
+            matters,
+            era: Array.isArray(era) ? [...era].sort() : era
+        };
+        const cacheKey = `ai_recommendations:${JSON.stringify(normalizedPrefs)}`;
         
-        // Check cache first (cache for 1 hour)
+        // Check cache first (cache for 24 hours to minimize API calls)
         const cachedResult = cache.get(cacheKey);
         if (cachedResult) {
-            logger.info('Returning cached AI recommendations');
-            return res.json(cachedResult);
+            logger.info('Returning cached AI recommendations (avoiding rate limit)');
+            return res.json({
+                ...cachedResult,
+                cached: true,
+                message: 'These are cached recommendations from your previous request'
+            });
         }
 
         // Validate required fields
-        if (!genres || !mood || !languages) {
+        if (!genres || !mood || !languages || !storytelling || !matters) {
             return res.status(400).json({ 
                 msg: 'Missing required preferences',
                 details: 'Please fill out all required fields'
@@ -111,32 +123,35 @@ const getMovieRecommendations = async (req, res) => {
             ? `STRICTLY recommend movies ONLY in these languages: ${languages.join(', ')}. Do not recommend movies in other languages.`
             : 'Recommend movies in any language, but prioritize based on user preferences.';
 
+        // Handle era preference
+        const eraInstructions = Array.isArray(era) && era.length > 0 && !era.includes('Any Era is fine')
+            ? `Focus on movies from these time periods: ${era.join(', ')}`
+            : 'Consider movies from all eras';
+
         const prompt = `Based on the following movie preferences, recommend exactly 10 POPULAR and WELL-KNOWN movies. Focus on mainstream movies that are widely available and likely to be in movie databases.
 
 User Preferences:
-- Genres: ${Array.isArray(genres) ? genres.join(', ') : genres}
-- Mood: ${mood}
+- Movie Types: ${Array.isArray(genres) ? genres.join(', ') : genres}
+- Mood Preference: ${mood}
 - Languages: ${Array.isArray(languages) ? languages.join(', ') : languages}
-- Preferred endings: ${endings}
-- Story themes: ${Array.isArray(themes) ? themes.join(', ') : themes}
-- Enjoys movies with: ${Array.isArray(enjoys) ? enjoys.join(', ') : enjoys}
-- Pace preference: ${pace}
-- Character types: ${Array.isArray(characters) ? characters.join(', ') : characters}
-- Movie experience: ${experience}
-- Watches movies: ${watchWith}
-- Release period: ${releasePeriod}
+- Storytelling Style: ${storytelling}
+- What Matters Most: ${matters}
+- Era Preference: ${Array.isArray(era) && era.length > 0 ? era.join(', ') : 'Any era'}
 
 LANGUAGE REQUIREMENT: ${languageInstructions}
+ERA REQUIREMENT: ${eraInstructions}
 
 IMPORTANT RULES:
 1. ${languageInstructions}
-2. Only recommend mainstream, popular movies (not obscure or indie films)
-3. Use EXACT movie titles as they appear in movie databases
-4. For non-English movies, use the most commonly known title (original title or English title)
-5. Include movies from acclaimed directors, popular actors, or well-known films in the specified languages
-6. Ensure all movies actually exist and are real
-7. Use simple, clean movie titles without extra punctuation
-8. If user selected specific languages like Tamil, Telugu, Hindi, etc., prioritize Bollywood, Tollywood, Kollywood hits
+2. ${eraInstructions}
+3. Only recommend mainstream, popular movies (not obscure or indie films)
+4. Use EXACT movie titles as they appear in movie databases
+5. For non-English movies, use the most commonly known title (original title or English title)
+6. Include movies from acclaimed directors, popular actors, or well-known films in the specified languages
+7. Ensure all movies actually exist and are real
+8. Use simple, clean movie titles without extra punctuation
+9. If user selected specific languages like Tamil, Telugu, Hindi, etc., prioritize Bollywood, Tollywood, Kollywood hits
+10. Match the storytelling style and what matters most to the user
 
 Return ONLY a valid JSON array:
 [
@@ -156,7 +171,7 @@ Return ONLY a valid JSON array:
             // If API fails completely, use fallback immediately
             if (apiError.response?.status === 429) {
                 logger.warn('Gemini API rate limit exceeded, using fallback recommendations');
-                return await provideFallbackRecommendations(req, res, { genres, mood, languages, endings, themes, enjoys, pace, characters, experience, watchWith, releasePeriod });
+                return await provideFallbackRecommendations(req, res, { genres, mood, languages, storytelling, matters, era });
             }
             throw apiError;
         }
@@ -357,7 +372,7 @@ Return ONLY a valid JSON array:
                         total: fallbackMovies.length,
                         fallback: true,
                         preferences_used: {
-                            genres, mood, languages, endings, themes, enjoys, pace, characters, experience, watchWith, releasePeriod
+                            genres, mood, languages, storytelling, matters, era
                         }
                     });
                 }
@@ -420,19 +435,15 @@ Return ONLY a valid JSON array:
                 genres,
                 mood,
                 languages,
-                endings,
-                themes,
-                enjoys,
-                pace,
-                characters,
-                experience,
-                watchWith,
-                releasePeriod
+                storytelling,
+                matters,
+                era
             }
         };
         
-        // Cache the result for 1 hour (3600 seconds)
-        cache.set(cacheKey, result, 3600);
+        // Cache the result for 24 hours (86400 seconds) to minimize API calls
+        cache.set(cacheKey, result, 86400);
+        logger.info('Successfully generated and cached AI recommendations');
         
         res.json(result);
 

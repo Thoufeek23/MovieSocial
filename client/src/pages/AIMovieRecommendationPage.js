@@ -22,20 +22,15 @@ const AIMovieRecommendationPage = () => {
         genres: [],
         mood: '',
         languages: [],
-        endings: '',
-        themes: [],
-        enjoys: [],
-        pace: '',
-        characters: [],
-        experience: '',
-        watchWith: '',
-        releasePeriod: ''
+        storytelling: '',
+        matters: '',
+        era: []
     });
     const [recommendations, setRecommendations] = useState([]);
     const [showResults, setShowResults] = useState(false);
     const [showMoreSuggestions, setShowMoreSuggestions] = useState(false);
 
-    const totalSteps = 11;
+    const totalSteps = 6;
 
     // Load stored recommendations on component mount
     React.useEffect(() => {
@@ -60,12 +55,38 @@ const AIMovieRecommendationPage = () => {
     }, []);
 
     const handleMultiSelect = (field, value) => {
-        setPreferences(prev => ({
-            ...prev,
-            [field]: prev[field].includes(value)
-                ? prev[field].filter(item => item !== value)
-                : [...prev[field], value]
-        }));
+        // Special handling for "Any language is fine" and "Any Era is fine"
+        if (field === 'languages' && value === 'Any language is fine') {
+            setPreferences(prev => ({
+                ...prev,
+                [field]: ['Any language is fine']
+            }));
+        } else if (field === 'era' && value === 'Any Era is fine') {
+            setPreferences(prev => ({
+                ...prev,
+                [field]: ['Any Era is fine']
+            }));
+        } else if (field === 'languages' || field === 'era') {
+            // Remove "Any..." option when selecting other options
+            setPreferences(prev => {
+                const anyOption = field === 'languages' ? 'Any language is fine' : 'Any Era is fine';
+                const filtered = prev[field].filter(item => item !== anyOption);
+                
+                return {
+                    ...prev,
+                    [field]: filtered.includes(value)
+                        ? filtered.filter(item => item !== value)
+                        : [...filtered, value]
+                };
+            });
+        } else {
+            setPreferences(prev => ({
+                ...prev,
+                [field]: prev[field].includes(value)
+                    ? prev[field].filter(item => item !== value)
+                    : [...prev[field], value]
+            }));
+        }
     };
 
     const handleSingleSelect = (field, value) => {
@@ -94,14 +115,9 @@ const AIMovieRecommendationPage = () => {
             genres: [],
             mood: '',
             languages: [],
-            endings: '',
-            themes: [],
-            enjoys: [],
-            pace: '',
-            characters: [],
-            experience: '',
-            watchWith: '',
-            releasePeriod: ''
+            storytelling: '',
+            matters: '',
+            era: []
         });
         setCurrentStep(1);
         setShowResults(false);
@@ -118,7 +134,7 @@ const AIMovieRecommendationPage = () => {
             console.log('Submitting preferences:', preferences);
             
             // Validate preferences before sending
-            const requiredFields = ['genres', 'mood', 'languages'];
+            const requiredFields = ['genres', 'mood', 'languages', 'storytelling', 'matters'];
             const missingFields = requiredFields.filter(field => {
                 const value = preferences[field];
                 return !value || (Array.isArray(value) && value.length === 0);
@@ -140,7 +156,14 @@ const AIMovieRecommendationPage = () => {
             localStorage.setItem('aiMovieRecommendations', JSON.stringify(response.data.recommendations));
             localStorage.setItem('aiMoviePreferences', JSON.stringify(preferences));
             
-            toast.success('Got your personalized recommendations!');
+            // Show appropriate message based on response
+            if (response.data.fallback) {
+                toast.success('Got popular recommendations! (AI service is busy, but these still match your preferences)', { duration: 5000 });
+            } else if (response.data.cached) {
+                toast.success('Got your cached recommendations!');
+            } else {
+                toast.success('Got your personalized AI recommendations!');
+            }
         } catch (error) {
             console.error('Error getting recommendations:', error);
             
@@ -154,7 +177,7 @@ const AIMovieRecommendationPage = () => {
                 } else if (status === 401) {
                     toast.error('Please log in again');
                 } else if (status === 429) {
-                    toast.error('Too many requests. Please try again later.');
+                    toast.error('AI service rate limit reached. Please wait a minute and try again, or refresh to see cached results.', { duration: 6000 });
                 } else {
                     toast.error(`Server error: ${message}`);
                 }
@@ -169,17 +192,20 @@ const AIMovieRecommendationPage = () => {
     };
 
     const renderStepContent = () => {
+        const isLanguagesMulti = !preferences.languages.includes('Any language is fine');
+        const isEraMulti = !preferences.era.includes('Any Era is fine');
+        
         switch (currentStep) {
             case 1:
                 return (
                     <div className="space-y-6">
                         <div className="text-center">
-                            <h2 className="text-2xl font-bold text-white mb-2">What genres do you usually enjoy?</h2>
-                            <p className="text-gray-400">Choose any number that appeal to you</p>
+                            <h2 className="text-2xl font-bold text-white mb-2">What types of movies do you enjoy most?</h2>
+                            <p className="text-gray-400">Multi-select - Choose all that appeal to you</p>
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                            {['Romance / Rom-com', 'Action', 'Thriller / Mystery', 'Horror', 'Drama', 'Comedy', 
-                              'Sci-fi / Fantasy', 'Adventure', 'Animated', 'Crime / Gangster', 'Slice-of-life', 'Feel-good movies'].map((genre) => (
+                            {['Romance / Drama', 'Comedy / Feel-good', 'Action / Adventure', 
+                              'Thriller / Crime / Mystery', 'Sci-fi / Fantasy / Animated'].map((genre) => (
                                 <button
                                     key={genre}
                                     onClick={() => handleMultiSelect('genres', genre)}
@@ -200,12 +226,12 @@ const AIMovieRecommendationPage = () => {
                 return (
                     <div className="space-y-6">
                         <div className="text-center">
-                            <h2 className="text-2xl font-bold text-white mb-2">What kind of mood do you prefer in movies?</h2>
-                            <p className="text-gray-400">Choose the mood that resonates with you</p>
+                            <h2 className="text-2xl font-bold text-white mb-2">What mood do you usually prefer in movies?</h2>
+                            <p className="text-gray-400">Single select - Choose one that resonates most</p>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {['Light-hearted & fun', 'Deep & emotional', 'Intense & gripping', 'Slow & realistic',
-                              'Fast-paced & exciting', 'Inspirational / uplifting', 'A mix of emotional + entertaining'].map((mood) => (
+                            {['Light-hearted & fun', 'Deep & emotional', 'Intense & gripping',
+                              'Fast-paced & exciting', 'A mix of emotional + entertaining'].map((mood) => (
                                 <button
                                     key={mood}
                                     onClick={() => handleSingleSelect('mood', mood)}
@@ -226,8 +252,13 @@ const AIMovieRecommendationPage = () => {
                 return (
                     <div className="space-y-6">
                         <div className="text-center">
-                            <h2 className="text-2xl font-bold text-white mb-2">What languages do you prefer?</h2>
-                            <p className="text-gray-400">Select all languages you're comfortable with</p>
+                            <h2 className="text-2xl font-bold text-white mb-2">Which languages do you prefer?</h2>
+                            <p className="text-gray-400">
+                                {isLanguagesMulti 
+                                    ? 'Multi-select - Choose all languages you\'re comfortable with'
+                                    : 'Single select'
+                                }
+                            </p>
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                             {['English', 'Tamil', 'Telugu', 'Malayalam', 'Hindi', 'Kannada', 'Korean', 'Japanese', 'Any language is fine'].map((lang) => (
@@ -251,21 +282,23 @@ const AIMovieRecommendationPage = () => {
                 return (
                     <div className="space-y-6">
                         <div className="text-center">
-                            <h2 className="text-2xl font-bold text-white mb-2">What type of endings do you prefer?</h2>
-                            <p className="text-gray-400">Choose your preferred story conclusion style</p>
+                            <h2 className="text-2xl font-bold text-white mb-2">What kind of storytelling do you connect with most?</h2>
+                            <p className="text-gray-400">Single select - Choose your preferred storytelling style</p>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {['Happy ending', 'Bittersweet ending', 'Open ending', 'Tragic ending', "Doesn't matter if the movie is good"].map((ending) => (
+                            {['Strong characters & emotional depth', 'Smart plots & twists', 
+                              'Stylish / larger-than-life storytelling', 'Realistic & slice-of-life', 
+                              'Visuals, music & cinematic feel'].map((storytelling) => (
                                 <button
-                                    key={ending}
-                                    onClick={() => handleSingleSelect('endings', ending)}
+                                    key={storytelling}
+                                    onClick={() => handleSingleSelect('storytelling', storytelling)}
                                     className={`p-4 rounded-lg border-2 transition-all ${
-                                        preferences.endings === ending
+                                        preferences.storytelling === storytelling
                                             ? 'border-green-500 bg-green-500/20 text-green-300'
                                             : 'border-gray-600 bg-gray-800 text-gray-300 hover:border-gray-500'
                                     }`}
                                 >
-                                    {ending}
+                                    {storytelling}
                                 </button>
                             ))}
                         </div>
@@ -276,23 +309,23 @@ const AIMovieRecommendationPage = () => {
                 return (
                     <div className="space-y-6">
                         <div className="text-center">
-                            <h2 className="text-2xl font-bold text-white mb-2">What story themes attract you the most?</h2>
-                            <p className="text-gray-400">Select themes that interest you</p>
+                            <h2 className="text-2xl font-bold text-white mb-2">What matters most to you in a movie?</h2>
+                            <p className="text-gray-400">Single select - Choose what you value most</p>
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                            {['Love & relationships', 'Friendship', 'Coming-of-age', 'Family drama', 'Crime & investigation',
-                              'Revenge', 'Social issues', 'Fantasy / world-building', 'Survival / adventure', 
-                              'Psychological themes', 'Historical / period films'].map((theme) => (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {['Feel-good or satisfying experience', 'Emotional or thought-provoking impact', 
+                              'High-energy entertainment', 'Realism (ending doesn\'t matter)', 
+                              'Depends on the movie'].map((matters) => (
                                 <button
-                                    key={theme}
-                                    onClick={() => handleMultiSelect('themes', theme)}
-                                    className={`p-3 rounded-lg border-2 transition-all text-sm ${
-                                        preferences.themes.includes(theme)
+                                    key={matters}
+                                    onClick={() => handleSingleSelect('matters', matters)}
+                                    className={`p-4 rounded-lg border-2 transition-all ${
+                                        preferences.matters === matters
                                             ? 'border-green-500 bg-green-500/20 text-green-300'
                                             : 'border-gray-600 bg-gray-800 text-gray-300 hover:border-gray-500'
                                     }`}
                                 >
-                                    {theme}
+                                    {matters}
                                 </button>
                             ))}
                         </div>
@@ -303,153 +336,27 @@ const AIMovieRecommendationPage = () => {
                 return (
                     <div className="space-y-6">
                         <div className="text-center">
-                            <h2 className="text-2xl font-bold text-white mb-2">Do you enjoy movies with:</h2>
-                            <p className="text-gray-400">Select what you value most in films</p>
+                            <h2 className="text-2xl font-bold text-white mb-2">Which movie era do you prefer?</h2>
+                            <p className="text-gray-400">
+                                {isEraMulti
+                                    ? 'Multi-select - Choose all eras you enjoy'
+                                    : 'Single select'
+                                }
+                            </p>
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                            {['Strong emotional depth', 'Strong comedy', 'Strong action', 'Strong plot twists',
-                              'Strong character development', 'Music-driven storytelling', 'Realistic slice-of-life vibes',
-                              'Larger-than-life moments'].map((enjoy) => (
+                            {['Before 1990', '1990 – 2000', '2000 – 2010', 
+                              '2010 – 2020', '2020 – Present', 'Any Era is fine'].map((era) => (
                                 <button
-                                    key={enjoy}
-                                    onClick={() => handleMultiSelect('enjoys', enjoy)}
+                                    key={era}
+                                    onClick={() => handleMultiSelect('era', era)}
                                     className={`p-3 rounded-lg border-2 transition-all text-sm ${
-                                        preferences.enjoys.includes(enjoy)
+                                        preferences.era.includes(era)
                                             ? 'border-green-500 bg-green-500/20 text-green-300'
                                             : 'border-gray-600 bg-gray-800 text-gray-300 hover:border-gray-500'
                                     }`}
                                 >
-                                    {enjoy}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                );
-
-            case 7:
-                return (
-                    <div className="space-y-6">
-                        <div className="text-center">
-                            <h2 className="text-2xl font-bold text-white mb-2">What kind of pace do you prefer?</h2>
-                            <p className="text-gray-400">Choose your preferred movie pacing</p>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {['Slow-burn', 'Medium paced', 'Fast paced', 'Depends on the genre'].map((pace) => (
-                                <button
-                                    key={pace}
-                                    onClick={() => handleSingleSelect('pace', pace)}
-                                    className={`p-4 rounded-lg border-2 transition-all ${
-                                        preferences.pace === pace
-                                            ? 'border-green-500 bg-green-500/20 text-green-300'
-                                            : 'border-gray-600 bg-gray-800 text-gray-300 hover:border-gray-500'
-                                    }`}
-                                >
-                                    {pace}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                );
-
-            case 8:
-                return (
-                    <div className="space-y-6">
-                        <div className="text-center">
-                            <h2 className="text-2xl font-bold text-white mb-2">What kind of characters do you connect with?</h2>
-                            <p className="text-gray-400">Select character types that resonate with you</p>
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                            {['Boy-next-door / girl-next-door', 'Flawed but relatable characters', 'Strong, confident leads',
-                              'Quirky, funny characters', 'Dark, mysterious characters', 'Underdogs',
-                              'Characters with deep emotional arcs'].map((character) => (
-                                <button
-                                    key={character}
-                                    onClick={() => handleMultiSelect('characters', character)}
-                                    className={`p-3 rounded-lg border-2 transition-all text-sm ${
-                                        preferences.characters.includes(character)
-                                            ? 'border-green-500 bg-green-500/20 text-green-300'
-                                            : 'border-gray-600 bg-gray-800 text-gray-300 hover:border-gray-500'
-                                    }`}
-                                >
-                                    {character}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                );
-
-            case 9:
-                return (
-                    <div className="space-y-6">
-                        <div className="text-center">
-                            <h2 className="text-2xl font-bold text-white mb-2">What kind of movie experience do you enjoy most?</h2>
-                            <p className="text-gray-400">Choose your ideal movie experience</p>
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                            {['Feel-good & relaxing', 'Emotional rollercoaster', 'Thought-provoking', 'Adrenaline/high-energy',
-                              'Beautiful visuals & cinematography', 'Strong writing & performances', 'Escapist entertainment',
-                              'Realistic & grounded'].map((experience) => (
-                                <button
-                                    key={experience}
-                                    onClick={() => handleSingleSelect('experience', experience)}
-                                    className={`p-3 rounded-lg border-2 transition-all text-sm ${
-                                        preferences.experience === experience
-                                            ? 'border-green-500 bg-green-500/20 text-green-300'
-                                            : 'border-gray-600 bg-gray-800 text-gray-300 hover:border-gray-500'
-                                    }`}
-                                >
-                                    {experience}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                );
-
-            case 10:
-                return (
-                    <div className="space-y-6">
-                        <div className="text-center">
-                            <h2 className="text-2xl font-bold text-white mb-2">How do you usually watch movies?</h2>
-                            <p className="text-gray-400">Select your typical movie-watching situation</p>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {['Alone', 'With friends', 'With partner', 'With family', 'Depends on the mood'].map((watchWith) => (
-                                <button
-                                    key={watchWith}
-                                    onClick={() => handleSingleSelect('watchWith', watchWith)}
-                                    className={`p-4 rounded-lg border-2 transition-all ${
-                                        preferences.watchWith === watchWith
-                                            ? 'border-green-500 bg-green-500/20 text-green-300'
-                                            : 'border-gray-600 bg-gray-800 text-gray-300 hover:border-gray-500'
-                                    }`}
-                                >
-                                    {watchWith}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                );
-
-            case 11:
-                return (
-                    <div className="space-y-6">
-                        <div className="text-center">
-                            <h2 className="text-2xl font-bold text-white mb-2">What release period do you prefer?</h2>
-                            <p className="text-gray-400">Choose your preferred era of films</p>
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                            {['Classics (1970s & earlier)', '1980s', '1990s', 'Early 2000s (2000–2010)',
-                              'Recent (2010–2020)', 'Very recent (2020–present)', 'No preference — any era is fine'].map((period) => (
-                                <button
-                                    key={period}
-                                    onClick={() => handleSingleSelect('releasePeriod', period)}
-                                    className={`p-3 rounded-lg border-2 transition-all text-sm ${
-                                        preferences.releasePeriod === period
-                                            ? 'border-green-500 bg-green-500/20 text-green-300'
-                                            : 'border-gray-600 bg-gray-800 text-gray-300 hover:border-gray-500'
-                                    }`}
-                                >
-                                    {period}
+                                    {era}
                                 </button>
                             ))}
                         </div>

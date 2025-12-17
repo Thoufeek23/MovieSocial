@@ -37,20 +37,15 @@ const AIMovieRecommendationPage = () => {
     genres: [],
     mood: '',
     languages: [],
-    endings: '',
-    themes: [],
-    enjoys: [],
-    pace: '',
-    characters: [],
-    experience: '',
-    watchWith: '',
-    releasePeriod: ''
+    storytelling: '',
+    matters: '',
+    era: []
   });
   const [recommendations, setRecommendations] = useState([]);
   const [showResults, setShowResults] = useState(false);
   const [showMoreSuggestions, setShowMoreSuggestions] = useState(false);
 
-  const totalSteps = 11;
+  const totalSteps = 6;
 
   // Load stored recommendations on component mount
   useEffect(() => {
@@ -78,12 +73,38 @@ const AIMovieRecommendationPage = () => {
   };
 
   const handleMultiSelect = (field, value) => {
-    setPreferences(prev => ({
-      ...prev,
-      [field]: prev[field].includes(value)
-        ? prev[field].filter(item => item !== value)
-        : [...prev[field], value]
-    }));
+    // Special handling for "Any language is fine" and "Any Era is fine"
+    if (field === 'languages' && value === 'Any language is fine') {
+      setPreferences(prev => ({
+        ...prev,
+        [field]: ['Any language is fine']
+      }));
+    } else if (field === 'era' && value === 'Any Era is fine') {
+      setPreferences(prev => ({
+        ...prev,
+        [field]: ['Any Era is fine']
+      }));
+    } else if (field === 'languages' || field === 'era') {
+      // Remove "Any..." option when selecting other options
+      setPreferences(prev => {
+        const anyOption = field === 'languages' ? 'Any language is fine' : 'Any Era is fine';
+        const filtered = prev[field].filter(item => item !== anyOption);
+        
+        return {
+          ...prev,
+          [field]: filtered.includes(value)
+            ? filtered.filter(item => item !== value)
+            : [...filtered, value]
+        };
+      });
+    } else {
+      setPreferences(prev => ({
+        ...prev,
+        [field]: prev[field].includes(value)
+          ? prev[field].filter(item => item !== value)
+          : [...prev[field], value]
+      }));
+    }
   };
 
   const handleSingleSelect = (field, value) => {
@@ -112,14 +133,9 @@ const AIMovieRecommendationPage = () => {
       genres: [],
       mood: '',
       languages: [],
-      endings: '',
-      themes: [],
-      enjoys: [],
-      pace: '',
-      characters: [],
-      experience: '',
-      watchWith: '',
-      releasePeriod: ''
+      storytelling: '',
+      matters: '',
+      era: []
     });
     setCurrentStep(1);
     setShowResults(false);
@@ -134,7 +150,7 @@ const AIMovieRecommendationPage = () => {
     setLoading(true);
     try {
       // Validate preferences before sending
-      const requiredFields = ['genres', 'mood', 'languages'];
+      const requiredFields = ['genres', 'mood', 'languages', 'storytelling', 'matters'];
       const missingFields = requiredFields.filter(field => {
         const value = preferences[field];
         return !value || (Array.isArray(value) && value.length === 0);
@@ -182,90 +198,57 @@ const AIMovieRecommendationPage = () => {
   const renderStepContent = () => {
     const stepData = [
       {
-        title: 'What genres do you usually enjoy?',
-        subtitle: 'Choose any number that appeal to you',
-        options: ['Romance / Rom-com', 'Action', 'Thriller / Mystery', 'Horror', 'Drama', 'Comedy', 
-                 'Sci-fi / Fantasy', 'Adventure', 'Animated', 'Crime / Gangster', 'Slice-of-life', 'Feel-good movies'],
+        title: 'What types of movies do you enjoy most?',
+        subtitle: 'Multi-select - Choose all that appeal to you',
+        options: ['Romance / Drama', 'Comedy / Feel-good', 'Action / Adventure', 
+                 'Thriller / Crime / Mystery', 'Sci-fi / Fantasy / Animated'],
         field: 'genres',
         multiSelect: true
       },
       {
-        title: 'What kind of mood do you prefer in movies?',
-        subtitle: 'Choose the mood that resonates with you',
-        options: ['Light-hearted & fun', 'Deep & emotional', 'Intense & gripping', 'Slow & realistic',
-                 'Fast-paced & exciting', 'Inspirational / uplifting', 'A mix of emotional + entertaining'],
+        title: 'What mood do you usually prefer in movies?',
+        subtitle: 'Single select - Choose one that resonates most',
+        options: ['Light-hearted & fun', 'Deep & emotional', 'Intense & gripping',
+                 'Fast-paced & exciting', 'A mix of emotional + entertaining'],
         field: 'mood',
         multiSelect: false
       },
       {
-        title: 'What languages do you prefer?',
-        subtitle: 'Select all languages you\'re comfortable with',
+        title: 'Which languages do you prefer?',
+        subtitle: preferences.languages.includes('Any language is fine') 
+          ? 'Single select' 
+          : 'Multi-select - Choose all languages you\'re comfortable with',
         options: ['English', 'Tamil', 'Telugu', 'Malayalam', 'Hindi', 'Kannada', 'Korean', 'Japanese', 'Any language is fine'],
         field: 'languages',
-        multiSelect: true
+        multiSelect: !preferences.languages.includes('Any language is fine')
       },
       {
-        title: 'What type of endings do you prefer?',
-        subtitle: 'Choose your preferred story conclusion style',
-        options: ['Happy ending', 'Bittersweet ending', 'Open ending', 'Tragic ending', "Doesn't matter if the movie is good"],
-        field: 'endings',
+        title: 'What kind of storytelling do you connect with most?',
+        subtitle: 'Single select - Choose your preferred storytelling style',
+        options: ['Strong characters & emotional depth', 'Smart plots & twists', 
+                 'Stylish / larger-than-life storytelling', 'Realistic & slice-of-life', 
+                 'Visuals, music & cinematic feel'],
+        field: 'storytelling',
         multiSelect: false
       },
       {
-        title: 'What story themes attract you the most?',
-        subtitle: 'Select themes that interest you',
-        options: ['Love & relationships', 'Friendship', 'Coming-of-age', 'Family drama', 'Crime & investigation',
-                 'Revenge', 'Social issues', 'Psychological themes', 'Survival / adventure', 'Historical / period films', 'Fantasy / world-building'],
-        field: 'themes',
-        multiSelect: true
-      },
-      {
-        title: 'Do you enjoy movies with:',
-        subtitle: 'Select what you value most in films',
-        options: ['Strong emotional depth', 'Strong comedy', 'Strong action', 'Strong plot twists',
-                 'Strong character development', 'Music-driven storytelling', 'Realistic slice-of-life vibes',
-                 'Larger-than-life moments'],
-        field: 'enjoys',
-        multiSelect: true
-      },
-      {
-        title: 'What kind of pace do you prefer?',
-        subtitle: 'Choose your preferred movie pacing',
-        options: ['Slow-burn', 'Medium paced', 'Fast paced', 'Depends on the genre'],
-        field: 'pace',
+        title: 'What matters most to you in a movie?',
+        subtitle: 'Single select - Choose what you value most',
+        options: ['Feel-good or satisfying experience', 'Emotional or thought-provoking impact', 
+                 'High-energy entertainment', 'Realism (ending doesn\'t matter)', 
+                 'Depends on the movie'],
+        field: 'matters',
         multiSelect: false
       },
       {
-        title: 'What kind of characters do you connect with?',
-        subtitle: 'Select character types that resonate with you',
-        options: ['Boy-next-door / girl-next-door', 'Flawed but relatable characters', 'Strong, confident leads',
-                 'Quirky, funny characters', 'Dark, mysterious characters', 'Underdogs',
-                 'Characters with deep emotional arcs'],
-        field: 'characters',
-        multiSelect: true
-      },
-      {
-        title: 'What kind of movie experience do you enjoy most?',
-        subtitle: 'Choose your ideal movie experience',
-        options: ['Feel-good & relaxing', 'Emotional rollercoaster', 'Thought-provoking', 'Adrenaline/high-energy', 'Escapist entertainment',
-                 'Realistic & grounded', 'Beautiful visuals & cinematography', 'Strong writing & performances'],
-        field: 'experience',
-        multiSelect: false
-      },
-      {
-        title: 'How do you usually watch movies?',
-        subtitle: 'Select your typical movie-watching situation',
-        options: ['Alone', 'With friends', 'With partner', 'With family', 'Depends on the mood'],
-        field: 'watchWith',
-        multiSelect: false
-      },
-      {
-        title: 'What release period do you prefer?',
-        subtitle: 'Choose your preferred era of films',
-        options: ['1970s & earlier', '1980s', '1990s', '2000 to 2010',
-                 '2010 to 2020', '2020 to present', 'No preference'],
-        field: 'releasePeriod',
-        multiSelect: false
+        title: 'Which movie era do you prefer?',
+        subtitle: preferences.era.includes('Any Era is fine')
+          ? 'Single select'
+          : 'Multi-select - Choose all eras you enjoy',
+        options: ['Before 1990', '1990 – 2000', '2000 – 2010', 
+                 '2010 – 2020', '2020 – Present', 'Any Era is fine'],
+        field: 'era',
+        multiSelect: !preferences.era.includes('Any Era is fine')
       }
     ];
 
