@@ -12,7 +12,7 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import { AuthContext } from '../../src/context/AuthContext';
 import Avatar from '../../components/Avatar';
-import { ConversationSkeleton } from '../../components/SkeletonLoader';
+import SkeletonLoader, { ConversationSkeleton } from '../../components/SkeletonLoader';
 import * as api from '../../src/api';
 import { useScrollToTop } from './_layout';
 import { Ionicons } from '@expo/vector-icons';
@@ -173,8 +173,16 @@ const MessagesScreen = () => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ConversationSkeleton />
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View style={{ paddingHorizontal: 20, paddingVertical: 16 }}>
+            <SkeletonLoader width={150} height={28} borderRadius={6} style={{ marginBottom: 4 }} />
+            <SkeletonLoader width={200} height={14} borderRadius={4} />
+          </View>
+        </View>
+        <View style={styles.content}>
+          <ConversationSkeleton />
+        </View>
       </View>
     );
   }

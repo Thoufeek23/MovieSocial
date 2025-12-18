@@ -1,9 +1,10 @@
-import React, { createContext, useContext, useRef } from 'react';
+import React, { createContext, useContext, useRef, useState } from 'react';
 import { Tabs } from 'expo-router';
 import { Home, Search, BookOpen, Puzzle, FileText, MessageSquare } from 'lucide-react-native';
-import { View, TouchableOpacity } from 'react-native';
+import { View, TouchableOpacity, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CustomHeader from '../../components/CustomHeader';
+import MSLogoModal from '../../components/MSLogoModal';
 import { usePathname } from 'expo-router';
 
 // Create context for scroll refs
@@ -18,6 +19,7 @@ export default function TabsLayout() {
   const pathname = usePathname();
   const scrollRefs = useRef({});
   const insets = useSafeAreaInsets();
+  const [isModalVisible, setIsModalVisible] = useState(false);
   
   const scrollToTop = (tabName) => {
     const scrollRef = scrollRefs.current[tabName];
@@ -47,8 +49,9 @@ export default function TabsLayout() {
     if (path.includes('/search')) return 'search';
     if (path.includes('/discussions')) return 'discussions';
     if (path.includes('/reviews')) return 'reviews';
+    if (path.includes('/ranks')) return 'ranks';
     if (path.includes('/modle')) return 'modle';
-    if (path.includes('/messages')) return 'messages'; // Updated
+    if (path.includes('/messages')) return 'messages';
     return 'index';
   };
   
@@ -59,8 +62,9 @@ export default function TabsLayout() {
     if (pathname.includes('/search')) return { title: 'Explore' };
     if (pathname.includes('/discussions')) return { title: 'Discussions' };
     if (pathname.includes('/reviews')) return { title: 'Reviews' };
+    if (pathname.includes('/ranks')) return { title: 'Ranks' };
     if (pathname.includes('/modle')) return { title: 'Modle' };
-    if (pathname.includes('/messages')) return { title: 'Messages' }; // Updated
+    if (pathname.includes('/messages')) return { title: 'Messages' };
     
     return { showLogo: true };
   };
@@ -69,6 +73,7 @@ export default function TabsLayout() {
     <ScrollToTopContext.Provider value={{ scrollToTop, registerScrollRef }}>
       <View style={{ flex: 1 }}>
         <CustomHeader {...getHeaderProps()} />
+        <MSLogoModal visible={isModalVisible} onClose={() => setIsModalVisible(false)} />
         <Tabs
           screenOptions={{
             headerShown: false,
@@ -130,16 +135,35 @@ export default function TabsLayout() {
               tabBarButton: (props) => <TouchableOpacity {...props} onPress={(e) => handleTabPress('search', () => props.onPress?.(e))} />
             }}
           />
+          {/* MS Logo - Opens Modal Menu */}
           <Tabs.Screen
-            name="discussions"
+            name="ms-menu"
             options={{
-              title: 'Discussions',
-              tabBarIcon: ({ color, focused }) => (
-                <View style={{ alignItems: 'center', justifyContent: 'center', width: 45, height: 35, backgroundColor: focused ? 'rgba(16, 185, 129, 0.15)' : 'transparent', borderRadius: 12 }}>
-                  <BookOpen color={focused ? '#10b981' : color} size={focused ? 26 : 24} strokeWidth={focused ? 2.5 : 2} />
+              title: 'Menu',
+              tabBarIcon: ({ focused }) => (
+                <View style={{ alignItems: 'center', justifyContent: 'center', width: 50, height: 40, backgroundColor: focused ? 'rgba(16, 185, 129, 0.15)' : 'transparent', borderRadius: 12 }}>
+                  <Image 
+                    source={require('../../assets/images/MS_logo.png')} 
+                    style={{ width: 36, height: 36 }}
+                    resizeMode="contain"
+                  />
                 </View>
               ),
-              tabBarButton: (props) => <TouchableOpacity {...props} onPress={(e) => handleTabPress('discussions', () => props.onPress?.(e))} />
+              tabBarButton: (props) => (
+                <TouchableOpacity 
+                  {...props}
+                  style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
+                  onPress={() => setIsModalVisible(true)}
+                >
+                  <View style={{ alignItems: 'center', justifyContent: 'center', width: 50, height: 40, backgroundColor: 'rgba(16, 185, 129, 0.15)', borderRadius: 12 }}>
+                    <Image 
+                      source={require('../../assets/images/MS_logo.png')} 
+                      style={{ width: 36, height: 36 }}
+                      resizeMode="contain"
+                    />
+                  </View>
+                </TouchableOpacity>
+              ),
             }}
           />
           <Tabs.Screen
@@ -155,19 +179,6 @@ export default function TabsLayout() {
             }}
           />
           <Tabs.Screen
-            name="reviews"
-            options={{
-              title: 'Reviews',
-              tabBarIcon: ({ color, focused }) => (
-                <View style={{ alignItems: 'center', justifyContent: 'center', width: 45, height: 35, backgroundColor: focused ? 'rgba(16, 185, 129, 0.15)' : 'transparent', borderRadius: 12 }}>
-                  <FileText color={focused ? '#10b981' : color} size={focused ? 26 : 24} strokeWidth={focused ? 2.5 : 2} />
-                </View>
-              ),
-              tabBarButton: (props) => <TouchableOpacity {...props} onPress={(e) => handleTabPress('reviews', () => props.onPress?.(e))} />
-            }}
-          />
-          {/* NEW MESSAGES TAB - REPLACING PROFILE */}
-          <Tabs.Screen
             name="messages"
             options={{
               title: 'Messages',
@@ -179,12 +190,22 @@ export default function TabsLayout() {
               tabBarButton: (props) => <TouchableOpacity {...props} onPress={(e) => handleTabPress('messages', () => props.onPress?.(e))} />
             }}
           />
-          {/* Hiding Profile Tab from bar, but keeping route accessible if needed via deep link, though standard nav is via Header */}
+          {/* Hide these from tab bar but keep them accessible as routes */}
           <Tabs.Screen 
-             name="profile" 
-             options={{ 
-               href: null,
-             }} 
+            name="discussions" 
+            options={{ href: null }} 
+          />
+          <Tabs.Screen 
+            name="reviews" 
+            options={{ href: null }} 
+          />
+          <Tabs.Screen 
+            name="ranks" 
+            options={{ href: null }} 
+          />
+          <Tabs.Screen 
+            name="profile" 
+            options={{ href: null }} 
           />
         </Tabs>
       </View>

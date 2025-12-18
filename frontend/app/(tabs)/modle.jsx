@@ -11,6 +11,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../../src/context/AuthContext';
+import { ModleLanguageCardSkeleton } from '../../components/SkeletonLoader';
 import * as api from '../../src/api';
 import { useScrollToTop } from './_layout';
 
@@ -132,7 +133,7 @@ export default function ModlePage() {
         showsVerticalScrollIndicator={false}
       >
         {/* Title Section */}
-        <View style={styles.titleContainer}>
+        <View style={[styles.titleContainer, { marginTop: 16 }]}>
           <Text style={styles.title}>Modle — Movie Wordle</Text>
           <Text style={styles.subtitle}>Guess the movie of the day!</Text>
         </View>
@@ -166,10 +167,7 @@ export default function ModlePage() {
 
         {/* Content States */}
         {loading && user ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#10b981" />
-            <Text style={styles.loadingText}>Loading your progress...</Text>
-          </View>
+          <ModleLanguageCardSkeleton />
         ) : globalDailyLimitReached ? (
           /* Daily Limit State */
           <View style={styles.dailyLimitCard}>
@@ -237,10 +235,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#09090b',
-    paddingTop: 60, // Adjust based on header height/safe area
+    paddingTop: 100, // Position content below navbar
   },
   scrollContent: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 0,
     paddingBottom: 120, // Extra padding for bottom tab bar
   },
   titleContainer: {

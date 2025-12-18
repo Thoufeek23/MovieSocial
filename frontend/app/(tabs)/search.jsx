@@ -94,13 +94,21 @@ export default function SearchPage() {
       </View>
 
       {showLoading ? (
-        <View style={styles.loadingContainer}>
-          <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>
-            {[1, 2, 3, 4].map((i) => (
-              <View key={i} style={styles.cardWrapper}>
-                <MovieCardSkeleton />
-              </View>
-            ))}
+        <View style={styles.content}>
+          {/* Section Title Skeleton */}
+          <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 }}>
+            <SkeletonLoader width={150} height={20} borderRadius={4} />
+          </View>
+          
+          {/* Grid Layout Skeleton */}
+          <View style={{ paddingHorizontal: 20 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <View key={i} style={{ width: cardWidth }}>
+                  <MovieCardSkeleton />
+                </View>
+              ))}
+            </View>
           </View>
         </View>
       ) : (

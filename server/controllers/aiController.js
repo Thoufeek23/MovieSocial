@@ -7,7 +7,7 @@ const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/
 
 // Rate limiting: Track last request time and implement cooldown
 let lastGeminiRequest = 0;
-const MIN_REQUEST_INTERVAL = 60000; // 60 seconds (1 minute) between requests to avoid rate limits
+const MIN_REQUEST_INTERVAL = 5000; // 5 seconds between requests to avoid rate limits
 
 // Helper function to wait for rate limit cooldown
 const waitForRateLimit = async () => {
@@ -45,7 +45,7 @@ const callGeminiWithRetry = async (prompt, maxRetries = 2) => {
                 {
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-goog-api-key': GEMINI_API_KEY
+                        'x-goog-api-key': GEMINI_API_KEY
                     },
                     timeout: 30000
                 }
@@ -53,10 +53,18 @@ const callGeminiWithRetry = async (prompt, maxRetries = 2) => {
             
             return response;
         } catch (error) {
+            logger.error(`Gemini API error (attempt ${attempt}/${maxRetries}):`, {
+                status: error.response?.status,
+                statusText: error.response?.statusText,
+                data: error.response?.data,
+                message: error.message
+            });
+            
             if (error.response?.status === 429) {
                 if (attempt < maxRetries) {
-                    // Exponential backoff: wait much longer with each retry
-                    const backoffTime = 60000 * attempt; // 60s, 120s
+                    // Exponential backoff: shorter waits (5s, 10s) for retry attempts
+                    const baseBackoff = 5000; // 5 seconds
+                    const backoffTime = baseBackoff * attempt; // 5s, 10s
                     logger.info(`Rate limited, retrying in ${backoffTime / 1000}s (attempt ${attempt}/${maxRetries})`);
                     await new Promise(resolve => setTimeout(resolve, backoffTime));
                     continue;
@@ -169,11 +177,21 @@ Return ONLY a valid JSON array:
             response = await callGeminiWithRetry(prompt);
         } catch (apiError) {
             // If API fails completely, use fallback immediately
+            logger.error('Gemini API call failed after retries:', {
+                status: apiError.response?.status,
+                statusText: apiError.response?.statusText,
+                data: apiError.response?.data,
+                message: apiError.message
+            });
+            
             if (apiError.response?.status === 429) {
                 logger.warn('Gemini API rate limit exceeded, using fallback recommendations');
                 return await provideFallbackRecommendations(req, res, { genres, mood, languages, storytelling, matters, era });
             }
-            throw apiError;
+            
+            // For any other API error, use fallback instead of throwing
+            logger.warn('Using fallback recommendations due to API error');
+            return await provideFallbackRecommendations(req, res, { genres, mood, languages, storytelling, matters, era });
         }
 
         const aiResponse = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -452,6 +470,10 @@ Return ONLY a valid JSON array:
             // Gemini API error
             const status = error.response.status;
             const errorData = error.response.data;
+            // Log response headers for diagnosis
+            if (error.response.headers) {
+                logger.info('AI error response headers: ' + JSON.stringify(error.response.headers));
+            }
             
             if (status === 400) {
                 return res.status(400).json({ 
@@ -464,8 +486,9 @@ Return ONLY a valid JSON array:
                     details: 'Please check API key configuration'
                 });
             } else if (status === 429) {
-                // Return fallback recommendations instead of error
+                // Log and return fallback recommendations instead of error
                 logger.warn('Rate limit hit, providing fallback recommendations');
+                logger.warn('429 response headers: ' + JSON.stringify(error.response.headers || {}));
                 return await provideFallbackRecommendations(req, res, req.body);
             }
             
@@ -516,27 +539,37 @@ const testAIConnection = async (req, res) => {
             {
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-goog-api-key': GEMINI_API_KEY
+                    'x-goog-api-key': GEMINI_API_KEY
                 },
                 timeout: 10000
             }
         );
 
         const aiResponse = testResponse.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        
+        // Log response headers for diagnosis (may include rate-limit/quota info)
+        logger.info('AI test response headers: ' + JSON.stringify(testResponse.headers));
+
         res.json({
             msg: 'AI service is working',
             configured: true,
             response: aiResponse,
-            status: 'success'
+            status: 'success',
+            headers: testResponse.headers
         });
 
     } catch (error) {
+        // Log headers if available to help diagnose quota/rate-limit
+        if (error.response && error.response.headers) {
+            logger.info('AI test error response headers: ' + JSON.stringify(error.response.headers));
+        }
+
         res.status(500).json({
             msg: 'AI service test failed',
             configured: !!GEMINI_API_KEY,
             error: error.message,
-            status: 'failed'
+            status: 'failed',
+            // Include headers if present so caller can inspect rate-limit info
+            headers: error.response?.headers || null
         });
     }
 };

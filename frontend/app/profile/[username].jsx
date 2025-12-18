@@ -6,7 +6,8 @@ import {
   StyleSheet, 
   Alert, 
   RefreshControl,
-  TouchableOpacity
+  TouchableOpacity,
+  Image
 } from 'react-native';
 import { useLocalSearchParams, useRouter, usePathname } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,53 +22,83 @@ import DiscussionListSection from '../../components/DiscussionListSection';
 import EditProfileModal from '../../components/EditProfileModal';
 import FollowListModal from '../../components/FollowListModal';
 import SkeletonLoader, { ProfileHeaderSkeleton } from '../../components/SkeletonLoader';
+import MSLogoModal from '../../components/MSLogoModal';
 
-// Bottom navigation component matching the tabs layout
+// Bottom navigation component matching the tabs layout with MS logo
 const StandardBottomNavigation = ({ currentUser }) => {
   const pathname = usePathname();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const [isModalVisible, setIsModalVisible] = useState(false);
   
   const tabs = [
     { name: 'index', icon: Home, route: '/(tabs)/', title: 'Home' },
     { name: 'search', icon: Search, route: '/(tabs)/search', title: 'Search' },
-    { name: 'discussions', icon: BookOpen, route: '/(tabs)/discussions', title: 'Discussions' },
+    { name: 'ms-menu', icon: null, route: null, title: 'Menu', isLogo: true },
     { name: 'modle', icon: Puzzle, route: '/(tabs)/modle', title: 'Modle' },
-    { name: 'reviews', icon: FileText, route: '/(tabs)/reviews', title: 'Reviews' },
     { name: 'messages', icon: MessageSquare, route: '/(tabs)/messages', title: 'Messages' },
   ];
 
-  const isProfileActive = pathname.includes('/profile');
-
   return (
-    <View style={[styles.bottomNavigation, { bottom: Math.max(20, insets.bottom + 10) }]}>
-      {tabs.map((tab) => {
-        const isActive = pathname === tab.route || (tab.name === 'index' && pathname === '/(tabs)/');
-        const IconComponent = tab.icon;
-        
-        return (
-          <TouchableOpacity
-            key={tab.name}
-            style={styles.tabItem}
-            onPress={() => {
-              router.push(tab.route);
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={[
-              styles.tabIconContainer,
-              isActive && styles.tabIconContainerActive
-            ]}>
-              <IconComponent
-                color={isActive ? '#10b981' : '#6b7280'}
-                size={isActive ? 26 : 24}
-                strokeWidth={isActive ? 2.5 : 2}
-              />
-            </View>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
+    <>
+      <View style={[styles.bottomNavigation, { bottom: Math.max(20, insets.bottom + 10) }]}>
+        {tabs.map((tab) => {
+          const isActive = pathname === tab.route || (tab.name === 'index' && pathname === '/(tabs)/');
+          const IconComponent = tab.icon;
+          
+          // MS Logo Button
+          if (tab.isLogo) {
+            return (
+              <TouchableOpacity
+                key={tab.name}
+                style={styles.tabItem}
+                onPress={() => setIsModalVisible(true)}
+                activeOpacity={0.7}
+              >
+                <View style={[
+                  styles.tabIconContainer,
+                  { width: 50, height: 40, backgroundColor: 'rgba(16, 185, 129, 0.15)' }
+                ]}>
+                  <Image 
+                    source={require('../../assets/images/MS_logo.png')} 
+                    style={{ width: 36, height: 36 }}
+                    resizeMode="contain"
+                  />
+                </View>
+              </TouchableOpacity>
+            );
+          }
+          
+          return (
+            <TouchableOpacity
+              key={tab.name}
+              style={styles.tabItem}
+              onPress={() => {
+                router.push(tab.route);
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={[
+                styles.tabIconContainer,
+                isActive && styles.tabIconContainerActive
+              ]}>
+                <IconComponent
+                  color={isActive ? '#10b981' : '#6b7280'}
+                  size={isActive ? 26 : 24}
+                  strokeWidth={isActive ? 2.5 : 2}
+                />
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      
+      {/* MS Logo Modal */}
+      <MSLogoModal 
+        visible={isModalVisible} 
+        onClose={() => setIsModalVisible(false)} 
+      />
+    </>
   );
 };
 

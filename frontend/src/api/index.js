@@ -6,7 +6,8 @@ const getApiUrl = () => {
     return process.env.REACT_APP_API_URL.replace(/\/$/, '');
   }
   // Use 10.0.2.2 for Android Emulator, or your LAN IP for physical devices
-  return "http://192.168.68.54:5001"; 
+  return "https://moviesocial-backend-khd2.onrender.com";
+  //return "http://192.168.1.42:5001"; 
 };
 
 const API = axios.create({ 
@@ -123,3 +124,16 @@ export const sendMessage = (username, content) => API.post('/messages', { recipi
 
 export const markMessagesRead = (username) => API.put(`/messages/${username}/read`);
 export const deleteMessage = (id) => API.delete(`/messages/${id}`);
+
+// --- Ranks ---
+export const fetchRanks = () => API.get('/ranks');
+export const createRank = (rankData) => API.post('/ranks', rankData);
+export const updateRank = (id, rankData) => API.put(`/ranks/${id}`, rankData);
+export const likeRank = (id) => API.put(`/ranks/${id}/like`);
+export const getRank = (id) => API.get(`/ranks/${id}`);
+export const deleteRank = (id) => API.delete(`/ranks/${id}`);
+export const postRankComment = (id, commentData) => API.post(`/ranks/${id}/comments`, commentData);
+export const editRankComment = (rankId, commentId, commentData) => API.put(`/ranks/${rankId}/comments/${commentId}`, commentData);
+export const deleteRankComment = (rankId, commentId) => API.delete(`/ranks/${rankId}/comments/${commentId}`);
+export const postRankReply = (rankId, commentId, replyData) => API.post(`/ranks/${rankId}/comments/${commentId}/replies`, replyData);
+export const deleteRankReply = (rankId, commentId, replyId) => API.delete(`/ranks/${rankId}/comments/${commentId}/replies/${replyId}`);

@@ -3,7 +3,7 @@ import { View, StyleSheet, Animated, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 /**
- * Skeleton Loader Component with Wave Animation (LinkedIn style)
+ * Professional Skeleton Loader Component with Smooth Wave Animation
  * Displays animated skeleton placeholders while content is loading
  * 
  * Usage:
@@ -16,22 +16,30 @@ const SkeletonLoader = ({
   borderRadius = 8, 
   style = {},
 }) => {
-  const shimmerAnim = useRef(new Animated.Value(-1)).current;
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.loop(
-      Animated.timing(shimmerAnim, {
-        toValue: 1,
-        duration: 4000,
-        easing: Easing.inOut(Easing.ease),
-        useNativeDriver: false,
-      })
+      Animated.sequence([
+        Animated.timing(shimmerAnim, {
+          toValue: 1,
+          duration: 1200,
+          easing: Easing.bezier(0.4, 0.0, 0.2, 1),
+          useNativeDriver: true,
+        }),
+        Animated.delay(300),
+      ])
     ).start();
   }, [shimmerAnim]);
 
   const translateX = shimmerAnim.interpolate({
-    inputRange: [-1, 1],
-    outputRange: ['-100%', '100%'],
+    inputRange: [0, 1],
+    outputRange: [-300, 300],
+  });
+
+  const opacity = shimmerAnim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0.3, 0.7, 0.3],
   });
 
   return (
@@ -42,7 +50,7 @@ const SkeletonLoader = ({
           width,
           height,
           borderRadius,
-          backgroundColor: '#374151',
+          backgroundColor: '#27272a',
           overflow: 'hidden',
         },
         style,
@@ -56,13 +64,14 @@ const SkeletonLoader = ({
           right: 0,
           bottom: 0,
           transform: [{ translateX }],
+          opacity,
         }}
       >
         <LinearGradient
-          colors={['#848485ff', '#818283ff', '#737475ff']}
+          colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.08)', 'rgba(255,255,255,0)']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
-          style={{ flex: 1 }}
+          style={{ flex: 1, width: 300 }}
         />
       </Animated.View>
     </View>
@@ -174,6 +183,118 @@ export const ConversationSkeleton = () => (
   </View>
 );
 
+// Rank Card Skeleton
+export const RankCardSkeleton = () => (
+  <View style={skeletonStyles.rankCardContainer}>
+    {/* Header */}
+    <View style={{ marginBottom: 12 }}>
+      <SkeletonLoader width="70%" height={20} borderRadius={4} style={{ marginBottom: 8 }} />
+      <SkeletonLoader width="85%" height={14} borderRadius={4} style={{ marginBottom: 12 }} />
+    </View>
+    
+    {/* User Info */}
+    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+      <SkeletonLoader width={28} height={28} borderRadius={14} style={{ marginRight: 8 }} />
+      <SkeletonLoader width={100} height={12} borderRadius={4} style={{ marginRight: 8 }} />
+      <SkeletonLoader width={60} height={12} borderRadius={4} />
+    </View>
+    
+    {/* Movie Count */}
+    <SkeletonLoader width={80} height={12} borderRadius={4} style={{ marginBottom: 8 }} />
+    
+    {/* Movie Strip */}
+    <View style={{ flexDirection: 'row', gap: 12 }}>
+      {[1, 2, 3, 4].map((i) => (
+        <SkeletonLoader key={i} width={80} height={112} borderRadius={8} />
+      ))}
+    </View>
+  </View>
+);
+
+// Search Result Skeleton
+export const SearchResultSkeleton = () => (
+  <View style={skeletonStyles.searchResultContainer}>
+    {[1, 2, 3].map((i) => (
+      <View key={i} style={{ flexDirection: 'row', marginBottom: 16, padding: 12, backgroundColor: '#27272a', borderRadius: 12 }}>
+        <SkeletonLoader width={60} height={84} borderRadius={8} style={{ marginRight: 12 }} />
+        <View style={{ flex: 1 }}>
+          <SkeletonLoader width="90%" height={16} borderRadius={4} style={{ marginBottom: 8 }} />
+          <SkeletonLoader width="60%" height={14} borderRadius={4} style={{ marginBottom: 8 }} />
+          <SkeletonLoader width="80%" height={12} borderRadius={4} />
+        </View>
+      </View>
+    ))}
+  </View>
+);
+
+// Modle Language Card Skeleton
+export const ModleLanguageCardSkeleton = () => (
+  <View style={skeletonStyles.modleCardContainer}>
+    {[1, 2, 3, 4].map((i) => (
+      <View key={i} style={{
+        backgroundColor: '#1f2937',
+        borderRadius: 12,
+        padding: 20,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#374151',
+      }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <SkeletonLoader width={120} height={20} borderRadius={4} />
+          <SkeletonLoader width={32} height={32} borderRadius={16} />
+        </View>
+        <SkeletonLoader width="70%" height={14} borderRadius={4} />
+      </View>
+    ))}
+  </View>
+);
+
+// Rank Detail Page Skeleton
+export const RankDetailSkeleton = () => (
+  <View style={{ padding: 20 }}>
+    {/* Header */}
+    <SkeletonLoader width="90%" height={32} borderRadius={8} style={{ marginBottom: 12 }} />
+    <SkeletonLoader width="100%" height={16} borderRadius={4} style={{ marginBottom: 8 }} />
+    <SkeletonLoader width="70%" height={16} borderRadius={4} style={{ marginBottom: 20 }} />
+    
+    {/* User Info */}
+    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+      <SkeletonLoader width={36} height={36} borderRadius={18} style={{ marginRight: 12 }} />
+      <View>
+        <SkeletonLoader width={100} height={14} borderRadius={4} style={{ marginBottom: 4 }} />
+        <SkeletonLoader width={60} height={12} borderRadius={4} />
+      </View>
+    </View>
+    
+    {/* Action Buttons */}
+    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 24 }}>
+      <SkeletonLoader width={80} height={40} borderRadius={20} />
+      <SkeletonLoader width={80} height={40} borderRadius={20} />
+    </View>
+    
+    {/* Movies List */}
+    <SkeletonLoader width={150} height={20} borderRadius={4} style={{ marginBottom: 16 }} />
+    {[1, 2, 3, 4].map((i) => (
+      <View key={i} style={{
+        backgroundColor: '#27272a',
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12
+      }}>
+        <SkeletonLoader width={36} height={36} borderRadius={18} />
+        <SkeletonLoader width={60} height={84} borderRadius={8} />
+        <View style={{ flex: 1 }}>
+          <SkeletonLoader width="90%" height={16} borderRadius={4} style={{ marginBottom: 8 }} />
+          <SkeletonLoader width="40%" height={14} borderRadius={4} />
+        </View>
+      </View>
+    ))}
+  </View>
+);
+
 const skeletonStyles = StyleSheet.create({
   movieCardContainer: {
     marginRight: 12,
@@ -219,5 +340,19 @@ const skeletonStyles = StyleSheet.create({
   },
   conversationContainer: {
     paddingTop: 20,
+  },
+  rankCardContainer: {
+    padding: 20,
+    backgroundColor: '#27272a',
+    borderRadius: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  searchResultContainer: {
+    paddingHorizontal: 16,
+  },
+  modleCardContainer: {
+    paddingHorizontal: 16,
   },
 });

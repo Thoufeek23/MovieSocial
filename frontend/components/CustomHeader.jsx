@@ -8,6 +8,7 @@ import {
   Dimensions,
   Animated
 } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -85,6 +86,13 @@ const CustomHeader = ({ title, showLogo = false }) => {
 
   return (
     <>
+      {/* Extended blur overlay covering entire top area */}
+      <BlurView
+        intensity={95}
+        tint="dark"
+        style={[styles.extendedBlurOverlay, { height: insets.top + 65 }]}
+      />
+      
       {/* Invisible backdrop when menu is expanded */}
       {isMenuExpanded && (
         <TouchableOpacity 
@@ -204,6 +212,14 @@ const CustomHeader = ({ title, showLogo = false }) => {
 };
 
 const styles = StyleSheet.create({
+  extendedBlurOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 9998,
+    width: width,
+  },
   headerContainer: {
     width: width,
     position: 'absolute',
@@ -220,23 +236,16 @@ const styles = StyleSheet.create({
   },
   glassBackground: {
     width: '100%',
-    // Enhanced glass morphism effect matching client's navbar
-    backgroundColor: 'rgba(0, 0, 0, 0.15)',
+    backgroundColor: 'transparent',
     borderBottomWidth: 0.5,
-    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
-    // Enhanced shadow for depth
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 6,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingBottom: 12,
   },
   leftSection: {
     flexDirection: 'row',
