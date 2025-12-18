@@ -172,7 +172,9 @@ const DiscussionDetailPage = () => {
     <KeyboardAvoidingView 
       style={styles.container} 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
+      <>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -283,6 +285,7 @@ const DiscussionDetailPage = () => {
           </View>
         </View>
       )}
+      </>
     </KeyboardAvoidingView>
   );
 };
@@ -416,9 +419,10 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   commentInputContainer: {
-    backgroundColor: '#1f2937',
+    backgroundColor: 'rgba(31, 41, 55, 0.95)',
     paddingHorizontal: 16,
     paddingVertical: 12,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
     borderTopWidth: 1,
     borderTopColor: '#374151',
   },
@@ -429,13 +433,16 @@ const styles = StyleSheet.create({
   },
   commentInput: {
     flex: 1,
-    backgroundColor: '#374151',
+    backgroundColor: 'transparent',
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#4b5563',
     paddingHorizontal: 16,
     paddingVertical: 12,
     color: 'white',
     fontSize: 14,
     maxHeight: 100,
+    minHeight: 44,
   },
   submitCommentButton: {
     backgroundColor: '#10b981',

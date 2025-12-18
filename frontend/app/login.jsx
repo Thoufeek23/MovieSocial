@@ -10,6 +10,7 @@ import {
   Platform, 
   TouchableOpacity,
   Pressable,
+  ScrollView,
   StyleSheet,
   Dimensions
 } from 'react-native';
@@ -80,6 +81,7 @@ export default function LoginPage() {
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={loginStyles.container}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
       <ImageBackground
         source={posterImages[currentBackdrop]}
@@ -89,6 +91,11 @@ export default function LoginPage() {
         {/* Enhanced gradient overlay for better text readability */}
         <View style={loginStyles.overlay}>
           <SafeAreaView style={loginStyles.safeArea}>
+            <ScrollView 
+              contentContainerStyle={{ flexGrow: 1 }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
             {/* Header Section */}
               <MotiView
                 from={{ opacity: 0, translateY: 30 }}
@@ -227,6 +234,7 @@ export default function LoginPage() {
                   </View>
                 </MotiView>
               </View>
+            </ScrollView>
           </SafeAreaView>
         </View>
       </ImageBackground>

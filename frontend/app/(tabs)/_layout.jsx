@@ -143,7 +143,7 @@ export default function TabsLayout() {
               tabBarIcon: ({ focused }) => (
                 <View style={{ alignItems: 'center', justifyContent: 'center', width: 50, height: 40, backgroundColor: focused ? 'rgba(16, 185, 129, 0.15)' : 'transparent', borderRadius: 12 }}>
                   <Image 
-                    source={require('../../assets/images/MS_logo.png')} 
+                    source={require('../../assets/images/MS_icon.png')} 
                     style={{ width: 36, height: 36 }}
                     resizeMode="contain"
                   />
@@ -157,7 +157,7 @@ export default function TabsLayout() {
                 >
                   <View style={{ alignItems: 'center', justifyContent: 'center', width: 50, height: 40, backgroundColor: 'rgba(16, 185, 129, 0.15)', borderRadius: 12 }}>
                     <Image 
-                      source={require('../../assets/images/MS_logo.png')} 
+                      source={require('../../assets/images/MS_icon.png')} 
                       style={{ width: 36, height: 36 }}
                       resizeMode="contain"
                     />

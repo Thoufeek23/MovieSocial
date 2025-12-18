@@ -299,48 +299,48 @@ const ModleGame = ({ language = 'English' }) => {
     <KeyboardAvoidingView 
       style={styles.container} 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
-      <View style={styles.fixedHeader}>
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Date</Text>
-            <Text style={styles.statValue}>{puzzle.date}</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Streak</Text>
-            <Text style={styles.statValue}>{streak} 🔥</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Guesses</Text>
-            <Text style={styles.statValue}>{guesses.length}</Text>
-          </View>
-        </View>
-        {todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily) ? (
-          <View style={styles.solvedBadge}>
-            <Ionicons 
-              name={todayPlayed.globalDaily ? "alert-circle" : "checkmark-circle"} 
-              size={16} 
-              color={todayPlayed.globalDaily ? "#f59e0b" : "#10b981"} 
-            />
-            <Text style={styles.solvedText}>
-              {todayPlayed.globalDaily 
-                ? "Daily limit reached!" 
-                : "Solved! Come back tomorrow"}
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.playingBadge}>
-            <Ionicons name="game-controller" size={16} color="#f59e0b" />
-            <Text style={styles.playingText}>Hints: {revealedHints}/{maxReveal}</Text>
-          </View>
-        )}
-      </View>
-
       <ScrollView 
         style={styles.mainContent} 
         contentContainerStyle={styles.mainContentContainer}
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.headerSection}>
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Text style={styles.statLabel}>Date</Text>
+              <Text style={styles.statValue}>{puzzle.date}</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statLabel}>Streak</Text>
+              <Text style={styles.statValue}>{streak} 🔥</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statLabel}>Guesses</Text>
+              <Text style={styles.statValue}>{guesses.length}</Text>
+            </View>
+          </View>
+          {todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily) ? (
+            <View style={styles.solvedBadge}>
+              <Ionicons 
+                name={todayPlayed.globalDaily ? "alert-circle" : "checkmark-circle"} 
+                size={16} 
+                color={todayPlayed.globalDaily ? "#f59e0b" : "#10b981"} 
+              />
+              <Text style={styles.solvedText}>
+                {todayPlayed.globalDaily 
+                  ? "Daily limit reached!" 
+                  : "Solved! Come back tomorrow"}
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.playingBadge}>
+              <Ionicons name="game-controller" size={16} color="#f59e0b" />
+              <Text style={styles.playingText}>Hints: {revealedHints}/{maxReveal}</Text>
+            </View>
+          )}
+        </View>
         {todayPlayed && (todayPlayed.correct || todayPlayed.globalDaily) && (
           <Animated.View 
             style={[
@@ -465,39 +465,28 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: 16,
   },
-  fixedHeader: {
+  headerSection: {
     backgroundColor: '#0f172a',
     paddingHorizontal: 20,
     paddingVertical: 20,
-    paddingTop: Platform.OS === 'ios' ? 55 : 25,
+    paddingTop: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#1e293b',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
+    marginBottom: 20,
   },
   mainContent: {
     flex: 1,
     backgroundColor: '#09090b',
   },
   mainContentContainer: {
-    padding: 20,
-    paddingBottom: 20,
+    paddingBottom: 140,
   },
   fixedInputSection: {
-    backgroundColor: '#0f172a',
+    backgroundColor: 'transparent',
     paddingHorizontal: 20,
-    paddingVertical: 20,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
-    borderTopWidth: 1,
-    borderTopColor: '#1e293b',
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
+    paddingVertical: 16,
+    paddingBottom: Platform.OS === 'ios' ? 32 : 16,
+    borderTopWidth: 0,
   },
   inputContainer: {
     backgroundColor: 'transparent',
@@ -712,22 +701,18 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    backgroundColor: '#1e293b',
+    backgroundColor: 'transparent',
     borderRadius: 16,
     paddingHorizontal: 20,
     paddingVertical: 18,
     fontSize: 16,
     color: '#f1f5f9',
     borderWidth: 2,
-    borderColor: '#334155',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    borderColor: '#4b5563',
+    minHeight: 56,
   },
   inputDisabled: {
-    backgroundColor: '#111827',
+    backgroundColor: 'rgba(17, 24, 39, 0.3)',
     borderColor: '#1f2937',
     color: '#6b7280',
   },

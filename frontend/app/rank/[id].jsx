@@ -238,7 +238,7 @@ export default function RankDetailPage() {
     <KeyboardAvoidingView 
       style={{ flex: 1, backgroundColor: '#18181b' }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
     >
       <Stack.Screen 
         options={{
@@ -489,7 +489,9 @@ export default function RankDetailPage() {
                           style={{
                             color: '#fafafa',
                             fontSize: 14,
-                            backgroundColor: '#18181b',
+                            backgroundColor: 'transparent',
+                            borderWidth: 1,
+                            borderColor: '#4b5563',
                             padding: 8,
                             borderRadius: 8,
                             minHeight: 60
@@ -559,14 +561,15 @@ export default function RankDetailPage() {
                           placeholderTextColor="#6b7280"
                           style={{
                             flex: 1,
-                            backgroundColor: '#18181b',
+                            backgroundColor: 'transparent',
                             borderWidth: 1,
-                            borderColor: '#374151',
+                            borderColor: '#4b5563',
                             borderRadius: 8,
                             paddingHorizontal: 12,
                             paddingVertical: 8,
                             color: '#fafafa',
-                            fontSize: 14
+                            fontSize: 14,
+                            minHeight: 44
                           }}
                         />
                         <TouchableOpacity
@@ -593,7 +596,7 @@ export default function RankDetailPage() {
 
       {/* FIXED BOTTOM COMMENT INPUT */}
       <View style={{
-        backgroundColor: '#27272a',
+        backgroundColor: 'rgba(39, 39, 42, 0.95)',
         borderTopWidth: 1,
         borderTopColor: '#374151',
         paddingHorizontal: 16,
@@ -615,16 +618,16 @@ export default function RankDetailPage() {
             autoCorrect
             style={{
               flex: 1,
-              backgroundColor: '#18181b',
+              backgroundColor: 'transparent',
               borderRadius: 20,
               borderWidth: 1,
-              borderColor: '#374151',
+              borderColor: '#4b5563',
               paddingHorizontal: 16,
               paddingVertical: 10,
               color: '#fafafa',
               fontSize: 14,
               maxHeight: 100,
-              minHeight: 40
+              minHeight: 44
             }}
           />
           <TouchableOpacity

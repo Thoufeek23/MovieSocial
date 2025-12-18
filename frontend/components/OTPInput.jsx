@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: 'white',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'transparent',
   },
   inputEmpty: {
     borderColor: 'rgba(255, 255, 255, 0.3)',

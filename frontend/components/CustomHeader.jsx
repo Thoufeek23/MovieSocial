@@ -143,7 +143,7 @@ const CustomHeader = ({ title, showLogo = false }) => {
             <View style={styles.centerContainer}>
               {showLogo ? (
                 <Image 
-                  source={require('../assets/images/MS_icon.png')}
+                  source={require('../assets/images/MS_logo.png')}
                   style={styles.logo}
                   resizeMode="contain"
                 />

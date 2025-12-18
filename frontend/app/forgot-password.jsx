@@ -9,6 +9,7 @@ import {
   Platform, 
   TouchableOpacity,
   Pressable,
+  ScrollView,
   StyleSheet,
   Dimensions,
   Alert,
@@ -354,6 +355,7 @@ export default function ForgotPasswordPage() {
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
       <ImageBackground
         source={posterImages[0]} // Using first poster
@@ -362,6 +364,11 @@ export default function ForgotPasswordPage() {
       >
         <View style={styles.overlay}>
           <SafeAreaView style={styles.safeArea}>
+            <ScrollView 
+              contentContainerStyle={{ flexGrow: 1 }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
             {/* Header with back button */}
             <View style={styles.header}>
               <TouchableOpacity onPress={goBack} style={styles.backButton}>
@@ -402,6 +409,7 @@ export default function ForgotPasswordPage() {
             <View style={styles.content}>
               {getStepContent()}
             </View>
+            </ScrollView>
           </SafeAreaView>
         </View>
       </ImageBackground>
