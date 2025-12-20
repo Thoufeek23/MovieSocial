@@ -24,6 +24,7 @@ import EmptyState from '../../components/EmptyState';
 import ReviewModal from '../../components/ReviewModal';
 import DiscussionFormModal from '../../components/DiscussionFormModal';
 import SkeletonLoader, { ReviewCardSkeleton } from '../../components/SkeletonLoader';
+import WatchedDateModal from '../../components/WatchedDateModal';
 
 const { width, height } = Dimensions.get('window');
 
@@ -40,6 +41,8 @@ const MovieDetailsPage = () => {
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [reviewToEdit, setReviewToEdit] = useState(null);
   const [isDiscussionModalOpen, setIsDiscussionModalOpen] = useState(false);
+  const [showDateModal, setShowDateModal] = useState(false);
+  const [isWatched, setIsWatched] = useState(false);
 
   const IMG_BASE_URL = 'https://image.tmdb.org/t/p/';
 
@@ -55,6 +58,14 @@ const MovieDetailsPage = () => {
       ]);
 
       setMovie(movieData);
+
+      // Check if current user has watched this movie
+      if (user?.watched) {
+        const watched = Array.isArray(user.watched) 
+          ? user.watched.some(w => String(w.movieId || w) === String(id))
+          : user.watched.includes(String(id));
+        setIsWatched(watched);
+      }
 
       if (reviewsRes.status === 'fulfilled') {
         const reviewsData = reviewsRes.value.data || [];
@@ -84,7 +95,7 @@ const MovieDetailsPage = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [id]);
+  }, [id, user]);
 
   useEffect(() => {
     setLoading(true);
@@ -105,13 +116,66 @@ const MovieDetailsPage = () => {
     }
   };
 
-  const handleAddToWatched = async () => {
-    try {
-      await api.addToWatched(movie.id);
-      Alert.alert('Success', `${movie.title} marked as watched!`);
-    } catch (err) {
-      Alert.alert('Error', err.response?.data?.msg || 'Could not mark as watched.');
+  const handleWatchedClick = () => {
+    if (!user) {
+      Alert.alert('Login Required', 'Please login to mark movies as watched.');
+      return;
     }
+    setShowDateModal(true);
+  };
+
+  const confirmWatched = async (dateToUse) => {
+    try {
+      await api.addToWatched(movie.id, dateToUse);
+      setIsWatched(true);
+      setShowDateModal(false);
+      Alert.alert('Success', isWatched ? 'Rewatch logged!' : 'Marked as watched!');
+    } catch (err) {
+      Alert.alert('Error', err.response?.data?.msg || 'Could not update watch status.');
+    }
+  };
+
+  const handleRemoveFromWatched = async () => {
+    // Check if user has a review for this movie
+    const myReview = reviews.find(r => 
+      r.user?._id === user?.id || String(r.user._id) === String(user?.id)
+    );
+
+    let confirmMsg = 'Remove this movie from your watch history?';
+    if (myReview) {
+      confirmMsg = 'Removing this from history will also delete your review. Are you sure?';
+    }
+
+    Alert.alert(
+      'Remove from Watch History',
+      confirmMsg,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Delete review first if exists
+              if (myReview) {
+                await api.deleteReview(myReview._id);
+                setReviews(prev => prev.filter(r => r._id !== myReview._id));
+              }
+
+              // Remove from watched list
+              await api.removeFromWatched(movie.id);
+              setIsWatched(false);
+              setShowDateModal(false);
+              
+              Alert.alert('Success', myReview ? 'Removed from history and review deleted' : 'Removed from history');
+            } catch (err) {
+              console.error(err);
+              Alert.alert('Error', 'Failed to remove from watch history.');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const handleAddReview = () => {
@@ -266,6 +330,15 @@ const MovieDetailsPage = () => {
         movie={movie}
         onDiscussionCreated={fetchMovieData}
       />
+
+      <WatchedDateModal
+        visible={showDateModal}
+        onClose={() => setShowDateModal(false)}
+        onConfirm={confirmWatched}
+        onRemove={isWatched ? handleRemoveFromWatched : null}
+        isWatched={isWatched}
+        movieTitle={movie.title}
+      />
       
       <ScrollView 
         style={styles.container}
@@ -343,10 +416,16 @@ const MovieDetailsPage = () => {
 
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={handleAddToWatched}
+              onPress={handleWatchedClick}
             >
-              <Ionicons name="checkmark-circle-outline" size={20} color="white" />
-              <Text style={styles.actionButtonText}>Mark as Watched</Text>
+              <Ionicons 
+                name={isWatched ? "checkmark-circle" : "checkmark-circle-outline"} 
+                size={20} 
+                color={isWatched ? "#10b981" : "white"} 
+              />
+              <Text style={[styles.actionButtonText, isWatched && { color: '#10b981' }]}>
+                {isWatched ? 'Watched' : 'Mark as Watched'}
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity

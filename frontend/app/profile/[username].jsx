@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter, usePathname } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Home, Search, BookOpen, Puzzle, FileText, MessageSquare } from 'lucide-react-native';
+import { Home, Search, BookOpen, Puzzle, FileText, MessageSquare, Star, Calendar, Bookmark, List } from 'lucide-react-native';
 import { useAuth } from '../../src/context/AuthContext';
 import * as api from '../../src/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -19,10 +19,13 @@ import CustomHeader from '../../components/CustomHeader';
 import ProfileHeader from '../../components/ProfileHeader';
 import MovieListSection from '../../components/MovieListSection';
 import DiscussionListSection from '../../components/DiscussionListSection';
+import ReviewCard from '../../components/ReviewCard';
+import ProfileReviewCard from '../../components/ProfileReviewCard';
 import EditProfileModal from '../../components/EditProfileModal';
 import FollowListModal from '../../components/FollowListModal';
 import SkeletonLoader, { ProfileHeaderSkeleton } from '../../components/SkeletonLoader';
 import MSLogoModal from '../../components/MSLogoModal';
+import LetterboxdImportModal from '../../components/LetterboxdImportModal';
 
 // Bottom navigation component matching the tabs layout with MS logo
 const StandardBottomNavigation = ({ currentUser }) => {
@@ -114,6 +117,8 @@ const ProfilePage = () => {
   const [isFollowing, setIsFollowing] = useState(false);
   
   // Content state
+  const [userReviews, setUserReviews] = useState([]);
+  const [timelineMovies, setTimelineMovies] = useState([]);
   const [watchedMovies, setWatchedMovies] = useState([]);
   const [watchlistMovies, setWatchlistMovies] = useState([]);
   const [userDiscussions, setUserDiscussions] = useState([]);
@@ -124,6 +129,7 @@ const ProfilePage = () => {
   const [followListOpen, setFollowListOpen] = useState(false);
   const [followListTitle, setFollowListTitle] = useState('');
   const [followListUsers, setFollowListUsers] = useState([]);
+  const [importModalOpen, setImportModalOpen] = useState(false);
 
   const isOwnProfile = currentUser && profile && currentUser.username === profile.username;
 
@@ -142,26 +148,82 @@ const ProfilePage = () => {
       setProfile(data);
       setIsFollowing(!!data.isFollowedByCurrentUser);
 
-      // Fetch watched and watchlist movies
-      // Handle both legacy (array of IDs) and new format (array of objects with movieId)
-      const watchedIds = (data.watched || []).map(entry => 
-        typeof entry === 'string' ? entry : entry.movieId
-      ).filter(id => id);
-      
-      const watchlistIds = (data.watchlist || []).filter(id => id);
+      // 1. Fetch Reviews
+      try {
+        const reviewsRes = await api.getReviewsByUser(username);
+        const sortedReviews = (reviewsRes.data || []).sort((a, b) => {
+          const votesA = a.agreementVotes ? a.agreementVotes.length : 0;
+          const votesB = b.agreementVotes ? b.agreementVotes.length : 0;
+          return votesB - votesA;
+        });
+        setUserReviews(sortedReviews);
+      } catch (err) {
+        console.error('Failed to load reviews', err);
+        setUserReviews([]);
+      }
 
-      const watchedDetails = watchedIds.length > 0 ? await Promise.all(
-        watchedIds.map(id => api.getMovieDetails(id))
-      ) : [];
-      
-      const watchlistDetails = watchlistIds.length > 0 ? await Promise.all(
-        watchlistIds.map(id => api.getMovieDetails(id))
-      ) : [];
-      
-      setWatchedMovies(watchedDetails.map(res => res.data));
-      setWatchlistMovies(watchlistDetails.map(res => res.data));
+      // 2. Timeline - Fetch ALL watched entries with dates (including rewatches)
+      try {
+        const normalizedWatched = (data.watched || []).map(entry => {
+          if (typeof entry === 'string') return { movieId: entry, watchedAt: null };
+          return entry;
+        });
+        
+        const watchedDetailsForTimeline = normalizedWatched.length > 0 ? await Promise.all(
+          normalizedWatched.map(e => api.getMovieDetails(e.movieId))
+        ) : [];
+        
+        const fullWatchedList = watchedDetailsForTimeline.map((res, i) => ({
+          ...res.data,
+          watchedAt: normalizedWatched[i].watchedAt
+        }));
+        
+        // Sort timeline by date (most recent first)
+        const sortedTimeline = [...fullWatchedList].sort((a, b) => {
+          const dateA = a.watchedAt ? new Date(a.watchedAt) : new Date(0);
+          const dateB = b.watchedAt ? new Date(b.watchedAt) : new Date(0);
+          return dateB - dateA;
+        });
+        setTimelineMovies(sortedTimeline);
+      } catch (err) {
+        console.error('Failed to load timeline', err);
+        setTimelineMovies([]);
+      }
 
-      // Fetch user discussions
+      // 3. Unique Watched Movies (for count display)
+      try {
+        const watchedIds = (data.watched || []).map(entry => 
+          typeof entry === 'string' ? entry : entry.movieId
+        ).filter(id => id);
+        
+        // Get unique movie IDs only (to handle rewatches)
+        const uniqueWatchedIds = [...new Set(watchedIds)];
+        
+        const uniqueWatchedDetails = uniqueWatchedIds.length > 0 ? await Promise.all(
+          uniqueWatchedIds.map(id => api.getMovieDetails(id))
+        ) : [];
+        
+        setWatchedMovies(uniqueWatchedDetails.map(res => res.data));
+      } catch (err) {
+        console.error('Failed to load watched movies', err);
+        setWatchedMovies([]);
+      }
+
+      // 4. Watchlist
+      try {
+        const watchlistIds = (data.watchlist || []).filter(id => id);
+        
+        const watchlistDetails = watchlistIds.length > 0 ? await Promise.all(
+          watchlistIds.map(id => api.getMovieDetails(id))
+        ) : [];
+        
+        setWatchlistMovies(watchlistDetails.map(res => res.data));
+      } catch (err) {
+        console.error('Failed to load watchlist', err);
+        setWatchlistMovies([]);
+      }
+
+      // 5. Fetch user discussions
       try {
         const discRes = await api.fetchDiscussionsByUser(username);
         const withPosters = await Promise.all(
@@ -318,6 +380,43 @@ const ProfilePage = () => {
     fetchProfile(true);
   };
 
+  const formatDate = (watchedAt) => {
+    if (!watchedAt) return 'Unknown';
+    const date = new Date(watchedAt);
+    const month = date.toLocaleDateString('en-US', { month: 'short' });
+    const day = date.getDate();
+    const year = date.getFullYear();
+    return `${month} ${day}, ${year}`;
+  };
+
+  const handleEditReview = (review) => {
+    // Navigate to review edit - could open a modal or navigate
+    router.push(`/create-review?movieId=${review.movieId}&edit=${review._id}`);
+  };
+
+  const handleDeleteReview = async (reviewId) => {
+    Alert.alert(
+      'Delete Review',
+      'Are you sure you want to delete this review?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.deleteReview(reviewId);
+              Alert.alert('Success', 'Review deleted.');
+              fetchProfile(true);
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete review.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -388,11 +487,12 @@ const ProfilePage = () => {
           isFollowing={isFollowing}
           onFollowPress={handleFollowToggle}
           onEditPress={() => setEditProfileOpen(true)}
+          onImportPress={() => setImportModalOpen(true)}
           onSettingsPress={() => {
             // Settings functionality can be added later
           }}
           stats={{
-            reviewCount: 0, // Can be calculated from API
+            reviewCount: userReviews.length,
             followersCount: profile.followersCount || 0,
             followingCount: profile.followingCount || 0,
             watchedCount: watchedMovies.length,
@@ -403,53 +503,179 @@ const ProfilePage = () => {
           onFollowingPress={() => showUserList('Following', profile.following)}
         />
 
-        <MovieListSection
-          title={`Watched Films (${watchedMovies.length})`}
-          movies={watchedMovies}
-          emptyMessage="No movies watched yet"
-          emptyIcon="film-outline"
-          showDelete={isOwnProfile}
-          onDelete={handleRemoveFromWatched}
-        />
+        {/* Popular Reviews Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Star color="#eab308" size={20} />
+            <Text style={styles.sectionTitle}>Popular Reviews</Text>
+            <Text style={styles.sectionCount}>({userReviews.length})</Text>
+          </View>
+          
+          {userReviews.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>No reviews yet.</Text>
+            </View>
+          ) : (
+            <View style={styles.reviewsList}>
+              {userReviews.slice(0, 5).map(review => (
+                <ProfileReviewCard
+                  key={review._id}
+                  review={review}
+                  onEdit={handleEditReview}
+                  onDelete={handleDeleteReview}
+                />
+              ))}
+            </View>
+          )}
+        </View>
 
-        <DiscussionListSection
-          title={`Discussions Started (${userDiscussions.length})`}
-          discussions={userDiscussions}
-          emptyMessage="No discussions started"
-          emptyIcon="chatbubble-outline"
-          showDelete={isOwnProfile}
-          onDelete={handleDeleteDiscussion}
-          showRedirectButton={true}
-          redirectButtonText="View Discussions"
-          redirectButtonIcon="chatbubbles"
-          redirectPath="/(tabs)/discussions"
-        />
+        {/* Timeline Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Calendar color="#10b981" size={20} />
+            <Text style={styles.sectionTitle}>Timeline</Text>
+            <Text style={styles.sectionCount}>({timelineMovies.length})</Text>
+          </View>
+          
+          {timelineMovies.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>No movies in timeline yet.</Text>
+            </View>
+          ) : (
+            <View style={styles.timelineContainer}>
+              {/* Timeline vertical line */}
+              <View style={styles.timelineLine} />
+              
+              {timelineMovies.map((movie, idx) => (
+                <TouchableOpacity
+                  key={`${movie.id}-${idx}`}
+                  style={styles.timelineItem}
+                  onPress={() => router.push(`/movie/${movie.id}`)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.timelineDate}>{formatDate(movie.watchedAt)}</Text>
+                  <View style={styles.timelineDot} />
+                  <View style={styles.timelineCard}>
+                    <Image
+                      source={{ uri: `https://image.tmdb.org/t/p/w92${movie.poster_path}` }}
+                      style={styles.timelinePoster}
+                      resizeMode="cover"
+                    />
+                    <View style={styles.timelineInfo}>
+                      <Text style={styles.timelineTitle} numberOfLines={2}>{movie.title}</Text>
+                      <Text style={styles.timelineYear}>{movie.release_date?.substring(0, 4) || '—'}</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
 
+        {/* Bookmarks Section (only for own profile) */}
         {isOwnProfile && (
-          <DiscussionListSection
-            title={`Bookmarked Discussions (${bookmarkedDiscussions.length})`}
-            discussions={bookmarkedDiscussions}
-            emptyMessage="No bookmarked discussions"
-            emptyIcon="bookmark-outline"
-            showDelete={false}
-            showRedirectButton={true}
-            redirectButtonText="Browse Discussions"
-            redirectButtonIcon="book"
-            redirectPath="/(tabs)/discussions"
-          />
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Bookmark color="#3b82f6" size={20} />
+              <Text style={styles.sectionTitle}>Bookmarks</Text>
+              <Text style={styles.sectionCount}>({bookmarkedDiscussions.length})</Text>
+            </View>
+            
+            {bookmarkedDiscussions.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyText}>No bookmarks yet.</Text>
+              </View>
+            ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
+                {bookmarkedDiscussions.map(d => (
+                  <TouchableOpacity
+                    key={d._id}
+                    style={styles.discussionCard}
+                    onPress={() => router.push(`/discussion/${d._id}`)}
+                  >
+                    <Image
+                      source={{ uri: d.poster_path ? `https://image.tmdb.org/t/p/w154${d.poster_path}` : 'https://via.placeholder.com/154x231' }}
+                      style={styles.discussionPoster}
+                      resizeMode="cover"
+                    />
+                    <View style={styles.discussionInfo}>
+                      <Text style={styles.discussionTitle} numberOfLines={2}>{d.title}</Text>
+                      <Text style={styles.discussionMeta}>{d.comments?.length || 0} comments</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+          </View>
         )}
 
-        <MovieListSection
-          title={`Watchlist (${watchlistMovies.length})`}
-          movies={watchlistMovies}
-          emptyMessage="Watchlist is empty"
-          emptyIcon="time-outline"
-          showDelete={false}
-          showRedirectButton={true}
-          redirectButtonText="Explore Movies"
-          redirectButtonIcon="search"
-          redirectPath="/(tabs)/search"
-        />
+        {/* Watchlist Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <List color="#a855f7" size={20} />
+            <Text style={styles.sectionTitle}>Watchlist</Text>
+            <Text style={styles.sectionCount}>({watchlistMovies.length})</Text>
+          </View>
+          
+          {watchlistMovies.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>Watchlist is empty.</Text>
+            </View>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
+              {watchlistMovies.map(m => (
+                <TouchableOpacity
+                  key={m.id}
+                  style={styles.movieCard}
+                  onPress={() => router.push(`/movie/${m.id}`)}
+                  activeOpacity={0.7}
+                >
+                  <Image
+                    source={{ uri: `https://image.tmdb.org/t/p/w342${m.poster_path}` }}
+                    style={styles.moviePoster}
+                    resizeMode="cover"
+                  />
+                  <Text style={styles.movieTitle} numberOfLines={2}>{m.title}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+
+        {/* Discussions Started Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MessageSquare color="#ec4899" size={20} />
+            <Text style={styles.sectionTitle}>Discussions Started</Text>
+            <Text style={styles.sectionCount}>({userDiscussions.length})</Text>
+          </View>
+          
+          {userDiscussions.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>No discussions started.</Text>
+            </View>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
+              {userDiscussions.map(d => (
+                <TouchableOpacity
+                  key={d._id}
+                  style={styles.discussionCard}
+                  onPress={() => router.push(`/discussion/${d._id}`)}
+                >
+                  <Image
+                    source={{ uri: d.poster_path ? `https://image.tmdb.org/t/p/w154${d.poster_path}` : 'https://via.placeholder.com/154x231' }}
+                    style={styles.discussionPoster}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.discussionInfo}>
+                    <Text style={styles.discussionTitle} numberOfLines={2}>{d.title}</Text>
+                    <Text style={styles.discussionMeta}>{d.comments?.length || 0} comments</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+        </View>
       </ScrollView>
 
       {/* Modals */}
@@ -469,6 +695,12 @@ const ProfilePage = () => {
         users={followListUsers}
         onClose={() => setFollowListOpen(false)}
         currentUser={currentUser}
+      />
+
+      <LetterboxdImportModal
+        visible={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onImportComplete={fetchProfile}
       />
 
       {/* Standard Bottom Navigation */}
@@ -501,6 +733,159 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#9ca3af',
     textAlign: 'center',
+  },
+  section: {
+    marginBottom: 32,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#374151',
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginLeft: 8,
+    flex: 1,
+  },
+  sectionCount: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  emptyState: {
+    backgroundColor: 'rgba(31, 41, 55, 0.3)',
+    borderRadius: 12,
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 120,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
+  },
+  reviewsList: {
+    gap: 12,
+  },
+  timelineContainer: {
+    position: 'relative',
+    paddingLeft: 8,
+  },
+  timelineLine: {
+    position: 'absolute',
+    left: 92,
+    top: 16,
+    bottom: 16,
+    width: 2,
+    backgroundColor: '#374151',
+  },
+  timelineItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+    position: 'relative',
+  },
+  timelineDate: {
+    width: 80,
+    paddingTop: 16,
+    paddingRight: 12,
+    fontSize: 10,
+    color: '#6b7280',
+    textAlign: 'right',
+    fontFamily: 'monospace',
+  },
+  timelineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#6b7280',
+    marginLeft: -4,
+    marginTop: 20,
+    marginRight: 16,
+    borderWidth: 2,
+    borderColor: '#09090b',
+    zIndex: 10,
+  },
+  timelineCard: {
+    flex: 1,
+    backgroundColor: '#1f2937',
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#374151',
+  },
+  timelinePoster: {
+    width: 40,
+    height: 56,
+    borderRadius: 6,
+  },
+  timelineInfo: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  timelineTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#e5e7eb',
+    marginBottom: 4,
+  },
+  timelineYear: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  horizontalScroll: {
+    marginHorizontal: -16,
+    paddingHorizontal: 16,
+  },
+  movieCard: {
+    width: 128,
+    marginRight: 12,
+  },
+  moviePoster: {
+    width: 128,
+    height: 192,
+    borderRadius: 12,
+    backgroundColor: '#1f2937',
+  },
+  movieTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#d1d5db',
+    marginTop: 8,
+  },
+  discussionCard: {
+    width: 200,
+    backgroundColor: '#1f2937',
+    borderRadius: 12,
+    marginRight: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#374151',
+  },
+  discussionPoster: {
+    width: '100%',
+    height: 80,
+    backgroundColor: '#374151',
+  },
+  discussionInfo: {
+    padding: 12,
+  },
+  discussionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#e5e7eb',
+    marginBottom: 4,
+  },
+  discussionMeta: {
+    fontSize: 12,
+    color: '#6b7280',
   },
   bottomNavigation: {
     position: 'absolute',

@@ -63,12 +63,14 @@ export const deleteReview = (id) => API.delete(`/reviews/${id}`);
 export const fetchMyReviews = () => API.get('/reviews/mine');
 export const voteReview = (id, value) => API.post(`/reviews/${id}/vote`, { value });
 export const createReview = (reviewData) => API.post('/reviews', reviewData);
+export const importLetterboxd = (username) => API.post('/reviews/import/letterboxd', { username });
+export const getReviewsByUser = (username) => API.get(`/reviews/user/${username}`);
 
 // --- User Actions ---
 export const getUserProfile = (username) => API.get(`/users/${username}`);
 export const searchUsers = (q) => API.get(`/users/search?q=${encodeURIComponent(q)}`);
 export const addToWatchlist = (movieId) => API.post('/users/watchlist', { movieId });
-export const addToWatched = (movieId) => API.post('/users/watched', { movieId });
+export const addToWatched = (movieId, date) => API.post('/users/watched', { movieId, date });
 export const removeFromWatchlist = (movieId) => API.delete('/users/watchlist', { data: { movieId } });
 export const removeFromWatched = (movieId) => API.delete('/users/watched', { data: { movieId } });
 export const updateMyProfile = (profileData) => API.patch('/users/me', profileData);
@@ -137,3 +139,4 @@ export const editRankComment = (rankId, commentId, commentData) => API.put(`/ran
 export const deleteRankComment = (rankId, commentId) => API.delete(`/ranks/${rankId}/comments/${commentId}`);
 export const postRankReply = (rankId, commentId, replyData) => API.post(`/ranks/${rankId}/comments/${commentId}/replies`, replyData);
 export const deleteRankReply = (rankId, commentId, replyId) => API.delete(`/ranks/${rankId}/comments/${commentId}/replies/${replyId}`);
+export const importLetterboxdRank = (url) => API.post('/ranks/import/letterboxd', { url });
