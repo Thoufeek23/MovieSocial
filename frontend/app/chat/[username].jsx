@@ -40,7 +40,16 @@ const ChatScreen = () => {
   useEffect(() => {
     if (!user) return;
 
-    const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.68.54:5001';
+    // Use the same API URL as the rest of the app
+    const getApiUrl = () => {
+      if (process.env.REACT_APP_API_URL) {
+        return process.env.REACT_APP_API_URL.replace(/\/$/,'');
+      }
+      return "https://moviesocial-backend-khd2.onrender.com";
+      //return "http://192.168.1.42:5001"; // Uncomment for local development
+    };
+    
+    const apiUrl = getApiUrl();
     socketRef.current = io(apiUrl, {
       reconnection: true,
       reconnectionDelay: 1000,
