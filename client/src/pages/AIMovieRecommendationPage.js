@@ -158,7 +158,7 @@ const AIMovieRecommendationPage = () => {
             
             // Show appropriate message based on response
             if (response.data.fallback) {
-                toast.success('Got popular recommendations! (AI service is busy, but these still match your preferences)', { duration: 5000 });
+                toast.success('Here are your recommendations based on your preferences!', { duration: 5000 });
             } else if (response.data.cached) {
                 toast.success('Got your cached recommendations!');
             } else {

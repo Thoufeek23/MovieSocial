@@ -121,6 +121,9 @@ exports.getConversationsList = async (req, res) => {
     const conversationsMap = new Map();
 
     for (const msg of messages) {
+      // Check if sender and recipient exist (not deleted users)
+      if (!msg.sender || !msg.recipient) continue;
+
       const otherUser = msg.sender._id.toString() === currentUserId
         ? msg.recipient
         : msg.sender;

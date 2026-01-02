@@ -9,6 +9,19 @@ const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/
 let lastGeminiRequest = 0;
 const MIN_REQUEST_INTERVAL = 5000; // 5 seconds between requests to avoid rate limits
 
+// Track API call count and quota exhaustion
+let dailyAPICallCount = 0;
+let quotaExhausted = false;
+let quotaResetTime = null;
+
+// Reset quota tracking at midnight Pacific Time
+const resetDailyQuota = () => {
+    dailyAPICallCount = 0;
+    quotaExhausted = false;
+    quotaResetTime = null;
+    logger.info('Daily Gemini API quota tracking reset');
+};
+
 // Helper function to wait for rate limit cooldown
 const waitForRateLimit = async () => {
     const now = Date.now();
@@ -22,10 +35,23 @@ const waitForRateLimit = async () => {
 };
 
 // Helper function to call Gemini API with retry logic
-const callGeminiWithRetry = async (prompt, maxRetries = 2) => {
+const callGeminiWithRetry = async (prompt, maxRetries = 2, userId = 'unknown') => {
+    // Check if quota is already exhausted
+    if (quotaExhausted) {
+        const timeUntilReset = quotaResetTime ? Math.ceil((quotaResetTime - Date.now()) / 1000 / 60) : 'unknown';
+        logger.warn(`Gemini API quota exhausted. Skipping API call. Resets in ~${timeUntilReset} minutes`);
+        const error = new Error('Quota exhausted');
+        error.response = { status: 429 };
+        throw error;
+    }
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
             await waitForRateLimit();
+            
+            // Log API call
+            dailyAPICallCount++;
+            logger.info(`🤖 Gemini API Call #${dailyAPICallCount} | User: ${userId} | Attempt: ${attempt}/${maxRetries}`);
             
             const response = await axios.post(
                 GEMINI_API_URL,
@@ -51,6 +77,7 @@ const callGeminiWithRetry = async (prompt, maxRetries = 2) => {
                 }
             );
             
+            logger.info(`✅ Gemini API Call #${dailyAPICallCount} successful`);
             return response;
         } catch (error) {
             logger.error(`Gemini API error (attempt ${attempt}/${maxRetries}):`, {
@@ -61,6 +88,16 @@ const callGeminiWithRetry = async (prompt, maxRetries = 2) => {
             });
             
             if (error.response?.status === 429) {
+                // Mark quota as exhausted
+                quotaExhausted = true;
+                // Set reset time to next midnight Pacific (approximately)
+                const now = new Date();
+                const resetDate = new Date(now);
+                resetDate.setHours(24, 0, 0, 0); // Next midnight local time (approximation)
+                quotaResetTime = resetDate.getTime();
+                
+                logger.error(`🚨 QUOTA EXHAUSTED at ${dailyAPICallCount} calls | User: ${userId} | Will use fallback until reset`);
+                
                 if (attempt < maxRetries) {
                     // Exponential backoff: shorter waits (5s, 10s) for retry attempts
                     const baseBackoff = 5000; // 5 seconds
@@ -174,7 +211,7 @@ Return ONLY a valid JSON array:
         // Call Gemini API with retry logic
         let response;
         try {
-            response = await callGeminiWithRetry(prompt);
+            response = await callGeminiWithRetry(prompt, 2, req.user?.username || req.user?.id || 'unknown');
         } catch (apiError) {
             // If API fails completely, use fallback immediately
             logger.error('Gemini API call failed after retries:', {
