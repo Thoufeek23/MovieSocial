@@ -1,4 +1,4 @@
-import React, { createContext, useReducer, useState, useEffect, useContext } from 'react'; // Added useContext
+import React, { createContext, useReducer, useState, useEffect, useContext, useCallback } from 'react'; // Added useContext and useCallback
 import { jwtDecode } from 'jwt-decode';
 import * as api from '../api';
 
@@ -46,7 +46,7 @@ function AuthProvider(props) {
   const [isJustLoggedIn, setJustLoggedIn] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  const updateUnreadCount = async () => {
+  const updateUnreadCount = useCallback(async () => {
     if (!state.user) return;
     try {
       const { data } = await api.getUnreadMessageCount();
@@ -54,7 +54,7 @@ function AuthProvider(props) {
     } catch (error) {
       console.error("Failed to update unread count", error);
     }
-  };
+  }, [state.user]);
 
   useEffect(() => {
     if (state.user) {

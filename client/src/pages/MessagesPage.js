@@ -223,6 +223,27 @@ const MessagesPage = () => {
         return date.toLocaleDateString();
     };
 
+    // Define handleSelectChat before using it in useEffect
+    const handleSelectChat = useCallback(async (chatUser) => {
+        setCurrentChat(chatUser);
+        setConversations(prev => prev.map(c =>
+            c.otherUser.username === chatUser.username ? { ...c, unreadCount: 0 } : c
+        ));
+
+        try {
+            const [msgsRes] = await Promise.all([
+                api.getMessages(chatUser.username),
+                api.markMessagesRead(chatUser.username)
+            ]);
+            setMessages(msgsRes.data);
+            if (updateUnreadCount) updateUnreadCount();
+        } catch (error) {
+            toast.error('Failed to load conversation');
+        } finally {
+            setTimeout(() => inputRef.current?.focus(), 100);
+        }
+    }, [updateUnreadCount]);
+
     // Load Data
     useEffect(() => {
         const loadData = async () => {
@@ -259,26 +280,6 @@ const MessagesPage = () => {
     useEffect(() => {
         scrollRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages]);
-
-    const handleSelectChat = useCallback(async (chatUser) => {
-        setCurrentChat(chatUser);
-        setConversations(prev => prev.map(c =>
-            c.otherUser.username === chatUser.username ? { ...c, unreadCount: 0 } : c
-        ));
-
-        try {
-            const [msgsRes] = await Promise.all([
-                api.getMessages(chatUser.username),
-                api.markMessagesRead(chatUser.username)
-            ]);
-            setMessages(msgsRes.data);
-            if (updateUnreadCount) updateUnreadCount();
-        } catch (error) {
-            toast.error('Failed to load conversation');
-        } finally {
-            setTimeout(() => inputRef.current?.focus(), 100);
-        }
-    }, [updateUnreadCount]);
 
     const handleSendMessage = async (e) => {
         e.preventDefault();

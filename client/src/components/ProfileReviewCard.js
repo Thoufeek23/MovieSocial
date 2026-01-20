@@ -2,8 +2,6 @@ import React, { useState, useContext, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Star, ThumbsUp, Edit2, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
-import * as api from '../api';
-import toast from 'react-hot-toast';
 
 const ProfileReviewCard = ({ review, onEdit, onDelete }) => {
     const { user } = useContext(AuthContext);
