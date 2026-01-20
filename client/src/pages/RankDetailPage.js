@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext, useRef } from 'react';
+import React, { useEffect, useState, useContext, useRef, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import * as api from '../api';
 import { AuthContext } from '../context/AuthContext';
@@ -36,7 +36,7 @@ const RankDetailPage = () => {
   // Edit Rank State
   const [isEditOpen, setIsEditOpen] = useState(false);
 
-  const loadRank = async () => {
+  const loadRank = useCallback(async () => {
     try {
       const { data } = await api.getRank(id);
       setRank(data);
@@ -46,7 +46,7 @@ const RankDetailPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     loadRank();

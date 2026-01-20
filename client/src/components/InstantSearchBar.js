@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import * as api from '../api';
-import { Search, Film, User } from 'lucide-react';
+import { Search, Film } from 'lucide-react';
 import Avatar from './Avatar';
 
 const InstantSearchBar = ({ className = 'w-full', maxResults = 5 }) => {

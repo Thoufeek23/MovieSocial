@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useContext } from 'react';
+import React, { useState, useEffect, useRef, useContext, useCallback } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { Send, ArrowLeft, Trash2, MessageSquare, Star } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
@@ -260,7 +260,7 @@ const MessagesPage = () => {
         scrollRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages]);
 
-    const handleSelectChat = async (chatUser) => {
+    const handleSelectChat = useCallback(async (chatUser) => {
         setCurrentChat(chatUser);
         setConversations(prev => prev.map(c =>
             c.otherUser.username === chatUser.username ? { ...c, unreadCount: 0 } : c
@@ -278,7 +278,7 @@ const MessagesPage = () => {
         } finally {
             setTimeout(() => inputRef.current?.focus(), 100);
         }
-    };
+    }, [updateUnreadCount]);
 
     const handleSendMessage = async (e) => {
         e.preventDefault();
@@ -382,7 +382,7 @@ const MessagesPage = () => {
     const groupedMessages = groupMessagesByDate(messages);
 
     // Search for users
-    const handleSearchUsers = async (query) => {
+    const handleSearchUsers = useCallback(async (query) => {
         if (!query.trim()) {
             setSearchResults([]);
             setSearching(false);
@@ -401,7 +401,7 @@ const MessagesPage = () => {
         } finally {
             setSearching(false);
         }
-    };
+    }, [user]);
 
     // Debounced search
     useEffect(() => {

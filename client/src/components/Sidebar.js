@@ -2,7 +2,6 @@ import React, { useContext, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { Home, Search, User, FileText, BookOpen, Puzzle, Database, MessageCircle, Users, ListOrdered } from 'lucide-react';
-import { Award } from 'lucide-react';
 import * as api from '../api';
 
 // Updated NavItem to accept a 'badge' prop

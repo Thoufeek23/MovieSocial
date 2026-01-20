@@ -4,7 +4,6 @@ import { AuthContext } from '../context/AuthContext';
 import { ModleContext } from '../context/ModleContext';
 import InstantSearchBar from './InstantSearchBar';
 import Avatar from './Avatar';
-import { Sparkles } from 'lucide-react';
 import * as api from '../api';
 // Use only MS_logo.png as the navbar logo
 // post-related UI moved to sidebar; no inline post controls in navbar

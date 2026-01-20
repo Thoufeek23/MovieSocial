@@ -60,7 +60,7 @@ function AuthProvider(props) {
     if (state.user) {
       updateUnreadCount();
     }
-  }, [state.user]);
+  }, [state.user, updateUnreadCount]);
 
   const login = (userData, isNewUser = false) => {
     localStorage.setItem('token', userData.token);
@@ -92,9 +92,6 @@ function AuthProvider(props) {
   const setUser = (user) => {
     dispatch({ type: 'LOGIN', payload: user });
     updateUnreadCount();
-    try {
-      const token = localStorage.getItem('token');
-    } catch (e) {}
   };
 
   const logout = () => {

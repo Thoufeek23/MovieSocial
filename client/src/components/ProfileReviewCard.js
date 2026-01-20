@@ -29,23 +29,6 @@ const ProfileReviewCard = ({ review, onEdit, onDelete }) => {
     }, [review.agreementVotes]);
     // ---------------------------------------
 
-    const handleVote = async (value) => {
-        if (!user) return toast.error('Login to vote');
-        try {
-            const { data } = await api.voteReview(review._id, value);
-            
-            // Update local state immediately using the same logic
-            if (data && data.agreementVotes) {
-                const votes = data.agreementVotes;
-                const sum = votes.reduce((s, v) => s + (Number(v.value) || 0), 0);
-                const avg = Math.round((sum / votes.length) * 100);
-                setAgreement({ average: avg, totalVotes: votes.length });
-            }
-        } catch (error) {
-            toast.error('Failed to vote');
-        }
-    };
-
     // Helper to render stars
     const renderStars = (rating) => {
         return [...Array(5)].map((_, i) => (
