@@ -26,7 +26,6 @@ const DiscussionPage = () => {
   const [confirmState, setConfirmState] = useState({ open: false, title: '', onConfirm: null, loading: false, preview: '' });
   const [editingDiscussion, setEditingDiscussion] = useState(false);
   const [editDiscussionTitle, setEditDiscussionTitle] = useState('');
-  const [editDiscussionTag, setEditDiscussionTag] = useState('');
   
   // New Share State
   const [showShare, setShowShare] = useState(false);

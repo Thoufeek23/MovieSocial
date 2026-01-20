@@ -125,7 +125,7 @@ const ProfilePage = () => {
         const onBookmarksUpdated = async () => {}; 
         window.addEventListener('bookmarksUpdated', onBookmarksUpdated);
         return () => window.removeEventListener('bookmarksUpdated', onBookmarksUpdated);
-    }, [username]);
+    }, [username, fetchProfile]);
 
     // --- HANDLERS ---
     const handleFollowToggle = async () => {
@@ -137,7 +137,6 @@ const ProfilePage = () => {
         } catch (err) { toast.error('Failed to update follow status'); }
     };
 
-    const handleRemoveFromWatched = async (movieId) => { /* ... */ };
     const handleEditReview = (review) => { /* ... */ };
     const handleDeleteReview = (id) => { /* ... */ };
     const openUserListModal = (title, users) => { setUserListTitle(title); setUserList(users || []); setUserListOpen(true); };

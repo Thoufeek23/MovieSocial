@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import * as api from '../api';
 import Avatar from '../components/Avatar';
-import { Trash2, Search, UserCheck, UserX, Mail } from 'lucide-react';
+import { Trash2, Search, UserCheck, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const UserAdmin = () => {

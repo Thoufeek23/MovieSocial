@@ -50,7 +50,7 @@ const RankDetailPage = () => {
 
   useEffect(() => {
     loadRank();
-  }, [id]);
+  }, [id, loadRank]);
 
   const handleLike = async () => {
     if (!user) return toast.error('Please login to like this list');

@@ -253,7 +253,7 @@ const MessagesPage = () => {
             }
         };
         loadData();
-    }, [initialChatUser]);
+    }, [initialChatUser, handleSelectChat]);
 
     // Auto-scroll
     useEffect(() => {
@@ -418,7 +418,7 @@ const MessagesPage = () => {
                 clearTimeout(searchTimeoutRef.current);
             }
         };
-    }, [searchQuery]);
+    }, [searchQuery, handleSearchUsers]);
 
     const handleSelectSearchResult = async (selectedUser) => {
         setSearchQuery('');
