@@ -73,6 +73,10 @@ export const fetchDiscussions = (params = {}) => {
   const qs = new URLSearchParams(params).toString();
   return API.get(`/discussions${qs ? `?${qs}` : ''}`);
 };
+export const fetchPersonalizedDiscussions = (params = {}) => {
+  const qs = new URLSearchParams({ ...params, personalized: 'true' }).toString();
+  return API.get(`/discussions${qs ? `?${qs}` : ''}`);
+};
 export const postDiscussion = (discussionData) => API.post('/discussions', discussionData);
 export const getDiscussion = (id) => API.get(`/discussions/${id}`);
 export const postDiscussionComment = (id, commentData) => API.post(`/discussions/${id}/comments`, commentData);

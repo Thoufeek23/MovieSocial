@@ -260,15 +260,19 @@ const RankDetailPage = () => {
                      </button>
 
                      {/* --- OWNER ACTIONS (Edit & Delete) --- */}
-                     {user && rank.user && (user._id === rank.user._id || user.id === rank.user._id) && (
+                     {user && rank.user && (String(user._id || user.id) === String(rank.user._id || rank.user.id) || user?.isAdmin === true) && (
                         <>
-                            <button 
-                                onClick={() => setIsEditOpen(true)}
-                                className="p-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-full transition-colors"
-                                title="Edit Rank"
-                            >
-                                <Pencil size={20} />
-                            </button>
+                            {/* Only show edit button for owner */}
+                            {String(user._id || user.id) === String(rank.user._id || rank.user.id) && (
+                                <button 
+                                    onClick={() => setIsEditOpen(true)}
+                                    className="p-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-full transition-colors"
+                                    title="Edit Rank"
+                                >
+                                    <Pencil size={20} />
+                                </button>
+                            )}
+                            {/* Show delete button for owner and admin */}
                             <button 
                                 onClick={handleDeleteRank}
                                 className="p-2 bg-gray-800 hover:bg-red-900/20 text-gray-300 hover:text-red-500 rounded-full transition-colors"
@@ -332,7 +336,7 @@ const RankDetailPage = () => {
                                         </div>
                                         
                                         {/* Actions */}
-                                        {(user && c.user && (String(user.id || user._id) === String(c.user._id) || String(user.id || user._id) === String(rank.user._id))) && (
+                                        {(user && c.user && (String(user.id || user._id) === String(c.user._id) || String(user.id || user._id) === String(rank.user._id) || user?.isAdmin === true)) && (
                                             <div className="flex gap-2">
                                                 {editingCommentId === c._id ? (
                                                      <div className="flex gap-2">
@@ -348,7 +352,11 @@ const RankDetailPage = () => {
                                                      </div>
                                                 ) : (
                                                     <>
-                                                        <button onClick={() => { setEditingCommentId(c._id); setEditingCommentText(c.text); }} className="text-gray-400 hover:text-white"><Edit size={14}/></button>
+                                                        {/* Only show edit button for comment author */}
+                                                        {String(user.id || user._id) === String(c.user._id) && (
+                                                            <button onClick={() => { setEditingCommentId(c._id); setEditingCommentText(c.text); }} className="text-gray-400 hover:text-white"><Edit size={14}/></button>
+                                                        )}
+                                                        {/* Show delete button for comment author, rank owner, and admin */}
                                                         <button onClick={() => showConfirm('Delete comment?', async () => {
                                                             setCommentProcessing(true);
                                                             try {
@@ -380,7 +388,7 @@ const RankDetailPage = () => {
                                                         <span className="font-semibold text-xs text-gray-300">{r.user?.username}</span>
                                                         <span className="text-[10px] text-gray-600">{timeAgo(r.createdAt)}</span>
                                                     </div>
-                                                    {(user && r.user && (String(user.id || user._id) === String(r.user._id) || String(user.id || user._id) === String(rank.user._id))) && (
+                                                    {(user && r.user && (String(user.id || user._id) === String(r.user._id) || String(user.id || user._id) === String(rank.user._id) || user?.isAdmin === true)) && (
                                                         <button onClick={() => showConfirm('Delete reply?', async () => {
                                                             setCommentProcessing(true);
                                                             try {

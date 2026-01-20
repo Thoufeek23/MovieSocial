@@ -121,19 +121,27 @@ const RanksPage = () => {
           ranks.map((rank) => {
             const isLiked = user && rank.likes.includes(user._id || user.id);
             return (
-              <div key={rank._id} className="bg-card p-6 rounded-xl border border-white/5 hover:border-white/10 transition-all hover:bg-card/80 group">
+              <Link 
+                key={rank._id} 
+                to={`/rank/${rank._id}`}
+                className="bg-card p-6 rounded-xl border border-white/5 hover:border-white/10 transition-all hover:bg-card/80 group block"
+              >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
                     <div className="flex items-center justify-between">
-                      {/* Title Link to Details */}
-                      <Link to={`/rank/${rank._id}`} className="text-xl font-bold text-white mb-2 hover:text-primary transition-colors">
+                      {/* Title */}
+                      <h3 className="text-xl font-bold text-white mb-2 group-hover:text-primary transition-colors">
                           {rank.title}
-                      </Link>
+                      </h3>
                       
                       <div className="flex items-center gap-2">
                         {/* LIKE BUTTON */}
                         <button 
-                          onClick={() => handleLike(rank._id)}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleLike(rank._id);
+                          }}
                           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                             isLiked ? 'text-red-500 bg-red-500/10' : 'text-gray-500 hover:text-red-400 hover:bg-white/5'
                           }`}
@@ -142,18 +150,19 @@ const RanksPage = () => {
                           <span>{rank.likes.length}</span>
                         </button>
 
-                        {/* COMMENT BUTTON */}
-                        <Link 
-                          to={`/rank/${rank._id}`}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium text-gray-500 hover:text-white hover:bg-white/5 transition-colors"
-                        >
+                        {/* COMMENT BUTTON - Now just shows count, clicking card navigates */}
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium text-gray-500">
                           <MessageCircle size={18} />
                           <span>{rank.comments?.length || 0}</span>
-                        </Link>
+                        </div>
 
                         {/* SHARE BUTTON */}
                         <button 
-                          onClick={() => setSharingRank(rank)}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setSharingRank(rank);
+                          }}
                           className="p-2 text-gray-500 hover:text-white hover:bg-white/10 rounded-full transition-colors"
                           title="Share Rank"
                         >
@@ -168,15 +177,15 @@ const RanksPage = () => {
                     
                     {/* --- UPDATED PROFILE LINK SECTION --- */}
                     <div className="flex items-center gap-2 mt-auto">
-                      <Link 
-                        to={`/profile/${rank.user?.username}`} 
+                      <div 
+                        onClick={(e) => e.stopPropagation()}
                         className="flex items-center gap-2 group/author hover:opacity-80 transition-opacity"
                       >
                         <Avatar user={rank.user} size="sm" />
                         <span className="text-sm text-gray-300 font-medium group-hover/author:text-primary transition-colors">
                           {rank.user?.username || 'Unknown'}
                         </span>
-                      </Link>
+                      </div>
                       <span className="text-gray-600 text-xs">•</span>
                       <span className="text-gray-500 text-xs">{new Date(rank.createdAt).toLocaleDateString()}</span>
                     </div>
@@ -187,10 +196,13 @@ const RanksPage = () => {
                 {/* Movie Strip Preview */}
                 <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide snap-x">
                   {rank.movies.slice(0, 6).map((movie, idx) => (
-                    <Link 
+                    <div
                       key={idx} 
-                      to={`/movie/${movie.movieId}`} 
-                      className="relative flex-shrink-0 w-20 aspect-[2/3] bg-gray-800 rounded-md overflow-hidden shadow-md snap-start group/poster block hover:opacity-90 transition-opacity"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      className="relative flex-shrink-0 w-20 aspect-[2/3] bg-gray-800 rounded-md overflow-hidden shadow-md snap-start group/poster"
                     >
                        <img 
                          src={movie.posterPath ? `https://image.tmdb.org/t/p/w200${movie.posterPath}` : '/assets/images/poster1.png'} 
@@ -200,16 +212,16 @@ const RanksPage = () => {
                        <div className="absolute top-0 left-0 bg-black/70 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-br-md">
                          #{movie.rank}
                        </div>
-                    </Link>
+                    </div>
                   ))}
                   {rank.movies.length > 6 && (
-                    <Link to={`/rank/${rank._id}`} className="flex-shrink-0 w-20 aspect-[2/3] bg-gray-800/50 border-2 border-dashed border-gray-700 rounded-md flex flex-col items-center justify-center text-gray-400 hover:text-white transition-colors cursor-pointer">
+                    <div className="flex-shrink-0 w-20 aspect-[2/3] bg-gray-800/50 border-2 border-dashed border-gray-700 rounded-md flex flex-col items-center justify-center text-gray-400 group-hover:text-white transition-colors">
                       <span className="text-lg font-bold">+{rank.movies.length - 6}</span>
                       <span className="text-[10px]">more</span>
-                    </Link>
+                    </div>
                   )}
                 </div>
-              </div>
+              </Link>
             );
           })
         )}

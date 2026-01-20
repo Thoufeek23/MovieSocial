@@ -18,24 +18,25 @@ const BadgeDetail = () => {
               <div className="text-sm text-gray-400 mt-1">Badge · {badge.id}</div>
             </div>
             <p className="text-gray-300 text-sm mt-2">{badge.description}</p>
-            <div className="mt-4 w-full">
+            {/* View leaderboards button hidden per user request */}
+            {/*<div className="mt-4 w-full">
               <Link to="/leaderboard" className="w-full inline-flex justify-center btn btn-ghost">View leaderboards</Link>
-            </div>
+            </div>*/}
           </div>
         </aside>
 
         {/* Rules panel */}
         <section className="lg:col-span-2">
           <div className="bg-card p-6 rounded-md shadow-sm">
-            <h3 className="text-xl font-semibold mb-3">How the monthly tier is calculated</h3>
-            <p className="text-gray-300 mb-4">Each calendar month we compute two metrics for every contributing user: their review count for the month and the community agreement percentage on those reviews. We select a contribution level from I (highest) to IV, then select a medal (Diamond, Gold, Silver, Bronze) based on agreement.</p>
+            <h3 className="text-xl font-semibold mb-3">How the tier is calculated</h3>
+            <p className="text-gray-300 mb-4">Every three months we compute two metrics for every contributing user: their review count for the period and the community agreement percentage on those reviews. We select a contribution level from I (highest) to IV, then select a medal (Diamond, Gold, Silver, Bronze) based on agreement.</p>
 
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="text-sm text-gray-400 border-b border-gray-700">
                     <th className="py-3 pr-6">Level</th>
-                    <th className="py-3 pr-6">Reviews (month)</th>
+                    <th className="py-3 pr-6">Reviews (3 months)</th>
                     <th className="py-3 pr-6">Diamond</th>
                     <th className="py-3 pr-6">Gold</th>
                     <th className="py-3 pr-6">Silver</th>
@@ -80,7 +81,7 @@ const BadgeDetail = () => {
             </div>
 
             <div className="text-sm text-gray-400 mt-4">
-              <strong>Notes:</strong> Agreement is the average of agreement vote values on a user’s reviews for the month (values 0.0–1.0, converted to percent). The system first determines the level from review count, then selects the medal using agreement. Monthly-tier badges replace previous monthly-tier badges so users keep only the most recent monthly badge.
+              <strong>Notes:</strong> Agreement is the average of agreement vote values on a user's reviews for the period (values 0.0–1.0, converted to percent). The system first determines the level from review count, then selects the medal using agreement. Tier badges are updated every three months and replace previous tier badges so users keep only the most recent badge.
             </div>
           </div>
         </section>

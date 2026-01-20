@@ -256,10 +256,7 @@ const importLetterboxdRank = async (req, res) => {
             success: true,
             msg: isListImport 
                 ? `Process complete: ${importedCount} imported, ${updatedCount} updated.`
-                : `Imported recent activity successfully.`,
-            note: isListImport 
-                ? "Note: Scanned RSS feed for all public lists." 
-                : "Note: No lists found, so we created a rank from recent watches."
+                : `Imported recent activity successfully.`
         });
 
     } catch (err) {
@@ -353,7 +350,8 @@ const deleteRank = async (req, res) => {
     const rank = await Rank.findById(req.params.id);
     if (!rank) return res.status(404).json({ msg: 'Rank list not found' });
     
-    if (rank.user.toString() !== req.user.id) {
+    // Allow deletion if user is the author OR an admin
+    if (rank.user.toString() !== req.user.id && !req.user.isAdmin) {
       return res.status(403).json({ msg: 'Not authorized' });
     }
 
@@ -400,7 +398,8 @@ const deleteRankComment = async (req, res) => {
     if (idx === -1) return res.status(404).json({ msg: 'Comment not found' });
 
     const comment = rank.comments[idx];
-    if (String(comment.user) !== String(req.user.id) && String(rank.user) !== String(req.user.id)) {
+    // Allow deletion if user is the comment author, rank owner, OR an admin
+    if (String(comment.user) !== String(req.user.id) && String(rank.user) !== String(req.user.id) && !req.user.isAdmin) {
       return res.status(403).json({ msg: 'Not authorized' });
     }
 
@@ -488,7 +487,8 @@ const deleteRankReply = async (req, res) => {
     if (ridx === -1) return res.status(404).json({ msg: 'Reply not found' });
 
     const reply = replies[ridx];
-    if (String(reply.user) !== String(req.user.id) && String(rank.user) !== String(req.user.id)) {
+    // Allow deletion if user is the reply author, rank owner, OR an admin
+    if (String(reply.user) !== String(req.user.id) && String(rank.user) !== String(req.user.id) && !req.user.isAdmin) {
       return res.status(403).json({ msg: 'Not authorized' });
     }
 

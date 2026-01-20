@@ -49,8 +49,8 @@ const ReviewCard = ({ review, onEdit, onDelete }) => {
     String(user._id) === String(review.user._id)
   );
 
-  // Show modify controls if the logged-in user is the author and at least one handler is provided.
-  const canModify = isAuthor && (typeof onEdit === 'function' || typeof onDelete === 'function');
+  // Show modify controls if the logged-in user is the author or an admin and at least one handler is provided.
+  const canModify = (isAuthor || user?.isAdmin) && (typeof onEdit === 'function' || typeof onDelete === 'function');
 
   const IMG_BASE_URL = 'https://image.tmdb.org/t/p/w200';
 

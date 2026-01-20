@@ -155,37 +155,54 @@ const connectWithRetry = async (maxAttempts = 5, initialDelay = 2000) => {
 
 connectWithRetry();
 
-// Schedule monthly badge computation when the DB is connected and the feature is enabled.
+// Schedule quarterly badge computation when the DB is connected and the feature is enabled.
 // Enable by setting ENABLE_MONTHLY_BADGES=true in environment (recommended for production only).
 mongoose.connection.on('connected', () => {
   try {
     if (process.env.ENABLE_MONTHLY_BADGES === 'true') {
-      logger.info('Monthly badge computation is enabled. Scheduling monthly job.');
+      logger.info('Quarterly badge computation is enabled. Scheduling quarterly job.');
 
-      // Compute time (ms) until next run: first day of next month at 00:05 UTC
+      // Compute time (ms) until next run: first day of next quarter at 00:05 UTC
+      // Node.js setTimeout max value is 2147483647 ms (~24.8 days), so we need to handle longer waits
+      const MAX_TIMEOUT = 2147483647; // Max 32-bit signed integer
       const scheduleNextRun = () => {
         const now = new Date();
-        // next month first day
-        const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 5, 0));
-        const wait = Math.max(0, nextMonth.getTime() - Date.now());
-        logger.info('Scheduling monthly badge compute in ms:', wait);
+        // Calculate next quarter start (Jan 1, Apr 1, Jul 1, Oct 1)
+        const currentMonth = now.getUTCMonth();
+        const quarterStartMonth = Math.floor(currentMonth / 3) * 3; // 0, 3, 6, or 9
+        const nextQuarterStartMonth = (quarterStartMonth + 3) % 12;
+        const nextYear = nextQuarterStartMonth === 0 ? now.getUTCFullYear() + 1 : now.getUTCFullYear();
+        const nextQuarter = new Date(Date.UTC(nextYear, nextQuarterStartMonth, 1, 0, 5, 0));
+        let wait = Math.max(0, nextQuarter.getTime() - Date.now());
+        
+        // If wait exceeds max timeout, schedule a check-in earlier
+        if (wait > MAX_TIMEOUT) {
+          logger.info(`Quarterly badge compute scheduled in ${Math.ceil(wait / (1000 * 60 * 60 * 24))} days, breaking into smaller intervals`);
+          wait = MAX_TIMEOUT - (60 * 60 * 1000); // Schedule 1 hour before max, then recheck
+          setTimeout(() => scheduleNextRun(), wait); // Reschedule when we get closer
+          return;
+        }
+        
+        logger.info('Scheduling quarterly badge compute in ms:', wait);
 
         setTimeout(async () => {
           try {
-            // Compute for previous month
+            // Compute for previous quarter (last 3 months)
             const runDate = new Date();
             runDate.setUTCDate(1);
             runDate.setUTCHours(0,0,0,0);
-            runDate.setUTCMonth(runDate.getUTCMonth()); // keep month as current month
-            // previous month year/month
-            const prev = new Date(Date.UTC(runDate.getUTCFullYear(), runDate.getUTCMonth() - 1, 1));
-            const year = prev.getUTCFullYear();
-            const month = prev.getUTCMonth() + 1; // 1-12
-            logger.info('Running monthly badge compute for', year, month);
-            await badges.computeMonthlyBadges(year, month);
-            logger.info('Monthly badge compute finished for', year, month);
+            // Calculate the start of the previous quarter
+            const currentMonth = runDate.getUTCMonth();
+            const currentQuarterStart = Math.floor(currentMonth / 3) * 3;
+            const prevQuarterStart = currentQuarterStart - 3;
+            const prevQuarterYear = prevQuarterStart < 0 ? runDate.getUTCFullYear() - 1 : runDate.getUTCFullYear();
+            const prevQuarterMonth = prevQuarterStart < 0 ? prevQuarterStart + 12 : prevQuarterStart;
+            const startMonth = prevQuarterMonth + 1; // 1-12 format
+            logger.info('Running quarterly badge compute for quarter starting', prevQuarterYear, startMonth);
+            await badges.computeQuarterlyBadges(prevQuarterYear, startMonth);
+            logger.info('Quarterly badge compute finished for quarter starting', prevQuarterYear, startMonth);
           } catch (err) {
-            logger.error('Monthly badge compute failed', err);
+            logger.error('Quarterly badge compute failed', err);
           } finally {
             // schedule next run
             scheduleNextRun();
@@ -196,10 +213,10 @@ mongoose.connection.on('connected', () => {
       // kick off schedule
       scheduleNextRun();
     } else {
-      logger.info('Monthly badge computation is disabled. Set ENABLE_MONTHLY_BADGES=true to enable.');
+      logger.info('Quarterly badge computation is disabled. Set ENABLE_MONTHLY_BADGES=true to enable.');
     }
   } catch (e) {
-    logger.error('Failed to schedule monthly badge compute', e);
+    logger.error('Failed to schedule quarterly badge compute', e);
   }
 });
 

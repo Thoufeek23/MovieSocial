@@ -5,7 +5,13 @@ const logger = require('../utils/logger');
 // GET /api/discussions - list recent discussions
 const listDiscussions = async (req, res) => {
   try {
-    const { movieId, sortBy } = req.query;
+    const { movieId, sortBy, personalized } = req.query;
+    
+    // If personalized is requested and user is logged in, use personalized feed
+    if (personalized === 'true' && req.user?.id) {
+      return getPersonalizedDiscussions(req, res);
+    }
+    
     let query = {};
     if (movieId) query.movieId = String(movieId);
 
@@ -31,6 +37,165 @@ const listDiscussions = async (req, res) => {
   .populate('comments.user', 'username avatar')
   .populate('comments.replies.user', 'username avatar');
     res.json(discussions);
+  } catch (err) {
+    logger.error(err);
+    res.status(500).json({ msg: 'Server Error' });
+  }
+};
+
+// GET /api/discussions (with personalized=true) - get personalized discussions
+const getPersonalizedDiscussions = async (req, res) => {
+  try {
+    const { movieId, sortBy } = req.query;
+    
+    // Get user interests and following list
+    const user = await User.findById(req.user.id).select('interests following');
+    const userInterests = user?.interests || [];
+    const followingIds = user?.following || [];
+    
+    // If no interests and not following anyone, fall back to regular feed
+    if (userInterests.length === 0 && followingIds.length === 0) {
+      req.query.personalized = 'false'; // Prevent infinite loop
+      return listDiscussions(req, res);
+    }
+    
+    let query = {};
+    if (movieId) query.movieId = String(movieId);
+    
+    // Helper function to shuffle array
+    const shuffleArray = (array) => {
+      const shuffled = [...array];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      return shuffled;
+    };
+    
+    // PRIORITY 1: Get discussions from followed users (up to 15)
+    let followedDiscussions = [];
+    if (followingIds.length > 0) {
+      followedDiscussions = await Discussion.find({ 
+        ...query,
+        starter: { $in: followingIds } 
+      })
+        .sort({ createdAt: -1 })
+        .limit(30)
+        .populate('starter', 'username avatar')
+        .populate('comments.user', 'username avatar')
+        .populate('comments.replies.user', 'username avatar');
+      
+      followedDiscussions = shuffleArray(followedDiscussions).slice(0, 15);
+    }
+    
+    // PRIORITY 2: Get discussions based on interests (movie language)
+    let interestBasedDiscussions = [];
+    if (userInterests.length > 0) {
+      const languageMap = {
+        'English': 'en',
+        'Hindi': 'hi', 
+        'Tamil': 'ta',
+        'Telugu': 'te',
+        'Malayalam': 'ml',
+        'Kannada': 'kn',
+        'Korean': 'ko',
+        'French': 'fr',
+        'Spanish': 'es'
+      };
+      
+      const languageCodes = userInterests
+        .filter(interest => languageMap[interest])
+        .map(interest => languageMap[interest]);
+      
+      if (languageCodes.length > 0) {
+        const axios = require('axios');
+        const tmdbApi = axios.create({ baseURL: 'https://api.themoviedb.org/3' });
+        
+        // Get discussions excluding already selected followed ones
+        const followedDiscussionIds = followedDiscussions.map(d => d._id);
+        const allDiscussions = await Discussion.find({ 
+          ...query,
+          _id: { $nin: followedDiscussionIds }
+        })
+          .sort({ createdAt: -1 })
+          .limit(100)
+          .populate('starter', 'username avatar')
+          .populate('comments.user', 'username avatar')
+          .populate('comments.replies.user', 'username avatar');
+        
+        const discussionsByLanguage = {};
+        
+        // Group discussions by movie language
+        for (const discussion of allDiscussions) {
+          try {
+            const movieResponse = await tmdbApi.get(`/movie/${discussion.movieId}`, {
+              params: { api_key: process.env.TMDB_API_KEY }
+            });
+            
+            const movie = movieResponse.data;
+            if (movie.original_language && languageCodes.includes(movie.original_language)) {
+              if (!discussionsByLanguage[movie.original_language]) {
+                discussionsByLanguage[movie.original_language] = [];
+              }
+              discussionsByLanguage[movie.original_language].push(discussion);
+            }
+          } catch (error) {
+            continue;
+          }
+        }
+        
+        // Shuffle within each language
+        Object.keys(discussionsByLanguage).forEach(lang => {
+          discussionsByLanguage[lang] = shuffleArray(discussionsByLanguage[lang]);
+        });
+        
+        // Round-robin distribution (up to 15)
+        const maxPerLang = Math.ceil(15 / languageCodes.length);
+        const languages = Object.keys(discussionsByLanguage);
+        
+        if (languages.length > 0) {
+          let round = 0;
+          while (interestBasedDiscussions.length < 15 && round < maxPerLang) {
+            for (const lang of languages) {
+              if (interestBasedDiscussions.length >= 15) break;
+              
+              const langDiscussions = discussionsByLanguage[lang];
+              if (langDiscussions && langDiscussions[round]) {
+                interestBasedDiscussions.push(langDiscussions[round]);
+              }
+            }
+            round++;
+          }
+        }
+      }
+    }
+    
+    // Combine followed discussions (priority) + interest-based discussions
+    let personalizedDiscussions = [...followedDiscussions, ...interestBasedDiscussions];
+    
+    // If we don't have enough, fill with general discussions
+    if (personalizedDiscussions.length < 30) {
+      const personalizedIds = personalizedDiscussions.map(d => d._id);
+      const generalDiscussions = await Discussion.find({
+        ...query,
+        _id: { $nin: personalizedIds }
+      })
+        .sort({ createdAt: -1 })
+        .limit(30 - personalizedDiscussions.length)
+        .populate('starter', 'username avatar')
+        .populate('comments.user', 'username avatar')
+        .populate('comments.replies.user', 'username avatar');
+      
+      personalizedDiscussions.push(...generalDiscussions);
+    }
+    
+    // Keep followed posts prioritized, shuffle the rest
+    const finalDiscussions = [
+      ...followedDiscussions,
+      ...shuffleArray(personalizedDiscussions.slice(followedDiscussions.length))
+    ].slice(0, 30);
+    
+    res.json(finalDiscussions);
   } catch (err) {
     logger.error(err);
     res.status(500).json({ msg: 'Server Error' });
@@ -148,8 +313,8 @@ const deleteComment = async (req, res) => {
     if (idx === -1) return res.status(404).json({ msg: 'Comment not found' });
 
     const comment = discussion.comments[idx];
-    // allow deletion by comment author or discussion starter
-    if (String(comment.user) !== String(req.user.id) && String(discussion.starter) !== String(req.user.id)) {
+    // allow deletion by comment author, discussion starter, or admin
+    if (String(comment.user) !== String(req.user.id) && String(discussion.starter) !== String(req.user.id) && !req.user.isAdmin) {
       return res.status(403).json({ msg: 'Not authorized' });
     }
 
@@ -208,8 +373,8 @@ const deleteReply = async (req, res) => {
     if (ridx === -1) return res.status(404).json({ msg: 'Reply not found' });
 
     const reply = replies[ridx];
-    // allow deletion by reply author or discussion starter
-    if (String(reply.user) !== String(req.user.id) && String(discussion.starter) !== String(req.user.id)) {
+    // allow deletion by reply author, discussion starter, or admin
+    if (String(reply.user) !== String(req.user.id) && String(discussion.starter) !== String(req.user.id) && !req.user.isAdmin) {
       return res.status(403).json({ msg: 'Not authorized' });
     }
 
@@ -229,13 +394,13 @@ const deleteReply = async (req, res) => {
   }
 };
 
-// PUT /api/discussions/:id - update discussion (only starter)
+// PUT /api/discussions/:id - update discussion (only starter or admin)
 const updateDiscussion = async (req, res) => {
   try {
     const { title, tag } = req.body;
     const discussion = await Discussion.findById(req.params.id);
     if (!discussion) return res.status(404).json({ msg: 'Discussion not found' });
-    if (String(discussion.starter) !== String(req.user.id)) return res.status(403).json({ msg: 'Not authorized' });
+    if (String(discussion.starter) !== String(req.user.id) && !req.user.isAdmin) return res.status(403).json({ msg: 'Not authorized' });
 
     if (title) discussion.title = title;
     if (tag) discussion.tag = tag;
@@ -251,12 +416,12 @@ const updateDiscussion = async (req, res) => {
   }
 };
 
-// DELETE /api/discussions/:id - delete a discussion (protected, only starter)
+// DELETE /api/discussions/:id - delete a discussion (protected, only starter or admin)
 const deleteDiscussion = async (req, res) => {
   try {
     const discussion = await Discussion.findById(req.params.id);
     if (!discussion) return res.status(404).json({ msg: 'Discussion not found' });
-    if (String(discussion.starter) !== String(req.user.id)) return res.status(403).json({ msg: 'Not authorized' });
+    if (String(discussion.starter) !== String(req.user.id) && !req.user.isAdmin) return res.status(403).json({ msg: 'Not authorized' });
       // Use model-level deletion for compatibility across Mongoose versions
       await Discussion.findByIdAndDelete(discussion._id);
     res.json({ msg: 'Discussion deleted' });

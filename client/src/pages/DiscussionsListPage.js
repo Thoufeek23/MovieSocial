@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
 import * as api from '../api';
 import { Link } from 'react-router-dom';
 import BookmarkButton from '../components/BookmarkButton';
+import { AuthContext } from '../context/AuthContext';
 
 const DiscussionsListPage = () => {
+  const { user } = useContext(AuthContext);
   const [discussions, setDiscussions] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -11,7 +13,10 @@ const DiscussionsListPage = () => {
     const fetch = async () => {
       setLoading(true);
       try {
-        const res = await api.fetchDiscussions();
+        // Use personalized discussions if user is logged in
+        const res = user 
+          ? await api.fetchPersonalizedDiscussions()
+          : await api.fetchDiscussions();
         const discs = res.data || [];
         const top = discs.slice(0, 12);
         const withPosters = await Promise.all(top.map(async d => {
@@ -30,7 +35,7 @@ const DiscussionsListPage = () => {
       }
     };
     fetch();
-  }, []);
+  }, [user]);
 
   return (
     <div>

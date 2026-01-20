@@ -60,7 +60,60 @@ const ReviewsPage = () => {
 
       {loading ? (
         <div className="space-y-4">
-          <Skeleton height={150} count={3} />
+          {Array(3).fill(0).map((_, index) => (
+            <div key={index} className="bg-gray-900/50 border border-gray-700/50 rounded-xl p-4">
+              <div className="flex gap-4">
+                {/* Movie poster skeleton */}
+                <Skeleton 
+                  width={80} 
+                  height={120}
+                  baseColor="rgba(255,255,255,0.05)"
+                  highlightColor="rgba(255,255,255,0.15)"
+                />
+                <div className="flex-1">
+                  {/* User info skeleton */}
+                  <div className="flex items-center gap-2 mb-3">
+                    <Skeleton 
+                      circle 
+                      width={32} 
+                      height={32}
+                      baseColor="rgba(255,255,255,0.05)"
+                      highlightColor="rgba(255,255,255,0.15)"
+                    />
+                    <Skeleton 
+                      width={120}
+                      height={16}
+                      baseColor="rgba(255,255,255,0.05)"
+                      highlightColor="rgba(255,255,255,0.15)"
+                    />
+                  </div>
+                  {/* Movie title skeleton */}
+                  <Skeleton 
+                    width="70%"
+                    height={20}
+                    baseColor="rgba(255,255,255,0.05)"
+                    highlightColor="rgba(255,255,255,0.15)"
+                    className="mb-2"
+                  />
+                  {/* Stars skeleton */}
+                  <Skeleton 
+                    width={100}
+                    height={18}
+                    baseColor="rgba(255,255,255,0.05)"
+                    highlightColor="rgba(255,255,255,0.15)"
+                    className="mb-3"
+                  />
+                  {/* Review text skeleton */}
+                  <Skeleton 
+                    count={2}
+                    height={14}
+                    baseColor="rgba(255,255,255,0.05)"
+                    highlightColor="rgba(255,255,255,0.15)"
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
         <div className="space-y-4">

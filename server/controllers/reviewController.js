@@ -280,78 +280,24 @@ const getFeedReviews = async (req, res) => {
     }
 };
 
-// @desc    Get personalized reviews based on user interests
+// @desc    Get personalized reviews based on user interests and followed users
 // @route   GET /api/reviews/personalized
 const getPersonalizedFeedReviews = async (req, res) => {
     try {
         let userInterests = [];
+        let followingIds = [];
         
-        // Get user interests if logged in
+        // Get user interests and following list if logged in
         if (req.user?.id) {
             const User = require('../models/User');
-            const user = await User.findById(req.user.id).select('interests');
+            const user = await User.findById(req.user.id).select('interests following');
             userInterests = user?.interests || [];
+            followingIds = user?.following || [];
         }
         
-        // If no interests, fall back to regular feed
-        if (userInterests.length === 0) {
+        // If no interests and not following anyone, fall back to regular feed
+        if (userInterests.length === 0 && followingIds.length === 0) {
             return getFeedReviews(req, res);
-        }
-        
-        // Map interests to language codes for movie filtering
-        const languageMap = {
-            'English': 'en',
-            'Hindi': 'hi', 
-            'Tamil': 'ta',
-            'Telugu': 'te',
-            'Malayalam': 'ml',
-            'Kannada': 'kn',
-            'Korean': 'ko',
-            'French': 'fr',
-            'Spanish': 'es'
-        };
-        
-        const languageCodes = userInterests
-            .filter(interest => languageMap[interest])
-            .map(interest => languageMap[interest]);
-        
-        if (languageCodes.length === 0) {
-            return getFeedReviews(req, res);
-        }
-        
-        // Get movie details for reviews to filter by language
-        const axios = require('axios');
-        const tmdbApi = axios.create({ baseURL: 'https://api.themoviedb.org/3' });
-        
-        // Get recent reviews first
-        const allReviews = await Review.find()
-            .populate('user', 'username avatar _id badges')
-            .sort({ createdAt: -1 })
-            .limit(100); // Get more to filter from
-        
-        // Filter out reviews with null user
-        const validReviews = allReviews.filter(r => r.user);
-        
-        const reviewsByLanguage = {};
-        
-        // Group reviews by language
-        for (const review of validReviews) {
-            try {
-                const movieResponse = await tmdbApi.get(`/movie/${review.movieId}`, {
-                    params: { api_key: process.env.TMDB_API_KEY }
-                });
-                
-                const movie = movieResponse.data;
-                if (movie.original_language && languageCodes.includes(movie.original_language)) {
-                    if (!reviewsByLanguage[movie.original_language]) {
-                        reviewsByLanguage[movie.original_language] = [];
-                    }
-                    reviewsByLanguage[movie.original_language].push(review);
-                }
-            } catch (error) {
-                // If movie fetch fails, skip this review
-                continue;
-            }
         }
         
         // Helper function to shuffle array
@@ -364,49 +310,124 @@ const getPersonalizedFeedReviews = async (req, res) => {
             return shuffled;
         };
         
-        // Shuffle reviews within each language
-        Object.keys(reviewsByLanguage).forEach(lang => {
-            reviewsByLanguage[lang] = shuffleArray(reviewsByLanguage[lang]);
-        });
+        // PRIORITY 1: Get reviews from followed users (up to 10)
+        let followedReviews = [];
+        if (followingIds.length > 0) {
+            followedReviews = await Review.find({ user: { $in: followingIds } })
+                .populate('user', 'username avatar _id badges')
+                .sort({ createdAt: -1 })
+                .limit(20);
+            
+            followedReviews = followedReviews.filter(r => r.user);
+            followedReviews = shuffleArray(followedReviews).slice(0, 10);
+        }
         
-        // Create balanced mix using round-robin distribution
-        const personalizedReviews = [];
-        const maxReviewsPerLang = Math.ceil(20 / languageCodes.length);
-        const languages = Object.keys(reviewsByLanguage);
-        
-        if (languages.length > 0) {
-            let round = 0;
-            while (personalizedReviews.length < 20 && round < maxReviewsPerLang) {
-                for (const lang of languages) {
-                    if (personalizedReviews.length >= 20) break;
-                    
-                    const langReviews = reviewsByLanguage[lang];
-                    if (langReviews && langReviews[round]) {
-                        personalizedReviews.push(langReviews[round]);
+        // PRIORITY 2: Get reviews based on language interests
+        let interestBasedReviews = [];
+        if (userInterests.length > 0) {
+            // Map interests to language codes for movie filtering
+            const languageMap = {
+                'English': 'en',
+                'Hindi': 'hi', 
+                'Tamil': 'ta',
+                'Telugu': 'te',
+                'Malayalam': 'ml',
+                'Kannada': 'kn',
+                'Korean': 'ko',
+                'French': 'fr',
+                'Spanish': 'es'
+            };
+            
+            const languageCodes = userInterests
+                .filter(interest => languageMap[interest])
+                .map(interest => languageMap[interest]);
+            
+            if (languageCodes.length > 0) {
+                // Get movie details for reviews to filter by language
+                const axios = require('axios');
+                const tmdbApi = axios.create({ baseURL: 'https://api.themoviedb.org/3' });
+                
+                // Get recent reviews (excluding already selected followed reviews)
+                const followedReviewIds = followedReviews.map(r => r._id.toString());
+                const allReviews = await Review.find({ 
+                    _id: { $nin: followedReviews.map(r => r._id) }
+                })
+                    .populate('user', 'username avatar _id badges')
+                    .sort({ createdAt: -1 })
+                    .limit(100);
+                
+                const validReviews = allReviews.filter(r => r.user);
+                const reviewsByLanguage = {};
+                
+                // Group reviews by language
+                for (const review of validReviews) {
+                    try {
+                        const movieResponse = await tmdbApi.get(`/movie/${review.movieId}`, {
+                            params: { api_key: process.env.TMDB_API_KEY }
+                        });
+                        
+                        const movie = movieResponse.data;
+                        if (movie.original_language && languageCodes.includes(movie.original_language)) {
+                            if (!reviewsByLanguage[movie.original_language]) {
+                                reviewsByLanguage[movie.original_language] = [];
+                            }
+                            reviewsByLanguage[movie.original_language].push(review);
+                        }
+                    } catch (error) {
+                        continue;
                     }
                 }
-                round++;
+                
+                // Shuffle reviews within each language
+                Object.keys(reviewsByLanguage).forEach(lang => {
+                    reviewsByLanguage[lang] = shuffleArray(reviewsByLanguage[lang]);
+                });
+                
+                // Create balanced mix using round-robin distribution (up to 10)
+                const maxReviewsPerLang = Math.ceil(10 / languageCodes.length);
+                const languages = Object.keys(reviewsByLanguage);
+                
+                if (languages.length > 0) {
+                    let round = 0;
+                    while (interestBasedReviews.length < 10 && round < maxReviewsPerLang) {
+                        for (const lang of languages) {
+                            if (interestBasedReviews.length >= 10) break;
+                            
+                            const langReviews = reviewsByLanguage[lang];
+                            if (langReviews && langReviews[round]) {
+                                interestBasedReviews.push(langReviews[round]);
+                            }
+                        }
+                        round++;
+                    }
+                }
             }
         }
         
-        // If we don't have enough personalized reviews, mix with general feed
-        if (personalizedReviews.length < 10) {
-            const generalReviews = await Review.find()
+        // Combine followed reviews (priority) + interest-based reviews
+        let personalizedReviews = [...followedReviews, ...interestBasedReviews];
+        
+        // If we don't have enough, fill with general feed
+        if (personalizedReviews.length < 20) {
+            const personalizedIds = personalizedReviews.map(r => r._id.toString());
+            const generalReviews = await Review.find({
+                _id: { $nin: personalizedReviews.map(r => r._id) }
+            })
                 .populate('user', 'username avatar _id badges')
                 .sort({ createdAt: -1 })
                 .limit(20 - personalizedReviews.length);
             
-            // Filter out reviews with null user and add general reviews that aren't already included
-            const personalizedIds = personalizedReviews.map(r => r._id.toString());
-            const additionalReviews = generalReviews.filter(r => 
-                r.user && !personalizedIds.includes(r._id.toString())
-            );
-            
+            const additionalReviews = generalReviews.filter(r => r.user);
             personalizedReviews.push(...additionalReviews);
         }
         
-        // Final shuffle to ensure good distribution
-        const finalReviews = shuffleArray(personalizedReviews).slice(0, 20);
+        // Final shuffle to ensure good distribution while keeping followed posts prioritized
+        // Keep first 10 (followed), shuffle the rest
+        const finalReviews = [
+            ...followedReviews,
+            ...shuffleArray(personalizedReviews.slice(followedReviews.length))
+        ].slice(0, 20);
+        
         res.json(finalReviews);
     } catch (error) {
         res.status(500).json({ msg: 'Server Error' });
@@ -493,8 +514,8 @@ const updateReview = async (req, res) => {
         let review = await Review.findById(req.params.id);
         if (!review) return res.status(404).json({ msg: 'Review not found' });
 
-        // IMPORTANT: Ensure the user owns the review
-        if (review.user.toString() !== req.user.id) {
+        // IMPORTANT: Ensure the user owns the review or is an admin
+        if (review.user.toString() !== req.user.id && !req.user.isAdmin) {
             return res.status(401).json({ msg: 'User not authorized' });
         }
 
@@ -519,8 +540,8 @@ const deleteReview = async (req, res) => {
         let review = await Review.findById(req.params.id);
         if (!review) return res.status(404).json({ msg: 'Review not found' });
         
-        // IMPORTANT: Ensure the user owns the review
-        if (review.user.toString() !== req.user.id) {
+        // IMPORTANT: Ensure the user owns the review or is an admin
+        if (review.user.toString() !== req.user.id && !req.user.isAdmin) {
             return res.status(401).json({ msg: 'User not authorized' });
         }
 

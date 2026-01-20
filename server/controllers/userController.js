@@ -328,29 +328,80 @@ const deleteMyAccount = async (req, res) => {
         const user = await User.findById(userId);
         if (!user) return res.status(404).json({ msg: 'User not found' });
 
+        // Delete all reviews by this user
         try {
-            await Comment.deleteMany({ user: userId });
+            await Review.deleteMany({ user: userId });
+            // Remove user from likes and agreement votes in other reviews
             await Review.updateMany({ likes: userId }, { $pull: { likes: userId } });
             await Review.updateMany({ 'agreementVotes.user': userId }, { $pull: { agreementVotes: { user: userId } } });
-            await Review.deleteMany({ user: userId });
-        } catch (e) {}
+        } catch (e) {
+            logger.error('Error deleting reviews:', e);
+        }
 
+        // Delete all discussions started by this user
         try {
             await Discussion.deleteMany({ starter: userId });
+            // Remove all comments and replies made by this user from all discussions
             await Discussion.updateMany(
                 { 'comments.user': userId },
                 { $pull: { comments: { user: userId } } }
             );
-        } catch (e) {}
+            await Discussion.updateMany(
+                { 'comments.replies.user': userId },
+                { $pull: { 'comments.$[].replies': { user: userId } } }
+            );
+        } catch (e) {
+            logger.error('Error deleting discussions:', e);
+        }
 
+        // Delete all ranks/lists created by this user
+        try {
+            const Rank = require('../models/Rank');
+            await Rank.deleteMany({ user: userId });
+            // Remove user from likes and comments in other ranks
+            await Rank.updateMany({ likes: userId }, { $pull: { likes: userId } });
+            await Rank.updateMany(
+                { 'comments.user': userId },
+                { $pull: { comments: { user: userId } } }
+            );
+            await Rank.updateMany(
+                { 'comments.replies.user': userId },
+                { $pull: { 'comments.$[].replies': { user: userId } } }
+            );
+        } catch (e) {
+            logger.error('Error deleting ranks:', e);
+        }
+
+        // Delete all messages sent or received by this user
+        try {
+            const Message = require('../models/Message');
+            await Message.deleteMany({ $or: [{ sender: userId }, { recipient: userId }] });
+        } catch (e) {
+            logger.error('Error deleting messages:', e);
+        }
+
+        // Delete all comments made by this user
+        try {
+            await Comment.deleteMany({ user: userId });
+        } catch (e) {
+            logger.error('Error deleting comments:', e);
+        }
+
+        // Remove user from all followers/following arrays
         try {
             await User.updateMany({ followers: userId }, { $pull: { followers: userId } });
             await User.updateMany({ following: userId }, { $pull: { following: userId } });
-        } catch (e) {}
+        } catch (e) {
+            logger.error('Error removing from follow lists:', e);
+        }
 
+        // Finally, delete the user account
         await User.findByIdAndDelete(userId);
-        res.json({ msg: 'Account deleted' });
+        
+        logger.info(`User ${user.username} deleted their account`);
+        res.json({ msg: 'Account deleted successfully. All your data has been removed.' });
     } catch (error) {
+        logger.error('Error deleting account:', error);
         res.status(500).json({ msg: 'Server Error' });
     }
 };
@@ -383,34 +434,83 @@ const deleteUser = async (req, res) => {
              return res.status(400).json({ msg: 'You cannot delete your own admin account from here.' });
         }
 
-        // --- Cleanup Logic (Same as deleteMyAccount) ---
+        // --- Comprehensive Cleanup Logic ---
+        
+        // Delete all reviews by this user
         try {
-            await Comment.deleteMany({ user: userId });
+            await Review.deleteMany({ user: userId });
+            // Remove user from likes and agreement votes in other reviews
             await Review.updateMany({ likes: userId }, { $pull: { likes: userId } });
             await Review.updateMany({ 'agreementVotes.user': userId }, { $pull: { agreementVotes: { user: userId } } });
-            await Review.deleteMany({ user: userId });
-        } catch (e) { logger.error(e); }
+        } catch (e) { 
+            logger.error('Error deleting reviews:', e); 
+        }
 
+        // Delete all discussions started by this user
         try {
             await Discussion.deleteMany({ starter: userId });
+            // Remove all comments and replies made by this user from all discussions
             await Discussion.updateMany(
                 { 'comments.user': userId },
                 { $pull: { comments: { user: userId } } }
             );
-        } catch (e) { logger.error(e); }
+            await Discussion.updateMany(
+                { 'comments.replies.user': userId },
+                { $pull: { 'comments.$[].replies': { user: userId } } }
+            );
+        } catch (e) { 
+            logger.error('Error deleting discussions:', e); 
+        }
 
+        // Delete all ranks/lists created by this user
+        try {
+            const Rank = require('../models/Rank');
+            await Rank.deleteMany({ user: userId });
+            // Remove user from likes and comments in other ranks
+            await Rank.updateMany({ likes: userId }, { $pull: { likes: userId } });
+            await Rank.updateMany(
+                { 'comments.user': userId },
+                { $pull: { comments: { user: userId } } }
+            );
+            await Rank.updateMany(
+                { 'comments.replies.user': userId },
+                { $pull: { 'comments.$[].replies': { user: userId } } }
+            );
+        } catch (e) { 
+            logger.error('Error deleting ranks:', e); 
+        }
+
+        // Delete all messages sent or received by this user
+        try {
+            const Message = require('../models/Message');
+            await Message.deleteMany({ $or: [{ sender: userId }, { recipient: userId }] });
+        } catch (e) { 
+            logger.error('Error deleting messages:', e); 
+        }
+
+        // Delete all comments made by this user
+        try {
+            await Comment.deleteMany({ user: userId });
+        } catch (e) { 
+            logger.error('Error deleting comments:', e); 
+        }
+
+        // Remove user from all followers/following arrays
         try {
             await User.updateMany({ followers: userId }, { $pull: { followers: userId } });
             await User.updateMany({ following: userId }, { $pull: { following: userId } });
-        } catch (e) { logger.error(e); }
+        } catch (e) { 
+            logger.error('Error removing from follow lists:', e); 
+        }
 
+        // Finally, delete the user account
         await User.findByIdAndDelete(userId);
         
         logger.info(`User ${user.username} deleted by Admin ${req.user.username}`);
-        res.json({ msg: 'User deleted successfully' });
+        res.json({ msg: 'User deleted successfully. All associated data has been removed.' });
 
     } catch (error) {
-        logger.error(error);
+        logger.error('Error deleting user:', error);
         res.status(500).json({ msg: 'Server Error' });
     }
 };

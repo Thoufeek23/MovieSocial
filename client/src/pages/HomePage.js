@@ -82,9 +82,11 @@ const HomePage = () => {
             const feedRes = await api.fetchFeed();
             setReviews(feedRes.data);
           }
-          // load discussions
+          // load discussions with personalization if user is logged in
           try {
-            const discRes = await fetchDiscussions({ sortBy: 'comments' });
+            const discRes = user 
+              ? await api.fetchPersonalizedDiscussions({ sortBy: 'comments' })
+              : await fetchDiscussions({ sortBy: 'comments' });
             const discs = discRes.data || [];
             // fetch posters for top discussions (limit)
             const top = discs.slice(0, 12);
@@ -204,9 +206,13 @@ const HomePage = () => {
       ) : (
         loading ? (
           <div>
-            <Skeleton height={40} width={300} className="mb-4" />
-            <div className="flex space-x-4">
-              <Skeleton height={270} width={192} count={5}/>
+            <h2 className="text-3xl font-bold mb-6">{user ? "Recommended For You" : "Popular This Week"}</h2>
+            <div className="flex space-x-4 overflow-hidden">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex-shrink-0">
+                  <Skeleton height={270} width={192} baseColor="rgba(255,255,255,0.05)" highlightColor="rgba(255,255,255,0.15)" />
+                </div>
+              ))}
             </div>
           </div>
         ) : (
@@ -218,7 +224,9 @@ const HomePage = () => {
         <h2 className="text-3xl font-bold mb-4">Latest Reviews</h2>
         {loading ? (
           <div className="space-y-4">
-            <Skeleton height={150} count={3}/>
+            {[...Array(3)].map((_, i) => (
+              <Skeleton key={i} height={150} baseColor="rgba(255,255,255,0.05)" highlightColor="rgba(255,255,255,0.15)" />
+            ))}
           </div>
         ) : (
           <div className="space-y-4">

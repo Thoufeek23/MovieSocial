@@ -6,6 +6,8 @@ import Avatar from '../components/Avatar';
 import * as api from '../api';
 import toast from 'react-hot-toast';
 import { io } from 'socket.io-client';
+import Skeleton from 'react-loading-skeleton';
+import 'react-loading-skeleton/dist/skeleton.css';
 
 // --- 1. NEW: CHAT REVIEW CARD (Compact version) ---
 const ChatReviewCard = ({ review }) => {
@@ -139,12 +141,16 @@ const MessagesPage = () => {
     const [newMessage, setNewMessage] = useState('');
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
+    const [searching, setSearching] = useState(false);
 
     // Refs
     const scrollRef = useRef();
     const inputRef = useRef();
     const socketRef = useRef();
     const currentChatRef = useRef();
+    const searchTimeoutRef = useRef();
 
     // Parse query params
     const queryParams = new URLSearchParams(location.search);
@@ -317,10 +323,40 @@ const MessagesPage = () => {
     };
 
     const handleDeleteMessage = async (msgId) => {
-        if (!window.confirm("Delete this message?")) return;
+        const confirmed = await new Promise((resolve) => {
+            toast((t) => (
+                <div className="flex items-center gap-3">
+                    <span className="flex-1">Delete this message?</span>
+                    <button
+                        onClick={() => {
+                            toast.dismiss(t.id);
+                            resolve(true);
+                        }}
+                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-md"
+                    >
+                        Delete
+                    </button>
+                    <button
+                        onClick={() => {
+                            toast.dismiss(t.id);
+                            resolve(false);
+                        }}
+                        className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white text-sm font-semibold rounded-md"
+                    >
+                        Cancel
+                    </button>
+                </div>
+            ), {
+                duration: 5000,
+            });
+        });
+
+        if (!confirmed) return;
+
         try {
             setMessages(prev => prev.filter(m => m._id !== msgId));
             await api.deleteMessage(msgId);
+            toast.success('Message deleted');
         } catch (err) {
             toast.error("Failed to delete");
         }
@@ -345,6 +381,51 @@ const MessagesPage = () => {
 
     const groupedMessages = groupMessagesByDate(messages);
 
+    // Search for users
+    const handleSearchUsers = async (query) => {
+        if (!query.trim()) {
+            setSearchResults([]);
+            setSearching(false);
+            return;
+        }
+
+        setSearching(true);
+        try {
+            const { data } = await api.searchUsers(query);
+            // Filter out current user
+            const filtered = data.filter(u => u.username !== user.username);
+            setSearchResults(filtered);
+        } catch (error) {
+            console.error('Failed to search users', error);
+            setSearchResults([]);
+        } finally {
+            setSearching(false);
+        }
+    };
+
+    // Debounced search
+    useEffect(() => {
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+        }
+
+        searchTimeoutRef.current = setTimeout(() => {
+            handleSearchUsers(searchQuery);
+        }, 300);
+
+        return () => {
+            if (searchTimeoutRef.current) {
+                clearTimeout(searchTimeoutRef.current);
+            }
+        };
+    }, [searchQuery]);
+
+    const handleSelectSearchResult = async (selectedUser) => {
+        setSearchQuery('');
+        setSearchResults([]);
+        await handleSelectChat(selectedUser);
+    };
+
     return (
         <div className="flex h-[calc(100dvh-64px)] w-full bg-gray-950 text-gray-100 overflow-hidden relative">
 
@@ -353,19 +434,88 @@ const MessagesPage = () => {
                 ${currentChat ? 'hidden md:flex' : 'flex'} 
                 w-full md:w-80 lg:w-96 flex-col border-r border-gray-800 bg-gray-950 z-20 flex-shrink-0 h-full
             `}>
-                <div className="p-5 border-b border-gray-800 flex justify-between items-center bg-gray-950 flex-shrink-0">
-                    <h1 className="text-2xl font-bold text-white tracking-tight">Messages</h1>
+                <div className="p-5 border-b border-gray-800 bg-gray-950 flex-shrink-0 relative">
+                    <h1 className="text-2xl font-bold text-white tracking-tight mb-4">Messages</h1>
+                    
+                    {/* Search Bar */}
+                    <div className="relative">
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Search users..."
+                            className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent"
+                        />
+                        {searching && (
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                <div className="w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin"></div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Search Results */}
+                    {searchQuery && searchResults.length > 0 && (
+                        <div className="absolute left-0 right-0 mx-5 mt-2 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-30 max-h-64 overflow-y-auto">
+                            {searchResults.map(u => (
+                                <div
+                                    key={u._id}
+                                    onClick={() => handleSelectSearchResult(u)}
+                                    className="flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-800 transition-colors border-b border-gray-800 last:border-b-0"
+                                >
+                                    <Avatar username={u.username} avatar={u.avatar} sizeClass="w-10 h-10" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-medium text-gray-100 truncate">{u.username}</p>
+                                        {u.bio && <p className="text-xs text-gray-500 truncate">{u.bio}</p>}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    
+                    {searchQuery && !searching && searchResults.length === 0 && (
+                        <div className="absolute left-0 right-0 mx-5 mt-2 bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-4 text-center text-gray-500 text-sm z-30">
+                            No users found
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex-1 overflow-y-auto no-scrollbar">
-                    {loading && !conversations.length ? (
-                        <div className="p-4 flex justify-center mt-10"><div className="w-6 h-6 border-2 border-green-600 border-t-transparent rounded-full animate-spin"></div></div>
-                    ) : conversations.length === 0 ? (
-                        <div className="p-8 text-center text-gray-500 mt-10">
-                            <p>No conversations yet.</p>
-                        </div>
-                    ) : (
-                        conversations.map(conv => (
+                    {!searchQuery && (
+                        loading && !conversations.length ? (
+                            <div className="p-4 space-y-4">
+                                {Array(4).fill(0).map((_, index) => (
+                                    <div key={index} className="flex items-center gap-4 p-4">
+                                        <Skeleton 
+                                            circle 
+                                            width={48} 
+                                            height={48}
+                                            baseColor="rgba(255,255,255,0.05)"
+                                            highlightColor="rgba(255,255,255,0.15)"
+                                        />
+                                        <div className="flex-1">
+                                            <Skeleton 
+                                                width="60%"
+                                                height={16}
+                                                baseColor="rgba(255,255,255,0.05)"
+                                                highlightColor="rgba(255,255,255,0.15)"
+                                                className="mb-2"
+                                            />
+                                            <Skeleton 
+                                                width="40%"
+                                                height={14}
+                                                baseColor="rgba(255,255,255,0.05)"
+                                                highlightColor="rgba(255,255,255,0.15)"
+                                            />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : conversations.length === 0 ? (
+                            <div className="p-8 text-center text-gray-500 mt-10">
+                                <p>No conversations yet.</p>
+                            </div>
+                        ) : (
+                            conversations.map(conv => (
                             <div
                                 key={conv.otherUser._id}
                                 onClick={() => handleSelectChat(conv.otherUser)}
@@ -401,7 +551,7 @@ const MessagesPage = () => {
                                 </div>
                             </div>
                         ))
-                    )}
+                    ))}
                 </div>
             </div>
 

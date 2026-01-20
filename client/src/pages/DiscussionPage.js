@@ -24,6 +24,9 @@ const DiscussionPage = () => {
   const [commentProcessing, setCommentProcessing] = useState(false);
   const [replyBoxes, setReplyBoxes] = useState({}); 
   const [confirmState, setConfirmState] = useState({ open: false, title: '', onConfirm: null, loading: false, preview: '' });
+  const [editingDiscussion, setEditingDiscussion] = useState(false);
+  const [editDiscussionTitle, setEditDiscussionTitle] = useState('');
+  const [editDiscussionTag, setEditDiscussionTag] = useState('');
   
   // New Share State
   const [showShare, setShowShare] = useState(false);
@@ -57,6 +60,8 @@ const DiscussionPage = () => {
       try {
         const { data } = await api.getDiscussion(id);
         setDiscussion(data);
+        setEditDiscussionTitle(data.title);
+        setEditDiscussionTag(data.tag || 'General');
         // try to fetch movie poster for display (use movieId from discussion)
         try {
           const movieRes = await api.getMovieDetails(data.movieId);
@@ -234,6 +239,31 @@ const DiscussionPage = () => {
   const shareUrl = `${window.location.origin}/discussion/${id}`;
   const shareText = `Check out this discussion on MovieSocial:\n\n"${discussion.title}"\n\n${shareUrl}`;
 
+  const isDiscussionOwner = user && discussion.starter && (String(user.id || user._id) === String(discussion.starter._id));
+  const canModifyDiscussion = isDiscussionOwner || user?.isAdmin;
+
+  const handleEditDiscussion = async () => {
+    try {
+      await api.updateDiscussion(id, { title: editDiscussionTitle });
+      setDiscussion({ ...discussion, title: editDiscussionTitle });
+      setEditingDiscussion(false);
+      toast.success('Discussion updated');
+    } catch (err) {
+      toast.error('Failed to update discussion');
+    }
+  };
+
+  const handleDeleteDiscussion = async () => {
+    showConfirm('Delete this discussion?', async () => {
+      try {
+        await api.deleteDiscussion(id);
+        toast.success('Discussion deleted');
+        window.location.href = '/discussions';
+      } catch (err) {
+        toast.error('Failed to delete discussion');
+      }
+    });
+  };
 
   return (
     <>
@@ -250,18 +280,69 @@ const DiscussionPage = () => {
         </div>
         <div className="flex-1">
           <div className="flex items-start justify-between">
-            <div>
-              <h1 className="text-3xl md:text-4xl font-extrabold mb-2 leading-tight">{discussion.title}</h1>
-              <div className="text-sm text-gray-400">Started by <Link to={`/profile/${discussion.starter?.username}`} className="font-semibold text-gray-200 hover:underline">{discussion.starter?.username}</Link> • <span className="text-gray-400">{timeAgo(discussion.createdAt)}</span></div>
-              <div className="mt-2 text-sm text-gray-300">Movie: <span className="font-medium text-gray-100">{discussion.movieTitle}</span></div>
+            <div className="flex-1">
+              {editingDiscussion ? (
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    value={editDiscussionTitle}
+                    onChange={(e) => setEditDiscussionTitle(e.target.value)}
+                    className="w-full px-3 py-2 bg-background border border-gray-700 rounded-md text-lg font-bold"
+                    placeholder="Discussion title"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleEditDiscussion}
+                      className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-md"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingDiscussion(false);
+                        setEditDiscussionTitle(discussion.title);
+                      }}
+                      className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm font-semibold rounded-md"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <h1 className="text-3xl md:text-4xl font-extrabold mb-2 leading-tight">{discussion.title}</h1>
+                  <div className="text-sm text-gray-400">Started by <Link to={`/profile/${discussion.starter?.username}`} className="font-semibold text-gray-200 hover:underline">{discussion.starter?.username}</Link> • <span className="text-gray-400">{timeAgo(discussion.createdAt)}</span></div>
+                  <div className="mt-2 text-sm text-gray-300">Movie: <span className="font-medium text-gray-100">{discussion.movieTitle}</span></div>
+                </>
+              )}
             </div>
             <div className="ml-4 flex flex-col items-end gap-2">
-              <button 
-                onClick={() => setShowShare(true)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-full transition-colors"
-              >
-                <Share2 size={16} /> Share
-              </button>
+              <div className="flex gap-2">
+                {canModifyDiscussion && !editingDiscussion && (
+                  <>
+                    <button
+                      onClick={() => setEditingDiscussion(true)}
+                      className="p-2 text-gray-400 hover:text-blue-400 transition-colors"
+                      title="Edit discussion"
+                    >
+                      <Edit size={18} />
+                    </button>
+                    <button
+                      onClick={handleDeleteDiscussion}
+                      className="p-2 text-gray-400 hover:text-red-400 transition-colors"
+                      title="Delete discussion"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </>
+                )}
+                <button 
+                  onClick={() => setShowShare(true)}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-full transition-colors"
+                >
+                  <Share2 size={16} /> Share
+                </button>
+              </div>
               <div className="text-right text-sm text-gray-400">{discussion.comments.length} comments</div>
             </div>
           </div>
@@ -284,7 +365,7 @@ const DiscussionPage = () => {
                           <div className="text-xs text-gray-500">{timeAgo(c.createdAt)}</div>
                         </div>
                         <div className="text-sm text-gray-400 flex items-center gap-2">
-                          {(user && c.user && (String(user.id || user._id) === String(c.user._id) || String(user.id || user._id) === String(discussion.starter?._id))) && (
+                          {(user && c.user && (String(user.id || user._id) === String(c.user._id) || String(user.id || user._id) === String(discussion.starter?._id) || user.isAdmin)) && (
                             <>
                               {editingCommentId === c._id ? (
                                 <div className="flex items-center gap-2">
@@ -349,7 +430,7 @@ const DiscussionPage = () => {
                                 <div className="flex items-center justify-between">
                                   <div className="font-semibold text-gray-100">{r.user?.username || 'Unknown User'} <span className="text-xs text-gray-500">• {timeAgo(r.createdAt)}</span></div>
                                   <div className="text-sm text-gray-400">
-                                    {(user && r.user && (String(user.id || user._id) === String(r.user._id) || String(user.id || user._id) === String(discussion.starter?._id))) && (
+                                    {(user && r.user && (String(user.id || user._id) === String(r.user._id) || String(user.id || user._id) === String(discussion.starter?._id) || user.isAdmin)) && (
                                       <button onClick={() => showConfirm('Delete this reply?', async () => {
                                         setCommentProcessing(true);
                                         try {
