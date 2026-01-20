@@ -60,7 +60,6 @@ const DiscussionPage = () => {
         const { data } = await api.getDiscussion(id);
         setDiscussion(data);
         setEditDiscussionTitle(data.title);
-        setEditDiscussionTag(data.tag || 'General');
         // try to fetch movie poster for display (use movieId from discussion)
         try {
           const movieRes = await api.getMovieDetails(data.movieId);
