@@ -48,13 +48,18 @@ const PageWrapper = ({ children }) => {
 const AppRoutes = () => {
   const location = useLocation();
   const isAuthRoute = ['/login', '/signup', '/interests'].includes(location.pathname);
+  const [isMobileOpen, setIsMobileOpen] = React.useState(false);
+
+  const toggleSidebar = () => {
+    setIsMobileOpen(!isMobileOpen);
+  };
 
   return (
     <>
-      <Navbar />
+      <Navbar onToggleSidebar={toggleSidebar} />
       <div className="flex">
-        {!isAuthRoute && <Sidebar />}
-  <main className={isAuthRoute ? 'flex-1 p-4 md:p-6 overflow-x-hidden' : 'flex-1 container max-w-full mx-auto p-4 md:p-6 overflow-x-hidden'}>
+        {!isAuthRoute && <Sidebar isMobileOpen={isMobileOpen} setIsMobileOpen={setIsMobileOpen} />}
+        <main className={isAuthRoute ? 'flex-1 p-4 md:p-6 overflow-x-hidden' : 'flex-1 container max-w-full mx-auto p-4 md:p-6 overflow-x-hidden md:ml-0'}>
           <AnimatePresence mode="wait">
           <Routes>
             <Route path="/login" element={<PageWrapper><LoginPage /></PageWrapper>} />

@@ -26,7 +26,7 @@ const ProfileHeader = ({ profile, isFollowing, onFollowToggle, onEditClick, onUs
 
     return (
         <div className="mb-8 fade-in">
-            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6">
+            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6 relative">
                 
                 {/* Avatar */}
                 <div className="flex-shrink-0 text-center sm:text-left">
@@ -36,11 +36,11 @@ const ProfileHeader = ({ profile, isFollowing, onFollowToggle, onEditClick, onUs
                 {/* User Info Block */}
                 <div className="flex-1 w-full flex flex-col items-center sm:items-start">
                     
-                    {/* Row 1: Username, Badges, Dropdown */}
-                    <div className="flex items-center justify-between w-full mb-3">
-                        <div className="flex items-center gap-2">
-                            <h1 className="text-2xl sm:text-3xl font-bold">{profile.username}</h1>
-                            <div className="flex flex-wrap items-center gap-1.5">
+                    {/* Row 1: Username and Badges centered on mobile, left on desktop */}
+                    <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between w-full mb-3">
+                        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-2">
+                            <h1 className="text-2xl sm:text-3xl font-bold text-center sm:text-left">{profile.username}</h1>
+                            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5">
                                 {(profile.badges || []).map(b => {
                                     const id = (b.id || b.name || '').toUpperCase();
                                     let bg = 'bg-gray-700 text-gray-100';
@@ -58,9 +58,9 @@ const ProfileHeader = ({ profile, isFollowing, onFollowToggle, onEditClick, onUs
                             </div>
                         </div>
                         
-                        {/* Dropdown Button */}
+                        {/* Dropdown Button - Positioned top-right on mobile, inline on desktop */}
                         {user && user.username === profile.username && (
-                            <div className="relative" ref={dropdownRef}>
+                            <div className="absolute top-2 right-2 sm:relative sm:top-0 sm:right-0" ref={dropdownRef}>
                                 <button
                                     onClick={() => setShowDropdown(!showDropdown)}
                                     className="p-1.5 hover:bg-gray-700 rounded-full transition-colors"

@@ -395,19 +395,32 @@ const MovieDetailPage = () => {
 };
 
 const MovieDetailSkeleton = () => (
-  <>
-    <Skeleton height={384} className="-mt-6 -mx-6" />
-    <div className="relative -mt-32">
-      <div className="md:flex gap-8">
-        <Skeleton height={384} width={256} />
-        <div className="flex-1 pt-24">
-          <Skeleton height={48} width={400} />
-          <Skeleton height={28} width={100} className="mt-2" />
-          <Skeleton count={4} className="my-6" />
-        </div>
+  <div className="space-y-6">
+    {/* Backdrop skeleton */}
+    <Skeleton height={300} className="w-full" baseColor="rgba(255,255,255,0.05)" highlightColor="rgba(255,255,255,0.15)" />
+    
+    {/* Content section */}
+    <div className="flex flex-col md:flex-row gap-6">
+      {/* Poster skeleton */}
+      <div className="flex-shrink-0">
+        <Skeleton height={384} width={256} className="w-full md:w-64" baseColor="rgba(255,255,255,0.05)" highlightColor="rgba(255,255,255,0.15)" />
+      </div>
+      
+      {/* Details skeleton */}
+      <div className="flex-1 space-y-4">
+        <Skeleton height={48} className="w-full max-w-md" baseColor="rgba(255,255,255,0.05)" highlightColor="rgba(255,255,255,0.15)" />
+        <Skeleton height={28} width={150} baseColor="rgba(255,255,255,0.05)" highlightColor="rgba(255,255,255,0.15)" />
+        <Skeleton count={4} baseColor="rgba(255,255,255,0.05)" highlightColor="rgba(255,255,255,0.15)" />
       </div>
     </div>
-  </>
+    
+    {/* Reviews section skeleton */}
+    <div className="space-y-4 mt-8">
+      <Skeleton height={32} width={200} baseColor="rgba(255,255,255,0.05)" highlightColor="rgba(255,255,255,0.15)" />
+      <Skeleton height={150} baseColor="rgba(255,255,255,0.05)" highlightColor="rgba(255,255,255,0.15)" />
+      <Skeleton height={150} baseColor="rgba(255,255,255,0.05)" highlightColor="rgba(255,255,255,0.15)" />
+    </div>
+  </div>
 );
 
 export default MovieDetailPage;

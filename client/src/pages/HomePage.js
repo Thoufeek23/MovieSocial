@@ -216,7 +216,9 @@ const HomePage = () => {
             </div>
           </div>
         ) : (
-          <MovieCarousel title={user ? "Recommended For You" : "Popular This Week"} movies={popularMovies} showRating={true} />
+          <div>
+            <MovieCarousel title={user ? "Recommended For You" : "Popular This Week"} movies={popularMovies} showRating={true} />
+          </div>
         )
       )}
       

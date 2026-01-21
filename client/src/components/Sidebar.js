@@ -11,11 +11,11 @@ const NavItem = ({ to, icon: Icon, label, badge }) => {
   return (
     <Link to={to} className={`flex items-center gap-3 px-4 py-3 rounded-md relative ${active ? 'bg-gray-800 text-white' : 'text-gray-300 hover:bg-gray-900'}`}>
       <Icon className="w-5 h-5" />
-      <span className="hidden md:inline-block font-medium">{label}</span>
+      <span className="font-medium">{label}</span>
       
       {/* Badge Display */}
       {badge > 0 && (
-        <span className="absolute top-2 left-7 md:top-auto md:left-auto md:relative md:ml-auto bg-green-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+        <span className="ml-auto bg-green-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
           {badge > 99 ? '99+' : badge}
         </span>
       )}
@@ -23,7 +23,7 @@ const NavItem = ({ to, icon: Icon, label, badge }) => {
   );
 };
 
-const Sidebar = () => {
+const Sidebar = ({ isMobileOpen, setIsMobileOpen }) => {
   const { user, setUser, unreadCount, updateUnreadCount } = useContext(AuthContext);
   const [isCheckingAdmin, setIsCheckingAdmin] = useState(false);
   const profileLink = user ? `/profile/${user.username}` : '/login';
@@ -59,37 +59,79 @@ const Sidebar = () => {
   // Check if user is admin
   const isAdmin = user && user.isAdmin === true;
 
-  return (
-    <aside className="w-20 md:w-56 bg-background/0 sticky top-0 h-screen p-4">
-      <div className="flex flex-col items-start gap-2">
-        {/* logo removed per request */}
+  // Close mobile sidebar when clicking a link
+  const handleLinkClick = () => {
+    setIsMobileOpen(false);
+  };
 
-        <nav className="flex flex-col w-full gap-1">
-          <NavItem to="/" icon={Home} label="Home" />
-          <NavItem to="/search" icon={Search} label="Explore" />
-          <NavItem to="/discussions" icon={BookOpen} label="Discussions" />
-          <NavItem to="/ranks" icon={ListOrdered} label="Ranks" />
-          <NavItem to="/modle" icon={Puzzle} label="Modle" />
-          <NavItem to="/reviews" icon={FileText} label="Reviews" />
-          
-          {/* Pass the unreadCount to the Messages item */}
-          <NavItem to="/messages" icon={MessageCircle} label="Messages" badge={unreadCount} />
-          
-          {/*<NavItem to="/leaderboard" icon={Award} label="Leaderboard" />*/}
-          <NavItem to={profileLink} icon={User} label="Profile" />
-          
-          {/* Admin Section */}
-          {isAdmin && (
-            <>
-              <div className="border-t border-gray-700 my-2 w-full"></div>
-              <div className="text-xs text-gray-500 px-4 mb-1 hidden md:block">ADMIN</div>
-              <NavItem to="/admin/puzzles" icon={Database} label="Puzzle Admin" />
-              <NavItem to="/admin/users" icon={Users} label="User Admin" />
-            </>
-          )}
-        </nav>
-      </div>
-    </aside>
+  return (
+    <>
+      {/* Overlay for mobile - only shows when sidebar is open */}
+      {isMobileOpen && (
+        <div
+          className="md:hidden fixed inset-0 bg-black/50 z-30"
+          onClick={() => setIsMobileOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside
+        className={`
+          fixed md:sticky top-0 h-screen bg-background z-40 transition-transform duration-300 ease-in-out
+          ${isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+          w-56 md:w-56 p-4
+        `}
+      >
+        <div className="flex flex-col items-start gap-2">
+          {/* logo removed per request */}
+
+          <nav className="flex flex-col w-full gap-1 mt-12 md:mt-0">
+            <div onClick={handleLinkClick}>
+              <NavItem to="/" icon={Home} label="Home" />
+            </div>
+            <div onClick={handleLinkClick}>
+              <NavItem to="/search" icon={Search} label="Explore" />
+            </div>
+            <div onClick={handleLinkClick}>
+              <NavItem to="/discussions" icon={BookOpen} label="Discussions" />
+            </div>
+            <div onClick={handleLinkClick}>
+              <NavItem to="/ranks" icon={ListOrdered} label="Ranks" />
+            </div>
+            <div onClick={handleLinkClick}>
+              <NavItem to="/modle" icon={Puzzle} label="Modle" />
+            </div>
+            <div onClick={handleLinkClick}>
+              <NavItem to="/reviews" icon={FileText} label="Reviews" />
+            </div>
+            
+            {/* Pass the unreadCount to the Messages item */}
+            <div onClick={handleLinkClick}>
+              <NavItem to="/messages" icon={MessageCircle} label="Messages" badge={unreadCount} />
+            </div>
+            
+            {/*<NavItem to="/leaderboard" icon={Award} label="Leaderboard" />*/}
+            <div onClick={handleLinkClick}>
+              <NavItem to={profileLink} icon={User} label="Profile" />
+            </div>
+            
+            {/* Admin Section */}
+            {isAdmin && (
+              <>
+                <div className="border-t border-gray-700 my-2 w-full"></div>
+                <div className="text-xs text-gray-500 px-4 mb-1">ADMIN</div>
+                <div onClick={handleLinkClick}>
+                  <NavItem to="/admin/puzzles" icon={Database} label="Puzzle Admin" />
+                </div>
+                <div onClick={handleLinkClick}>
+                  <NavItem to="/admin/users" icon={Users} label="User Admin" />
+                </div>
+              </>
+            )}
+          </nav>
+        </div>
+      </aside>
+    </>
   );
 };
 

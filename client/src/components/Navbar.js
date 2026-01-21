@@ -4,11 +4,12 @@ import { AuthContext } from '../context/AuthContext';
 import { ModleContext } from '../context/ModleContext';
 import InstantSearchBar from './InstantSearchBar';
 import Avatar from './Avatar';
+import { Menu } from 'lucide-react';
 import * as api from '../api';
 // Use only MS_logo.png as the navbar logo
 // post-related UI moved to sidebar; no inline post controls in navbar
 
-const Navbar = () => {
+const Navbar = ({ onToggleSidebar }) => {
   const { user } = useContext(AuthContext);
   const { global, refreshGlobal } = useContext(ModleContext);
   // derive modle streak for display in navbar (per-user). Server is source-of-truth for authenticated users.
@@ -81,22 +82,30 @@ const Navbar = () => {
 
   return (
   <nav className="glass sticky top-0 z-50 px-3 py-0">
-      <div className="container mx-auto flex flex-col md:flex-row items-center justify-between max-w-6xl gap-2">
-        <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-start">
+      <div className="container mx-auto flex items-center justify-between max-w-6xl gap-2">
+        {/* Hamburger Menu - Only visible on mobile */}
+        <button
+          onClick={onToggleSidebar}
+          className="md:hidden flex-shrink-0 text-white p-2 hover:bg-gray-800 rounded-md transition-colors"
+          aria-label="Toggle menu"
+        >
+          <Menu className="w-6 h-6" />
+        </button>
+
+        {/* Logo - Centered on mobile, left-aligned on desktop */}
+        <div className="flex items-center gap-4 flex-1 md:flex-initial justify-center md:justify-start">
           <Link to="/" aria-label="Home" className="flex items-center justify-center h-full">
-            <img src={process.env.PUBLIC_URL + '/MS_logo.png'} alt="Movie Social logo" className="w-32 h-32 max-h-16 md:w-40 md:h-40 md:max-h-20 object-contain mx-auto" />
+            <img src={process.env.PUBLIC_URL + '/MS_logo.png'} alt="Movie Social logo" className="w-32 h-32 max-h-16 md:w-40 md:h-40 md:max-h-20 object-contain" />
           </Link>
           {/* Leaderboard moved to sidebar */}
           {shouldShowSearch && (
-            <div className="flex-1 md:flex-none ml-4 w-full md:w-96">
-              <div className="hidden md:block">
-                <InstantSearchBar />
-              </div>
+            <div className="flex-1 md:flex-none ml-4 w-full md:w-96 hidden md:block">
+              <InstantSearchBar />
             </div>
           )}
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-3 flex-shrink-0">
           {user ? (
             <>
               {/* AI Movie Picker Icon - Hidden per user request */}
@@ -126,11 +135,7 @@ const Navbar = () => {
           )}
         </div>
       </div>
-      {shouldShowSearch && (
-        <div className="md:hidden mt-3 px-4 w-full">
-          <InstantSearchBar />
-        </div>
-      )}
+      {/* Instant search bar removed from mobile view */}
       {/* Post modal removed from navbar; Post now lives as a sidebar action linking to /search */}
     </nav>
   );
