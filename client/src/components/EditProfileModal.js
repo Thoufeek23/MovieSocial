@@ -7,10 +7,11 @@ import * as api from '../api';
 import { X } from 'lucide-react';
 
 const EditProfileModal = ({ isOpen, onClose, profile, onUpdated }) => {
-  const [bio, setBio] = useState(profile?.bio || '');
-  const [avatarPreview, setAvatarPreview] = useState(profile?.avatar || '');
+  const [bio, setBio] = useState('');
+  const [avatarPreview, setAvatarPreview] = useState('');
   const [interests, setInterests] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [initialized, setInitialized] = useState(false);
   const avatarRef = useRef(null);
 
   // Available language interests
@@ -26,14 +27,19 @@ const EditProfileModal = ({ isOpen, onClose, profile, onUpdated }) => {
     { name: 'Spanish', flag: '🇪🇸' }
   ];
 
-  // Update local state if the profile prop changes (e.g., after initial load)
+  // Initialize state only when modal opens for the first time
   useEffect(() => {
-    if (profile) {
+    if (isOpen && profile && !initialized) {
       setBio(profile.bio || '');
       setAvatarPreview(profile.avatar || '');
       setInterests(profile.interests || []);
+      setInitialized(true);
     }
-  }, [profile]);
+    // Reset initialization flag when modal closes
+    if (!isOpen && initialized) {
+      setInitialized(false);
+    }
+  }, [isOpen, profile, initialized]);
 
   const handleInterestToggle = (languageName) => {
     if (interests.includes(languageName)) {
