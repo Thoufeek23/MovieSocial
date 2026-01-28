@@ -175,7 +175,10 @@ const ProfilePage = () => {
     );
 
     if (loading && !profile) return <ProfilePageSkeleton />;
-    if (!profile) return <p className="text-center mt-8 text-xl">User not found.</p>;
+    if (!profile) {
+        navigate('/login');
+        return null;
+    }
 
     return (
         <div>
