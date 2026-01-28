@@ -60,10 +60,10 @@ const ProfileHeader = ({ profile, isFollowing, onFollowToggle, onEditClick, onUs
                         
                         {/* Dropdown Button - Positioned top-right on mobile, inline on desktop */}
                         {user && user.username === profile.username && (
-                            <div className="absolute top-2 right-2 sm:relative sm:top-0 sm:right-0" ref={dropdownRef}>
+                            <div className="absolute top-2 right-2 sm:relative sm:top-0 sm:right-0 z-10" ref={dropdownRef}>
                                 <button
                                     onClick={() => setShowDropdown(!showDropdown)}
-                                    className="p-1.5 hover:bg-gray-700 rounded-full transition-colors"
+                                    className="p-1.5 hover:bg-gray-700 rounded-full transition-colors text-gray-300 hover:text-white"
                                     aria-label="Profile options"
                                 >
                                     <BsThreeDotsVertical className="w-5 h-5" />
