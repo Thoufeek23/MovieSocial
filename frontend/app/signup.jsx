@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -10,18 +10,23 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Dimensions
+  Dimensions,
+  Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, useRouter } from 'expo-router';
 import { MotiView } from 'moti';
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
 
 import { useAuth } from '../src/context/AuthContext';
 import * as api from '../src/api';
 import { FloatingLabelInput } from '../components/FloatingLabelInput';
-import { OTPInput } from '../components/OTPInput';
+// import { OTPInput } from '../components/OTPInput'; // Commented out: OTP flow disabled
 
 import COUNTRIES from '../src/data/countries';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function SignupPage() {
   const [formData, setFormData] = useState({ 
@@ -36,9 +41,6 @@ export default function SignupPage() {
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [signupStep, setSignupStep] = useState(1); // 1: enter details, 2: enter otp, 3: complete
-  const [otp, setOtp] = useState('');
-  const [signupToken, setSignupToken] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [passwordChecks, setPasswordChecks] = useState({ 
     length: false, 
@@ -53,6 +55,48 @@ export default function SignupPage() {
 
   // Use static poster image instead of dynamic background
   const staticPoster = require('../assets/images/poster1.png');
+
+  // Google Sign In configuration
+  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
+    clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+  });
+
+  // Handle Google Sign In response
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const { id_token } = response.params;
+      handleGoogleSignIn(id_token);
+    }
+  }, [response]);
+
+  const handleGoogleSignIn = async (idToken) => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const { data } = await api.googleSignUp(idToken);
+      await login(data, true); // Mark as new user
+      // Redirect to username selection for Google users
+      router.push('/username');
+    } catch (err) {
+      const errorMsg = err?.response?.data?.msg || 'Google Sign Up failed. Please try again.';
+      const accountExists = err?.response?.data?.accountExists;
+      
+      setError(errorMsg);
+      console.error('Google Sign Up error:', err);
+      
+      // Redirect to login if account already exists
+      if (accountExists) {
+        setTimeout(() => {
+          router.push('/login');
+        }, 2000);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleChange = (field, value) => {
     setFormData({ ...formData, [field]: value });
@@ -79,8 +123,13 @@ export default function SignupPage() {
       return;
     }
 
-    if (formData.username.trim().length > 10) {
-      setError('Username cannot be more than 10 characters.');
+    // Validate username length (5-20 characters)
+    if (formData.username.trim().length < 5) {
+      setError('Username must be at least 5 characters.');
+      return;
+    }
+    if (formData.username.trim().length > 20) {
+      setError('Username cannot be more than 20 characters.');
       return;
     }
 
@@ -110,7 +159,6 @@ export default function SignupPage() {
 
     setIsLoading(true);
     try {
-      // Start signup OTP flow
       const payload = {
         name: formData.name.trim(),
         age: ageNum,
@@ -121,43 +169,14 @@ export default function SignupPage() {
         state: formData.state || '',
       };
 
-      await api.sendSignupOtp(payload);
-      setSignupStep(2);
+      const { data } = await api.register(payload);
+      await login(data, true); // Mark as new user
+      // Navigation will be handled by _layout.jsx
     } catch (err) {
-      setError(err.response?.data?.msg || 'Failed to start signup.');
+      setError(err.response?.data?.msg || 'Failed to sign up.');
       console.error(err);
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleVerifyOtp = async () => {
-    setError('');
-    setIsLoading(true);
-    try {
-      const { data } = await api.verifySignupOtp({ email: formData.email.trim(), otp });
-      setSignupToken(data.signupToken);
-      setSignupStep(3);
-    } catch (err) {
-      setError(err.response?.data?.msg || 'Invalid OTP');
-      console.error(err);
-    } finally { 
-      setIsLoading(false); 
-    }
-  };
-
-  const handleCompleteSignup = async () => {
-    setError('');
-    setIsLoading(true);
-    try {
-      const { data } = await api.completeSignup({ email: formData.email.trim(), signupToken });
-      await login(data, true); // Pass true to indicate this is a new user signup
-      // Navigation will be handled by _layout.jsx
-    } catch (err) {
-      setError(err.response?.data?.msg || 'Failed to complete signup');
-      console.error(err);
-    } finally { 
-      setIsLoading(false); 
     }
   };
 
@@ -222,7 +241,6 @@ export default function SignupPage() {
                 )}
 
                 {/* Step 1: Registration Form */}
-                {signupStep === 1 && (
                   <View style={signupStyles.inputsContainer}>
                     <MotiView
                       from={{ opacity: 0, translateX: -20 }}
@@ -343,85 +361,42 @@ export default function SignupPage() {
                         ]}
                       >
                         <Text style={signupStyles.signupButtonText}>
-                          {isLoading ? 'Sending OTP...' : 'Sign Up'}
+                          {isLoading ? 'Signing Up...' : 'Sign Up'}
+                        </Text>
+                      </Pressable>
+                    </MotiView>
+
+                    {/* Divider */}
+                    <View style={signupStyles.dividerContainer}>
+                      <View style={signupStyles.dividerLine} />
+                      <Text style={signupStyles.dividerText}>OR</Text>
+                      <View style={signupStyles.dividerLine} />
+                    </View>
+
+                    {/* Google Sign In Button */}
+                    <MotiView
+                      from={{ opacity: 0, translateY: 20 }}
+                      animate={{ opacity: 1, translateY: 0 }}
+                      transition={{ type: 'timing', duration: 500, delay: 1050 }}
+                    >
+                      <Pressable
+                        onPress={() => promptAsync()}
+                        disabled={!request || isLoading}
+                        style={[
+                          signupStyles.googleButton,
+                          { opacity: (!request || isLoading) ? 0.5 : 1 }
+                        ]}
+                      >
+                        <Image
+                          source={{ uri: 'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg' }}
+                          style={signupStyles.googleIcon}
+                        />
+                        <Text style={signupStyles.googleButtonText}>
+                          Continue with Google
                         </Text>
                       </Pressable>
                     </MotiView>
                   </View>
-                )}
-
-                {/* Step 2: OTP Verification */}
-                {signupStep === 2 && (
-                  <View style={signupStyles.otpContainer}>
-                    <Text style={signupStyles.otpText}>
-                      We've sent an OTP to <Text style={signupStyles.emailText}>{formData.email}</Text>. Enter it below to verify your email.
-                    </Text>
-                    <OTPInput
-                      length={6}
-                      value={otp}
-                      onChangeText={setOtp}
-                      onComplete={(code) => {
-                        setOtp(code);
-                        // Auto-submit when OTP is complete
-                        if (code.length === 6) {
-                          setTimeout(() => handleVerifyOtp(), 500);
-                        }
-                      }}
-                    />
-                    <View style={signupStyles.otpButtons}>
-                      <Pressable
-                        onPress={() => setSignupStep(1)}
-                        style={signupStyles.backButton}
-                      >
-                        <Text style={signupStyles.backButtonText}>Back</Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={handleVerifyOtp}
-                        disabled={isLoading || otp.trim().length === 0}
-                        style={[
-                          signupStyles.verifyButton,
-                          { 
-                            backgroundColor: (isLoading || otp.trim().length === 0) ? '#6b7280' : '#10b981',
-                            opacity: (isLoading || otp.trim().length === 0) ? 0.7 : 1
-                          }
-                        ]}
-                      >
-                        <Text style={signupStyles.verifyButtonText}>
-                          {isLoading ? 'Verifying...' : 'Verify'}
-                        </Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                )}
-
-                {/* Step 3: Complete Signup */}
-                {signupStep === 3 && (
-                  <View style={signupStyles.completeContainer}>
-                    <Text style={signupStyles.completeText}>
-                      Verification successful. Click below to complete account creation.
-                    </Text>
-                    <View style={signupStyles.otpButtons}>
-                      <Pressable
-                        onPress={() => setSignupStep(2)}
-                        style={signupStyles.backButton}
-                      >
-                        <Text style={signupStyles.backButtonText}>Back</Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={handleCompleteSignup}
-                        disabled={isLoading}
-                        style={[
-                          signupStyles.completeButton,
-                          { backgroundColor: isLoading ? '#6b7280' : '#10b981' }
-                        ]}
-                      >
-                        <Text style={signupStyles.completeButtonText}>
-                          {isLoading ? 'Completing...' : 'Complete Signup'}
-                        </Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                )}
 
                 {/* Login Link */}
                 <MotiView
@@ -477,6 +452,26 @@ const signupStyles = StyleSheet.create({
   buttonContainer: { marginTop: 15, marginBottom: 10 },
   signupButton: { width: '100%', paddingVertical: 14, borderRadius: 15, alignItems: 'center', justifyContent: 'center', shadowColor: '#10b981', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 10 },
   signupButtonText: { color: 'white', fontSize: 18, fontWeight: 'bold', letterSpacing: 0.5 },
+  dividerContainer: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: '#4b5563' },
+  dividerText: { color: '#9ca3af', paddingHorizontal: 15, fontSize: 14, fontWeight: '600' },
+  googleButton: { 
+    width: '100%', 
+    paddingVertical: 14, 
+    borderRadius: 15, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    backgroundColor: 'white',
+    flexDirection: 'row',
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 4 }, 
+    shadowOpacity: 0.2, 
+    shadowRadius: 8, 
+    elevation: 5,
+    marginBottom: 10
+  },
+  googleIcon: { width: 20, height: 20, marginRight: 12 },
+  googleButtonText: { color: '#1f2937', fontSize: 16, fontWeight: '600' },
   loginContainer: { alignItems: 'center', marginTop: 20, marginBottom: 20 },
   loginBox: { backgroundColor: 'transparent', borderRadius: 12, padding: 16, alignItems: 'center' },
   loginText: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' },

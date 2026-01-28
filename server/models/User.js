@@ -4,7 +4,9 @@ const bcrypt = require('bcryptjs');
 const UserSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   email: { type: String, required: true, unique: true },
-  passwordHash: { type: String, required: true },
+  passwordHash: { type: String, required: false }, // Made optional for Google users
+  googleId: { type: String, unique: true, sparse: true }, // Google OAuth ID
+  authProvider: { type: String, enum: ['local', 'google'], default: 'local' }, // Track auth method
   bio: { type: String, default: '' },
   avatar: { type: String, default: '/default_dp.png' },
   interests: [{ type: String }],
@@ -42,10 +44,14 @@ const UserSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 UserSchema.methods.matchPassword = async function (enteredPassword) {
+  // Google users don't have passwords
+  if (this.authProvider === 'google' || !this.passwordHash) return false;
   return await bcrypt.compare(enteredPassword, this.passwordHash);
 };
 
 UserSchema.pre('save', async function () {
+  // Skip password hashing for Google users
+  if (this.authProvider === 'google' || !this.passwordHash) return;
   if (!this.isModified('passwordHash')) return;
   const maybeHash = this.passwordHash || '';
   const bcryptRegex = /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/;

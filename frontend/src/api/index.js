@@ -39,12 +39,20 @@ API.interceptors.response.use(
 // --- Authentication ---
 export const login = (formData) => API.post('/auth/login', formData);
 export const register = (formData) => API.post('/auth/register', formData);
-export const forgotPassword = (payload) => API.post('/auth/forgot-password', payload);
-export const verifyResetOtp = (payload) => API.post('/auth/verify-otp', payload);
-export const resetPassword = (payload) => API.post('/auth/reset-password', payload);
-export const sendSignupOtp = (payload) => API.post('/auth/signup-otp', payload);
-export const verifySignupOtp = (payload) => API.post('/auth/verify-signup-otp', payload);
-export const completeSignup = (payload) => API.post('/auth/complete-signup', payload);
+export const googleSignIn = (idToken) => API.post('/auth/google-signin', { idToken }); // Google Sign In (login only)
+export const googleSignUp = (idToken) => API.post('/auth/google-signup', { idToken }); // Google Sign Up (create account only)
+export const checkUsername = (username) => API.get(`/users/check-username/${encodeURIComponent(username)}`);
+export const updateUsername = (username) => API.patch('/users/me/username', { username });
+export const setAuthToken = async (token) => {
+  await AsyncStorage.setItem('token', token);
+}; // Helper to update token
+// Commented out OTP functions:
+// export const forgotPassword = (payload) => API.post('/auth/forgot-password', payload);
+// export const verifyResetOtp = (payload) => API.post('/auth/verify-otp', payload);
+// export const resetPassword = (payload) => API.post('/auth/reset-password', payload);
+// export const sendSignupOtp = (payload) => API.post('/auth/signup-otp', payload);
+// export const verifySignupOtp = (payload) => API.post('/auth/verify-signup-otp', payload);
+// export const completeSignup = (payload) => API.post('/auth/complete-signup', payload);
 
 // --- Movies ---
 export const searchMovies = (query) => API.get(`/movies/search?query=${query}`);

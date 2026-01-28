@@ -18,6 +18,7 @@ import Avatar from './Avatar';
 import * as api from '../src/api';
 
 const EditProfileModal = ({ visible, profile, onClose, onUpdated }) => {
+  const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
   const [avatarPreview, setAvatarPreview] = useState('');
   const [interests, setInterests] = useState([]);
@@ -39,6 +40,7 @@ const EditProfileModal = ({ visible, profile, onClose, onUpdated }) => {
   // Update local state when profile changes
   useEffect(() => {
     if (profile) {
+      setUsername(profile.username || '');
       setBio(profile.bio || '');
       setAvatarPreview(profile.avatar || '');
       setInterests(profile.interests || []);
@@ -88,9 +90,16 @@ const EditProfileModal = ({ visible, profile, onClose, onUpdated }) => {
 
   // Handle saving changes
   const handleSave = async () => {
+    // Validate username
+    if (username.trim().length < 3 || username.trim().length > 20) {
+      Alert.alert('Error', 'Username must be between 3 and 20 characters');
+      return;
+    }
+
     setIsLoading(true);
     try {
       const payload = {
+        username: username.trim(),
         bio: bio.trim(),
         interests: interests.slice(0, 3), // Ensure only top 3 interests
       };
@@ -100,10 +109,16 @@ const EditProfileModal = ({ visible, profile, onClose, onUpdated }) => {
         payload.avatar = avatarPreview;
       }
 
-      await api.updateMyProfile(payload);
+      const response = await api.updateMyProfile(payload);
+      
+      // If username was changed, the backend returns a new token
+      if (response.data?.token) {
+        // Update token in storage
+        await api.setAuthToken(response.data.token);
+      }
       
       // Refetch updated profile
-      const { data } = await api.getUserProfile(profile.username);
+      const { data } = await api.getUserProfile(username.trim());
       
       Alert.alert('Success', 'Profile updated successfully');
       onUpdated?.(data);
@@ -151,6 +166,24 @@ const EditProfileModal = ({ visible, profile, onClose, onUpdated }) => {
         </View>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Username Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Username</Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                value={username}
+                onChangeText={setUsername}
+                placeholder="Enter your username"
+                placeholderTextColor="#6b7280"
+                maxLength={20}
+                editable={!isLoading}
+                autoCapitalize="none"
+              />
+            </View>
+            <Text style={styles.hint}>3-20 characters. This will be your unique identifier.</Text>
+          </View>
+
           {/* Avatar Section */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Profile Picture</Text>

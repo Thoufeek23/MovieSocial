@@ -5,6 +5,66 @@ const Discussion = require('../models/Discussion');
 const Review = require('../models/Review');
 const Comment = require('../models/Comment');
 
+// @desc    Check if username is available
+// @route   GET /api/users/check-username/:username
+const checkUsername = async (req, res) => {
+    try {
+        const username = req.params.username.trim();
+        
+        if (username.length < 5 || username.length > 20) {
+            return res.json({ available: false, msg: 'Username must be 5-20 characters' });
+        }
+        
+        const existingUser = await User.findOne({ username });
+        res.json({ available: !existingUser });
+    } catch (error) {
+        logger.error(error);
+        res.status(500).json({ msg: 'Server Error' });
+    }
+};
+
+// @desc    Update username for newly created Google users
+// @route   PATCH /api/users/me/username
+const updateUsernameOnly = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id);
+        if (!user) return res.status(404).json({ msg: 'User not found' });
+
+        const { username } = req.body;
+        
+        if (!username || username.trim().length < 5) {
+            return res.status(400).json({ msg: 'Username must be at least 5 characters' });
+        }
+        if (username.trim().length > 20) {
+            return res.status(400).json({ msg: 'Username cannot be more than 20 characters' });
+        }
+        
+        // Check if username is already taken
+        const existingUser = await User.findOne({ username: username.trim() });
+        if (existingUser && existingUser._id.toString() !== user._id.toString()) {
+            return res.status(400).json({ msg: 'Username is already taken' });
+        }
+        
+        user.username = username.trim();
+        await user.save();
+        
+        // Generate new token with updated username
+        const token = jwt.sign(
+            { user: { id: user._id, username: user.username, isAdmin: user.isAdmin } },
+            process.env.JWT_SECRET,
+            { expiresIn: '30d' }
+        );
+        
+        res.json({ msg: 'Username updated', username: user.username, token });
+    } catch (error) {
+        logger.error(error);
+        if (error.code === 11000) {
+            return res.status(400).json({ msg: 'Username is already taken' });
+        }
+        res.status(500).json({ msg: 'Server Error' });
+    }
+};
+
 // @desc    Get user profile
 // @route   GET /api/users/:username
 const getUserProfile = async (req, res) => {
@@ -126,15 +186,44 @@ const updateProfile = async (req, res) => {
         const user = await User.findById(req.user.id);
         if (!user) return res.status(404).json({ msg: 'User not found' });
 
-        const { bio, avatar, interests } = req.body;
+        const { bio, avatar, interests, username } = req.body;
+        
+        // Handle username change
+        if (username && username !== user.username) {
+            // Validate username
+            if (username.trim().length > 20) {
+                return res.status(400).json({ msg: 'Username cannot be more than 20 characters' });
+            }
+            if (username.trim().length < 3) {
+                return res.status(400).json({ msg: 'Username must be at least 3 characters' });
+            }
+            // Check if username is already taken
+            const existingUser = await User.findOne({ username: username.trim() });
+            if (existingUser && existingUser._id.toString() !== user._id.toString()) {
+                return res.status(400).json({ msg: 'Username is already taken' });
+            }
+            user.username = username.trim();
+        }
+        
         if (typeof bio !== 'undefined') user.bio = bio;
         if (typeof avatar !== 'undefined') user.avatar = avatar;
         if (Array.isArray(interests)) user.interests = interests.slice(0, 3);
 
         await user.save();
-        res.json({ msg: 'Profile updated', user });
+        
+        // Generate new token with updated username
+        const token = jwt.sign(
+            { user: { id: user._id, username: user.username, isAdmin: user.isAdmin } },
+            process.env.JWT_SECRET,
+            { expiresIn: '30d' }
+        );
+        
+        res.json({ msg: 'Profile updated', user, token });
     } catch (error) {
         logger.error(error);
+        if (error.code === 11000) {
+            return res.status(400).json({ msg: 'Username is already taken' });
+        }
         res.status(500).json({ msg: 'Server Error' });
     }
 };
@@ -526,6 +615,8 @@ module.exports = {
     removeFromWatched,
     searchUsers,
     deleteMyAccount,
+    checkUsername,
+    updateUsernameOnly,
     getAllUsers, // New export
     deleteUser,  // New export
 };

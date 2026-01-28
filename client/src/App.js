@@ -8,6 +8,7 @@ import InterestsRoute from './components/InterestsRoute';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
+import UsernamePage from './pages/UsernamePage';
 import MovieDetailPage from './pages/MovieDetailPage';
 import SearchPage from './pages/SearchPage';
 import ProfilePage from './pages/ProfilePage';
@@ -47,7 +48,7 @@ const PageWrapper = ({ children }) => {
 
 const AppRoutes = () => {
   const location = useLocation();
-  const isAuthRoute = ['/login', '/signup', '/interests'].includes(location.pathname);
+  const isAuthRoute = ['/login', '/signup', '/username', '/interests'].includes(location.pathname);
   const [isMobileOpen, setIsMobileOpen] = React.useState(false);
 
   const toggleSidebar = () => {
@@ -64,6 +65,11 @@ const AppRoutes = () => {
           <Routes>
             <Route path="/login" element={<PageWrapper><LoginPage /></PageWrapper>} />
             <Route path="/signup" element={<PageWrapper><SignupPage /></PageWrapper>} />
+            <Route path="/username" element={
+              <InterestsRoute>
+                <PageWrapper><UsernamePage /></PageWrapper>
+              </InterestsRoute>
+            } />
             <Route path="/interests" element={
               <InterestsRoute>
                 <PageWrapper><InterestsPage /></PageWrapper>

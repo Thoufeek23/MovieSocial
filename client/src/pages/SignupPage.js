@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AuthContext } from '../context/AuthContext';
@@ -11,14 +11,94 @@ const SignupPage = () => {
   const [formData, setFormData] = useState({ name: '', age: '', username: '', email: '', password: '', confirmPassword: '' });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [signupStep, setSignupStep] = useState(1); // 1: enter details, 2: enter otp, 3: complete
-  const [otp, setOtp] = useState('');
-  const [signupToken, setSignupToken] = useState('');
+  // const [signupStep, setSignupStep] = useState(1); // Commented out: OTP flow disabled
+  // const [otp, setOtp] = useState(''); // Commented out
+  // const [signupToken, setSignupToken] = useState(''); // Commented out
   const [showCurtains, setShowCurtains] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [passwordChecks, setPasswordChecks] = useState({ length: false, upper: false, lower: false, number: false, special: false });
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
+
+  // Initialize Google Sign In
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    document.body.appendChild(script);
+
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+
+  const handleGoogleSignIn = useCallback(async (response) => {
+    if (response.credential) {
+      setIsLoading(true);
+      setError('');
+      try {
+        const { data } = await api.googleSignUp(response.credential);
+        login(data, data.isNewUser);
+        setShowCurtains(true);
+        setTimeout(() => {
+          if (data.isNewUser) {
+            navigate('/username'); // Redirect to username page for new Google users
+          } else {
+            navigate('/');
+          }
+          setIsLoading(false);
+        }, 100);
+      } catch (err) {
+        const errorMsg = err?.response?.data?.msg || 'Google Sign Up failed. Please try again.';
+        const accountExists = err?.response?.data?.accountExists;
+        
+        setError(errorMsg);
+        console.error('Google Sign Up error:', err);
+        setIsLoading(false);
+        
+        // Redirect to login if account already exists
+        if (accountExists) {
+          setTimeout(() => {
+            navigate('/login');
+          }, 2000);
+        }
+      }
+    }
+  }, [login, navigate, setShowCurtains]);
+
+  // Initialize Google Sign In button
+  useEffect(() => {
+    const initializeGoogleButton = () => {
+      if (window.google && document.getElementById('googleSignUpButton')) {
+        window.google.accounts.id.initialize({
+          client_id: process.env.REACT_APP_GOOGLE_CLIENT_ID,
+          callback: handleGoogleSignIn,
+        });
+
+        window.google.accounts.id.renderButton(
+          document.getElementById('googleSignUpButton'),
+          { 
+            theme: 'filled_black',
+            size: 'large',
+            width: '100%',
+            text: 'continue_with',
+            shape: 'rectangular'
+          }
+        );
+      }
+    };
+
+    // Try to initialize immediately if Google is already loaded
+    if (window.google) {
+      initializeGoogleButton();
+    }
+
+    // Also try after a short delay to ensure script is loaded
+    const timer = setTimeout(initializeGoogleButton, 500);
+
+    return () => clearTimeout(timer);
+  }, [handleGoogleSignIn]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -43,6 +123,16 @@ const SignupPage = () => {
     // basic validations
     if (!formData.name.trim() || !formData.age.trim() || !formData.username.trim() || !formData.email.trim() || !formData.password) {
       setError('Please fill out all fields.');
+      return;
+    }
+
+    // Validate username length (5-20 characters)
+    if (formData.username.trim().length < 5) {
+      setError('Username must be at least 5 characters.');
+      return;
+    }
+    if (formData.username.trim().length > 20) {
+      setError('Username cannot be more than 20 characters.');
       return;
     }
 
@@ -72,7 +162,6 @@ const SignupPage = () => {
 
     setIsLoading(true);
     try {
-      // Start signup OTP flow
       const payload = {
         name: formData.name.trim(),
         age: ageNum,
@@ -81,43 +170,16 @@ const SignupPage = () => {
         password: formData.password,
       };
 
-      await api.sendSignupOtp(payload);
-      setSignupStep(2);
+      const { data } = await api.register(payload);
+      login(data, true);
+      setShowCurtains(true);
+      navigate('/interests');
     } catch (err) {
-      setError(err.response?.data?.msg || 'Failed to start signup.');
+      setError(err.response?.data?.msg || 'Failed to sign up.');
       console.error(err);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleVerifyOtp = async () => {
-    setError('');
-    setIsLoading(true);
-    try {
-      const { data } = await api.verifySignupOtp({ email: formData.email.trim(), otp });
-      setSignupToken(data.signupToken);
-      setSignupStep(3);
-    } catch (err) {
-      setError(err.response?.data?.msg || 'Invalid OTP');
-      console.error(err);
-    } finally { setIsLoading(false); }
-  };
-
-  const handleCompleteSignup = async () => {
-    setError('');
-    setIsLoading(true);
-    try {
-      const { data } = await api.completeSignup({ email: formData.email.trim(), signupToken });
-      // login will set token in localStorage and update context, mark as new user
-      login(data, true);
-      // show curtains and navigate to interests page for new users
-      setShowCurtains(true);
-      navigate('/interests');
-    } catch (err) {
-      setError(err.response?.data?.msg || 'Failed to complete signup');
-      console.error(err);
-    } finally { setIsLoading(false); }
   };
 
   const containerVariants = {
@@ -143,8 +205,26 @@ const SignupPage = () => {
         <motion.h2 variants={itemVariants} className="text-4xl font-bold mb-3 text-white">Create Account</motion.h2>
         <motion.p variants={itemVariants} className="text-gray-400 mb-6">Join the community and start sharing your thoughts on film.</motion.p>
 
-        {signupStep === 1 && (
-          <form onSubmit={handleSubmit} className="space-y-6 max-w-md">
+        {error && <motion.p variants={itemVariants} className="bg-red-500/20 text-red-400 p-3 rounded-lg text-center font-medium">{error}</motion.p>}
+
+        {/* Google Sign In Button - Primary Method */}
+        <motion.div variants={itemVariants} className="mb-6">
+          <div id="googleSignUpButton" className="flex justify-center"></div>
+        </motion.div>
+
+        {/* Divider */}
+        <motion.div variants={itemVariants} className="flex items-center my-6">
+          <div className="flex-1 border-t border-gray-600"></div>
+          <span className="px-4 text-gray-400 text-sm font-semibold">OR</span>
+          <div className="flex-1 border-t border-gray-600"></div>
+        </motion.div>
+
+        {/* Old Signup Method - Disabled Notice */}
+        <motion.div variants={itemVariants} className="bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 p-3 rounded-lg text-center mb-6">
+          <p className="text-sm font-medium">⚠️ Use Google Sign Up (traditional registration is disabled)</p>
+        </motion.div>
+
+        <form onSubmit={handleSubmit} className="space-y-6 max-w-md opacity-50 pointer-events-none">
           {error && <p className="bg-red-500/20 text-red-400 p-3 rounded-lg text-center font-medium">{error}</p>}
 
           <motion.div variants={itemVariants} className="relative">
@@ -213,12 +293,12 @@ const SignupPage = () => {
             <label htmlFor="confirmPassword" className="absolute left-0 -top-4 text-gray-400 text-sm transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-placeholder-shown:top-3 peer-focus:-top-4 peer-focus:text-primary peer-focus:text-sm">Retype password</label>
           </motion.div>
 
-            <motion.div variants={itemVariants}>
-              <button type="submit" disabled={isLoading} className="w-full bg-primary hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300 disabled:bg-gray-500">{isLoading ? 'Sending OTP...' : 'Sign Up'}</button>
-            </motion.div>
-          </form>
-        )}
+          <motion.div variants={itemVariants}>
+            <button type="submit" disabled={isLoading} className="w-full bg-primary hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300 disabled:bg-gray-500">{isLoading ? 'Signing up...' : 'Sign Up'}</button>
+          </motion.div>
+        </form>
 
+        {/* Commented out: OTP flow disabled
         {signupStep === 2 && (
           <div className="space-y-6 max-w-md">
             <p className="text-sm text-gray-400">We've sent an OTP to <strong>{formData.email}</strong>. Enter it below to verify your email.</p>
@@ -239,6 +319,7 @@ const SignupPage = () => {
             </div>
           </div>
         )}
+        */}
 
         <motion.p variants={itemVariants} className="text-center mt-6 text-sm text-gray-400">Already have an account? <Link to="/login" className="font-semibold text-primary hover:underline">Log In</Link></motion.p>
       </motion.div>

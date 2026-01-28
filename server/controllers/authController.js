@@ -6,6 +6,9 @@ const { sendEmail } = require('../utils/email');
 const SignupIntent = require('../models/SignupIntent');
 const { handleNewUser } = require('../utils/badges');
 const logger = require('../utils/logger');
+const { OAuth2Client } = require('google-auth-library');
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // Helper function to generate JWT
 const generateToken = (id, username, isAdmin = false) => {
@@ -17,14 +20,17 @@ const generateToken = (id, username, isAdmin = false) => {
 // @desc    Register a new user
 // @route   POST /api/auth/register
 const registerUser = async (req, res) => {
-    const { username, email, password } = req.body;
+    const { username, email, password, name, age } = req.body;
 
     try {
         if (!username || !email || !password) {
             return res.status(400).json({ msg: 'Please enter all fields' });
         }
 
-        // Validate username length
+        // Validate username length (5-20 characters)
+        if (username.trim().length < 5) {
+            return res.status(400).json({ msg: 'Username must be at least 5 characters' });
+        }
         if (username.trim().length > 20) {
             return res.status(400).json({ msg: 'Username cannot be more than 20 characters' });
         }
@@ -54,6 +60,7 @@ const registerUser = async (req, res) => {
             
             res.status(201).json({
                 token: generateToken(user._id, user.username, user.isAdmin),
+                isNewUser: true,
             });
         } else {
             res.status(400).json({ msg: 'Invalid user data' });
@@ -83,7 +90,11 @@ const loginUser = async (req, res) => {
     try {
         const user = await User.findOne({ email });
 
-        if (user && (await user.matchPassword(password))) {
+        if (!user) {
+            return res.status(404).json({ msg: 'No account found with this email. Please sign up.', accountNotFound: true });
+        }
+
+        if (await user.matchPassword(password)) {
             // Ensure a default avatar is present for users signing in
             if (!user.avatar) {
                 user.avatar = '/default_dp.png';
@@ -98,7 +109,7 @@ const loginUser = async (req, res) => {
                 token: generateToken(user._id, user.username, user.isAdmin),
             });
         } else {
-            res.status(401).json({ msg: 'Invalid email or password' });
+            res.status(401).json({ msg: 'Invalid password. Please try again.' });
         }
     } catch (error) {
         logger.error(error);
@@ -106,10 +117,9 @@ const loginUser = async (req, res) => {
     }
 };
 
-// Export handlers (will be assigned at bottom after additional functions are defined)
-// (Forgot password feature removed)
-
-// @desc Send OTP to user's email for password reset
+// Commented out: OTP forgot password flow
+/*
+// @desc Forgot password - send OTP
 // @route POST /api/auth/forgot-password
 const forgotPassword = async (req, res) => {
     const { email } = req.body;
@@ -429,6 +439,7 @@ const completeSignup = async (req, res) => {
         return res.status(500).json({ msg: 'Server error' });
     }
 };
+*/
 
 // @desc Get current user data
 // @route GET /api/auth/me
@@ -445,16 +456,158 @@ const getMe = async (req, res) => {
     }
 };
 
+// @desc    Authenticate with Google OAuth
+// @route   POST /api/auth/google
+// @desc    Google Sign In - Login ONLY (does not create new accounts)
+// @route   POST /api/auth/google-signin
+const googleSignIn = async (req, res) => {
+    const { idToken } = req.body;
+
+    if (!idToken) {
+        return res.status(400).json({ msg: 'Google ID token is required' });
+    }
+
+    try {
+        // Verify the Google token
+        const ticket = await googleClient.verifyIdToken({
+            idToken,
+            audience: process.env.GOOGLE_CLIENT_ID,
+        });
+
+        const payload = ticket.getPayload();
+        const { sub: googleId, email, picture } = payload;
+
+        if (!email) {
+            return res.status(400).json({ msg: 'Email not provided by Google' });
+        }
+
+        // Check if user already exists
+        let user = await User.findOne({ $or: [{ email }, { googleId }] });
+
+        if (!user) {
+            // User doesn't exist - do NOT create account from login
+            return res.status(404).json({ 
+                msg: 'No account found with this email. Please sign up first.', 
+                accountNotFound: true 
+            });
+        }
+
+        // Existing user - update Google ID if not set
+        if (!user.googleId) {
+            user.googleId = googleId;
+            user.authProvider = 'google';
+            await user.save();
+        }
+
+        // Ensure avatar is set
+        if (!user.avatar || user.avatar === '/default_dp.png') {
+            user.avatar = picture || '/default_dp.png';
+            await user.save();
+        }
+
+        return res.json({
+            token: generateToken(user._id, user.username, user.isAdmin),
+            isNewUser: false,
+        });
+    } catch (error) {
+        logger.error('Google sign in error:', error);
+        
+        if (error.message && error.message.includes('Token used too late')) {
+            return res.status(401).json({ msg: 'Google token expired. Please try again.' });
+        }
+        
+        return res.status(500).json({ msg: 'Google sign in failed' });
+    }
+};
+
+// @desc    Google Sign Up - Create new account ONLY
+// @route   POST /api/auth/google-signup
+const googleSignUp = async (req, res) => {
+    const { idToken } = req.body;
+
+    if (!idToken) {
+        return res.status(400).json({ msg: 'Google ID token is required' });
+    }
+
+    try {
+        // Verify the Google token
+        const ticket = await googleClient.verifyIdToken({
+            idToken,
+            audience: process.env.GOOGLE_CLIENT_ID,
+        });
+
+        const payload = ticket.getPayload();
+        const { sub: googleId, email, name, picture } = payload;
+
+        if (!email) {
+            return res.status(400).json({ msg: 'Email not provided by Google' });
+        }
+
+        // Check if user already exists
+        let user = await User.findOne({ $or: [{ email }, { googleId }] });
+
+        if (user) {
+            // User already exists - should not sign up again
+            return res.status(400).json({ 
+                msg: 'An account with this email already exists. Please sign in instead.',
+                accountExists: true
+            });
+        }
+
+        // New user - create account
+        // Generate a unique username from email or name
+        let username = (name || email.split('@')[0]).replace(/[^a-zA-Z0-9]/g, '').substring(0, 15);
+        
+        // Ensure username is unique
+        let usernameExists = await User.findOne({ username });
+        let counter = 1;
+        while (usernameExists) {
+            username = `${username}${counter}`;
+            usernameExists = await User.findOne({ username });
+            counter++;
+        }
+
+        // Create new user with Google auth
+        user = await User.create({
+            username,
+            email,
+            googleId,
+            authProvider: 'google',
+            avatar: picture || '/default_dp.png',
+            passwordHash: undefined, // No password for Google users
+        });
+
+        // Award new user badge
+        await handleNewUser(user._id);
+
+        return res.status(201).json({
+            token: generateToken(user._id, user.username, user.isAdmin),
+            isNewUser: true,
+        });
+    } catch (error) {
+        logger.error('Google sign up error:', error);
+        
+        if (error.message && error.message.includes('Token used too late')) {
+            return res.status(401).json({ msg: 'Google token expired. Please try again.' });
+        }
+        
+        return res.status(500).json({ msg: 'Google sign up failed' });
+    }
+};
+
 module.exports = {
     registerUser,
     loginUser,
-    forgotPassword,
-    verifyResetOtp,
-    resetPassword,
-    sendSignupOtp,
-    verifySignupOtp,
-    completeSignup,
     getMe,
+    googleSignIn,
+    googleSignUp,
+    // Commented out OTP functions:
+    // forgotPassword,
+    // verifyResetOtp,
+    // resetPassword,
+    // sendSignupOtp,
+    // verifySignupOtp,
+    // completeSignup,
 };
 
 // Password policy validator

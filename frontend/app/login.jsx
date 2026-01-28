@@ -1,5 +1,3 @@
-// frontend/app/login.jsx
-
 import React, { useState, useEffect } from 'react';
 import { 
   View, 
@@ -12,15 +10,20 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Dimensions
+  Dimensions,
+  Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, useRouter } from 'expo-router';
 import { MotiView } from 'moti';
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
 
 import { useAuth } from '../src/context/AuthContext';
 import * as api from '../src/api';
 import { FloatingLabelInput } from '../components/FloatingLabelInput';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginPage() {
   const [formData, setFormData] = useState({ email: '', password: '' });
@@ -30,6 +33,47 @@ export default function LoginPage() {
   
   const { login } = useAuth();
   const router = useRouter();
+
+  // Google Sign In configuration
+  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
+    clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+  });
+
+  // Handle Google Sign In response
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const { id_token } = response.params;
+      handleGoogleSignIn(id_token);
+    }
+  }, [response]);
+
+  const handleGoogleSignIn = async (idToken) => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await api.googleSignIn(idToken);
+      await login(data, data.isNewUser);
+      // AuthGuard will handle the redirect
+    } catch (err) {
+      console.error('Google Sign In error:', err);
+      const errorMsg = err?.response?.data?.msg || 'Google Sign In failed. Please try again.';
+      const accountNotFound = err?.response?.data?.accountNotFound;
+      
+      setError(errorMsg);
+      
+      // Redirect to signup if account doesn't exist
+      if (accountNotFound) {
+        setTimeout(() => {
+          router.push('/signup');
+        }, 2000);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Local poster images
   const posterImages = [
@@ -71,7 +115,17 @@ export default function LoginPage() {
       // AuthGuard will handle the redirect
     } catch (err) {
       console.error('Login error:', err);
-      setError(err?.response?.data?.message || err?.message || 'Invalid credentials. Please try again.');
+      const errorMsg = err?.response?.data?.msg || err?.response?.data?.message || err?.message || 'Invalid credentials. Please try again.';
+      const accountNotFound = err?.response?.data?.accountNotFound;
+      
+      setError(errorMsg);
+      
+      // Redirect to signup if account doesn't exist
+      if (accountNotFound) {
+        setTimeout(() => {
+          router.push('/signup');
+        }, 2000);
+      }
     } finally {
       setLoading(false);
     }
@@ -167,7 +221,38 @@ export default function LoginPage() {
                       animate={{ opacity: 1, translateX: 0 }}
                       transition={{ type: 'spring', stiffness: 100, delay: 800 }}
                       style={loginStyles.inputWrapper}
+                    >Divider */}
+                  <View style={loginStyles.dividerContainer}>
+                    <View style={loginStyles.dividerLine} />
+                    <Text style={loginStyles.dividerText}>OR</Text>
+                    <View style={loginStyles.dividerLine} />
+                  </View>
+
+                  {/* Google Sign In Button */}
+                  <MotiView
+                    from={{ opacity: 0, translateY: 20 }}
+                    animate={{ opacity: 1, translateY: 0 }}
+                    transition={{ type: 'timing', duration: 500, delay: 950 }}
+                  >
+                    <Pressable
+                      onPress={() => promptAsync()}
+                      disabled={!request || loading}
+                      style={[
+                        loginStyles.googleButton,
+                        { opacity: (!request || loading) ? 0.5 : 1 }
+                      ]}
                     >
+                      <Image
+                        source={{ uri: 'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg' }}
+                        style={loginStyles.googleIcon}
+                      />
+                      <Text style={loginStyles.googleButtonText}>
+                        Continue with Google
+                      </Text>
+                    </Pressable>
+                  </MotiView>
+
+                  {/* 
                       <FloatingLabelInput
                         label="Password"
                         value={formData.password}
@@ -235,6 +320,25 @@ export default function LoginPage() {
                 </MotiView>
               </View>
             </ScrollView>
+  dividerContainer: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: '#4b5563' },
+  dividerText: { color: '#9ca3af', paddingHorizontal: 15, fontSize: 14, fontWeight: '600' },
+  googleButton: { 
+    width: '100%', 
+    paddingVertical: 14, 
+    borderRadius: 15, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    backgroundColor: 'white',
+    flexDirection: 'row',
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 4 }, 
+    shadowOpacity: 0.2, 
+    shadowRadius: 8, 
+    elevation: 5 
+  },
+  googleIcon: { width: 20, height: 20, marginRight: 12 },
+  googleButtonText: { color: '#1f2937', fontSize: 16, fontWeight: '600' },
           </SafeAreaView>
         </View>
       </ImageBackground>

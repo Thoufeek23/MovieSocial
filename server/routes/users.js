@@ -11,6 +11,8 @@ const {
     unfollowUser, 
     searchUsers,
     deleteMyAccount,
+    checkUsername,
+    updateUsernameOnly,
     getAllUsers, 
     deleteUser 
 } = require('../controllers/userController');
@@ -28,6 +30,8 @@ router.get('/search', searchUsers);
 router.get('/admin/list', protect, adminOnly, getAllUsers);
 
 // Current User Operations
+router.get('/check-username/:username', checkUsername);
+router.patch('/me/username', protect, updateUsernameOnly);
 router.patch('/me', protect, updateProfile);
 router.delete('/me', protect, deleteMyAccount);
 

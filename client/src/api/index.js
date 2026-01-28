@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // In production the client should be built with REACT_APP_API_URL set to your API root 
 //const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://localhost:5001';
-const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'https://moviesocial-backend-khd2.onrender.com';
+const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'https://moviesocial-62qe.onrender.com';
 const API = axios.create({ baseURL: `${apiRoot}/api` });
 
 
@@ -20,12 +20,15 @@ export const adminDeleteUser = (id) => API.delete(`/users/${id}`);
 // Authentication
 export const login = (formData) => API.post('/auth/login', formData);
 export const register = (formData) => API.post('/auth/register', formData);
-export const forgotPassword = (payload) => API.post('/auth/forgot-password', payload);
-export const verifyResetOtp = (payload) => API.post('/auth/verify-otp', payload);
-export const resetPassword = (payload) => API.post('/auth/reset-password', payload);
-export const sendSignupOtp = (payload) => API.post('/auth/signup-otp', payload);
-export const verifySignupOtp = (payload) => API.post('/auth/verify-signup-otp', payload);
-export const completeSignup = (payload) => API.post('/auth/complete-signup', payload);
+export const googleSignIn = (idToken) => API.post('/auth/google-signin', { idToken }); // Google Sign In (login only)
+export const googleSignUp = (idToken) => API.post('/auth/google-signup', { idToken }); // Google Sign Up (create account only)
+// Commented out OTP functions:
+// export const forgotPassword = (payload) => API.post('/auth/forgot-password', payload);
+// export const verifyResetOtp = (payload) => API.post('/auth/verify-otp', payload);
+// export const resetPassword = (payload) => API.post('/auth/reset-password', payload);
+// export const sendSignupOtp = (payload) => API.post('/auth/signup-otp', payload);
+// export const verifySignupOtp = (payload) => API.post('/auth/verify-signup-otp', payload);
+// export const completeSignup = (payload) => API.post('/auth/complete-signup', payload);
 export const getCurrentUser = () => API.get('/auth/me');
 
 // Movies (Proxy)
@@ -58,6 +61,8 @@ export const voteReview = (id, value) => API.post(`/reviews/${id}/vote`, { value
 export const getUserProfile = (username) => API.get(`/users/${username}`);
 export const getMyProfile = () => API.get('/auth/me');
 export const searchUsers = (q) => API.get(`/users/search?q=${encodeURIComponent(q)}`);
+export const checkUsername = (username) => API.get(`/users/check-username/${encodeURIComponent(username)}`);
+export const updateUsername = (username) => API.patch('/users/me/username', { username });
 export const addToWatchlist = (movieId) => API.post('/users/watchlist', { movieId });
 export const addToWatched = (movieId, date) => API.post('/users/watched', { movieId, date });
 export const removeFromWatchlist = (movieId) => API.delete('/users/watchlist', { data: { movieId } });

@@ -7,6 +7,7 @@ import * as api from '../api';
 import { X } from 'lucide-react';
 
 const EditProfileModal = ({ isOpen, onClose, profile, onUpdated }) => {
+  const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
   const [avatarPreview, setAvatarPreview] = useState('');
   const [interests, setInterests] = useState([]);
@@ -30,6 +31,7 @@ const EditProfileModal = ({ isOpen, onClose, profile, onUpdated }) => {
   // Initialize state only when modal opens for the first time
   useEffect(() => {
     if (isOpen && profile && !initialized) {
+      setUsername(profile.username || '');
       setBio(profile.bio || '');
       setAvatarPreview(profile.avatar || '');
       setInterests(profile.interests || []);
@@ -67,9 +69,16 @@ const EditProfileModal = ({ isOpen, onClose, profile, onUpdated }) => {
 
   // Handle saving changes
   const save = async () => {
+    // Validate username
+    if (username.trim().length < 3 || username.trim().length > 20) {
+      toast.error('Username must be between 3 and 20 characters');
+      return;
+    }
+
     setIsLoading(true);
     try {
       const payload = {
+        username: username.trim(),
         bio,
         interests: interests.slice(0, 3), // Ensure only top 3 interests
       };
@@ -78,8 +87,15 @@ const EditProfileModal = ({ isOpen, onClose, profile, onUpdated }) => {
         payload.avatar = avatarPreview;
       }
 
-      await api.updateMyProfile(payload);
-      const { data } = await api.getUserProfile(profile.username); // Refetch updated profile
+      const response = await api.updateMyProfile(payload);
+      
+      // If username was changed, the backend returns a new token
+      if (response.data?.token) {
+        // Update token in localStorage
+        localStorage.setItem('token', response.data.token);
+      }
+      
+      const { data } = await api.getUserProfile(username.trim()); // Refetch updated profile
       toast.success('Profile updated');
       onUpdated?.(data); // Notify parent component
       onClose();
@@ -111,10 +127,10 @@ const EditProfileModal = ({ isOpen, onClose, profile, onUpdated }) => {
             initial="hidden"
             animate="visible"
             exit="exit"
-            className="relative bg-card w-full max-w-2xl rounded-lg shadow-xl p-6 border border-gray-700"
+            className="relative bg-card w-full max-w-2xl max-h-[90vh] rounded-lg shadow-xl border border-gray-700 flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-5 border-b border-gray-700 pb-3">
+            <div className="flex items-center justify-between p-6 pb-3 border-b border-gray-700 flex-shrink-0">
               <h3 className="text-xl font-semibold text-white">Edit Profile</h3>
               <button
                 onClick={onClose}
@@ -125,7 +141,21 @@ const EditProfileModal = ({ isOpen, onClose, profile, onUpdated }) => {
               </button>
             </div>
 
-            <div className="space-y-6">
+            <div className="space-y-6 p-6 overflow-y-auto flex-1">
+              {/* Username Section */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Username</label>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Enter your username"
+                  maxLength={20}
+                  className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-primary transition-colors"
+                />
+                <p className="text-xs text-gray-500 mt-1">3-20 characters. This will be your unique identifier.</p>
+              </div>
+
               {/* Avatar Section */}
               <div className="flex items-center gap-5">
                 <Avatar username={profile.username} avatar={avatarPreview} sizeClass="w-20 h-20" className="border-2 border-gray-600" />
@@ -198,30 +228,28 @@ const EditProfileModal = ({ isOpen, onClose, profile, onUpdated }) => {
                 />
                 <p className="text-xs text-gray-500 mt-1 text-right">{bio.length}/200</p>
               </div>
+            </div>
 
-
-
-              {/* Action Buttons */}
-              <div className="flex justify-end gap-3 pt-4 border-t border-gray-700">
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={onClose}
-                  disabled={isLoading}
-                  className="px-5 py-2 rounded-md bg-gray-700 text-gray-200 font-medium hover:bg-gray-600 transition-colors duration-200 disabled:opacity-50"
-                >
-                  Cancel
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={save}
-                  disabled={isLoading}
-                  className="px-5 py-2 rounded-md bg-primary text-primary-foreground font-medium hover:bg-green-700 transition-colors duration-200 disabled:opacity-50"
-                >
-                  {isLoading ? 'Saving...' : 'Save Changes'}
-                </motion.button>
-              </div>
+            {/* Action Buttons - Fixed at bottom */}
+            <div className="flex justify-end gap-3 p-6 pt-4 border-t border-gray-700 flex-shrink-0 bg-card">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={onClose}
+                disabled={isLoading}
+                className="px-5 py-2 rounded-md bg-gray-700 text-gray-200 font-medium hover:bg-gray-600 transition-colors duration-200 disabled:opacity-50"
+              >
+                Cancel
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={save}
+                disabled={isLoading}
+                className="px-5 py-2 rounded-md bg-primary text-primary-foreground font-medium hover:bg-green-700 transition-colors duration-200 disabled:opacity-50"
+              >
+                {isLoading ? 'Saving...' : 'Save Changes'}
+              </motion.button>
             </div>
           </motion.div>
         </motion.div>
