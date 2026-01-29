@@ -1,8 +1,8 @@
 import axios from 'axios';
 
 // In production the client should be built with REACT_APP_API_URL set to your API root 
-//const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://localhost:5001';
-const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'https://moviesocial-62qe.onrender.com';
+const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://localhost:5001';
+//const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'https://moviesocial-62qe.onrender.com';
 const API = axios.create({ baseURL: `${apiRoot}/api` });
 
 
@@ -68,6 +68,7 @@ export const addToWatched = (movieId, date) => API.post('/users/watched', { movi
 export const removeFromWatchlist = (movieId) => API.delete('/users/watchlist', { data: { movieId } });
 export const removeFromWatched = (movieId) => API.delete('/users/watched', { data: { movieId } });
 export const updateMyProfile = (profileData) => API.patch('/users/me', profileData);
+export const removeProfilePhoto = () => API.delete('/users/me/avatar');
 export const saveInterests = (interests) => API.patch('/users/me', { interests });
 export const followUser = (username) => API.post(`/users/${username}/follow`);
 export const unfollowUser = (username) => API.delete(`/users/${username}/follow`);

@@ -6,7 +6,8 @@ const {
     addToWatched, 
     removeFromWatchlist, 
     removeFromWatched, 
-    updateProfile, 
+    updateProfile,
+    removeProfilePhoto,
     followUser, 
     unfollowUser, 
     searchUsers,
@@ -33,6 +34,7 @@ router.get('/admin/list', protect, adminOnly, getAllUsers);
 router.get('/check-username/:username', checkUsername);
 router.patch('/me/username', protect, updateUsernameOnly);
 router.patch('/me', protect, updateProfile);
+router.delete('/me/avatar', protect, removeProfilePhoto);
 router.delete('/me', protect, deleteMyAccount);
 
 // Watchlist & Watched

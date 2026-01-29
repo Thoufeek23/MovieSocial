@@ -228,6 +228,24 @@ const updateProfile = async (req, res) => {
     }
 };
 
+// @desc    Remove profile photo
+// @route   DELETE /api/users/me/avatar
+const removeProfilePhoto = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id);
+        if (!user) return res.status(404).json({ msg: 'User not found' });
+
+        // Reset to default avatar
+        user.avatar = '/default_dp.png';
+        await user.save();
+        
+        res.json({ msg: 'Profile photo removed', avatar: user.avatar });
+    } catch (error) {
+        logger.error(error);
+        res.status(500).json({ msg: 'Server Error' });
+    }
+};
+
 // @desc    Follow a user
 // @route   POST /api/users/:username/follow
 const followUser = async (req, res) => {
@@ -607,6 +625,7 @@ const deleteUser = async (req, res) => {
 module.exports = {
     getUserProfile,
     updateProfile,
+    removeProfilePhoto,
     followUser,
     unfollowUser,
     addToWatchlist,

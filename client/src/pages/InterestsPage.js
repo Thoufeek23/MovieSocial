@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Check } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
+import WelcomeModal from '../components/WelcomeModal';
 import * as api from '../api';
 
 const InterestsPage = () => {
   const [selectedInterests, setSelectedInterests] = useState([]);
   const [currentBackdrop, setCurrentBackdrop] = useState(0);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(true);
   const { setNewUser } = useContext(AuthContext);
   const navigate = useNavigate();
 
@@ -101,6 +103,9 @@ const InterestsPage = () => {
 
   return (
     <div className="min-h-screen relative overflow-hidden" style={backgroundStyle}>
+      {/* Welcome Modal */}
+      <WelcomeModal isOpen={showWelcomeModal} onClose={() => setShowWelcomeModal(false)} />
+      
       {/* Overlay */}
       <div className="absolute inset-0 bg-black bg-opacity-80" />
       

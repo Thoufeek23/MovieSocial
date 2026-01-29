@@ -159,7 +159,7 @@ const EditProfileModal = ({ isOpen, onClose, profile, onUpdated }) => {
               {/* Avatar Section */}
               <div className="flex items-center gap-5">
                 <Avatar username={profile.username} avatar={avatarPreview} sizeClass="w-20 h-20" className="border-2 border-gray-600" />
-                <div>
+                <div className="flex-1">
                   <label className="block text-sm font-medium text-gray-300 mb-2">Change Avatar</label>
                   <input
                     ref={avatarRef}
@@ -173,7 +173,18 @@ const EditProfileModal = ({ isOpen, onClose, profile, onUpdated }) => {
                                file:bg-primary/20 file:text-primary
                                hover:file:bg-primary/30 cursor-pointer"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Max 2MB. PNG, JPG, GIF.</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <p className="text-xs text-gray-500">Max 2MB. PNG, JPG, GIF.</p>
+                    {avatarPreview && avatarPreview !== '/default_dp.png' && (
+                      <button
+                        type="button"
+                        onClick={() => setAvatarPreview('/default_dp.png')}
+                        className="text-xs text-red-400 hover:text-red-300 font-medium transition-colors"
+                      >
+                        Remove Photo
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
