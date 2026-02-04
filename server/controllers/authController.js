@@ -27,12 +27,12 @@ const registerUser = async (req, res) => {
             return res.status(400).json({ msg: 'Please enter all fields' });
         }
 
-        // Validate username length (5-20 characters)
+        // Validate username length (5-15 characters)
         if (username.trim().length < 5) {
             return res.status(400).json({ msg: 'Username must be at least 5 characters' });
         }
-        if (username.trim().length > 20) {
-            return res.status(400).json({ msg: 'Username cannot be more than 20 characters' });
+        if (username.trim().length > 15) {
+            return res.status(400).json({ msg: 'Username cannot be more than 15 characters' });
         }
 
         const userExists = await User.findOne({ email });
@@ -117,8 +117,6 @@ const loginUser = async (req, res) => {
     }
 };
 
-// Commented out: OTP forgot password flow
-/*
 // @desc Forgot password - send OTP
 // @route POST /api/auth/forgot-password
 const forgotPassword = async (req, res) => {
@@ -249,9 +247,12 @@ const sendSignupOtp = async (req, res) => {
     let { country, state } = req.body;
     if (!username || !email || !password) return res.status(400).json({ msg: 'username, email and password required' });
     
-    // Validate username length
-    if (username.trim().length > 10) {
-        return res.status(400).json({ msg: 'Username cannot be more than 10 characters' });
+    // Validate username length (5-15 characters)
+    if (username.trim().length < 5) {
+        return res.status(400).json({ msg: 'Username must be at least 5 characters' });
+    }
+    if (username.trim().length > 15) {
+        return res.status(400).json({ msg: 'Username cannot be more than 15 characters' });
     }
 
     // small helpers
@@ -439,7 +440,6 @@ const completeSignup = async (req, res) => {
         return res.status(500).json({ msg: 'Server error' });
     }
 };
-*/
 
 // @desc Get current user data
 // @route GET /api/auth/me
@@ -492,10 +492,12 @@ const googleSignIn = async (req, res) => {
             });
         }
 
-        // Existing user - update Google ID if not set
+        // Existing user - link Google ID if not already linked
         if (!user.googleId) {
             user.googleId = googleId;
-            user.authProvider = 'google';
+            // Don't override authProvider - allow hybrid authentication
+            // If user registered with email/password, keep it as 'local'
+            // They can now use both methods
             await user.save();
         }
 
@@ -601,13 +603,12 @@ module.exports = {
     getMe,
     googleSignIn,
     googleSignUp,
-    // Commented out OTP functions:
-    // forgotPassword,
-    // verifyResetOtp,
-    // resetPassword,
-    // sendSignupOtp,
-    // verifySignupOtp,
-    // completeSignup,
+    forgotPassword,
+    verifyResetOtp,
+    resetPassword,
+    sendSignupOtp,
+    verifySignupOtp,
+    completeSignup,
 };
 
 // Password policy validator

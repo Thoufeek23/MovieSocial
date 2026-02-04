@@ -11,9 +11,9 @@ const SignupPage = () => {
   const [formData, setFormData] = useState({ name: '', age: '', username: '', email: '', password: '', confirmPassword: '' });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  // const [signupStep, setSignupStep] = useState(1); // Commented out: OTP flow disabled
-  // const [otp, setOtp] = useState(''); // Commented out
-  // const [signupToken, setSignupToken] = useState(''); // Commented out
+  const [signupStep, setSignupStep] = useState(1);
+  const [otp, setOtp] = useState('');
+  const [signupToken, setSignupToken] = useState('');
   const [showCurtains, setShowCurtains] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [passwordChecks, setPasswordChecks] = useState({ length: false, upper: false, lower: false, number: false, special: false });
@@ -126,13 +126,13 @@ const SignupPage = () => {
       return;
     }
 
-    // Validate username length (5-20 characters)
+    // Validate username length (5-15 characters)
     if (formData.username.trim().length < 5) {
       setError('Username must be at least 5 characters.');
       return;
     }
-    if (formData.username.trim().length > 20) {
-      setError('Username cannot be more than 20 characters.');
+    if (formData.username.trim().length > 15) {
+      setError('Username cannot be more than 15 characters.');
       return;
     }
 
@@ -170,12 +170,46 @@ const SignupPage = () => {
         password: formData.password,
       };
 
-      const { data } = await api.register(payload);
+      await api.sendSignupOtp(payload);
+      setSignupStep(2);
+      setError('');
+    } catch (err) {
+      setError(err.response?.data?.msg || 'Failed to send OTP.');
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!otp || otp.length !== 6) {
+      setError('Please enter a valid 6-digit code.');
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+    try {
+      const { data } = await api.verifySignupOtp({ email: formData.email, otp });
+      setSignupToken(data.signupToken);
+      setSignupStep(3);
+    } catch (err) {
+      setError(err.response?.data?.msg || 'Invalid or expired OTP.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCompleteSignup = async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const { data } = await api.completeSignup({ email: formData.email, signupToken });
       login(data, true);
       setShowCurtains(true);
       navigate('/interests');
     } catch (err) {
-      setError(err.response?.data?.msg || 'Failed to sign up.');
+      setError(err.response?.data?.msg || 'Failed to complete signup.');
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -202,31 +236,33 @@ const SignupPage = () => {
       </AnimatePresence>
 
       <motion.div variants={containerVariants} initial="hidden" animate="visible">
-        <motion.h2 variants={itemVariants} className="text-4xl font-bold mb-3 text-white">Create Account</motion.h2>
-        <motion.p variants={itemVariants} className="text-gray-400 mb-6">Join the community and start sharing your thoughts on film.</motion.p>
+        <motion.h2 variants={itemVariants} className="text-4xl font-bold mb-3 text-white">
+          {signupStep === 1 ? 'Create Account' : signupStep === 2 ? 'Verify Email' : 'Complete Signup'}
+        </motion.h2>
+        <motion.p variants={itemVariants} className="text-gray-400 mb-6">
+          {signupStep === 1 ? 'Join the community and start sharing your thoughts on film.' : signupStep === 2 ? 'Enter the 6-digit code sent to your email.' : 'Almost there! Complete your registration.'}
+        </motion.p>
 
         {error && <motion.p variants={itemVariants} className="bg-red-500/20 text-red-400 p-3 rounded-lg text-center font-medium">{error}</motion.p>}
 
-        {/* Google Sign In Button - Primary Method */}
-        <motion.div variants={itemVariants} className="mb-6">
-          <div id="googleSignUpButton" className="flex justify-center"></div>
-        </motion.div>
+        {signupStep === 1 && (
+          <>
+            {/* Google Sign In Button - Primary Method */}
+            <motion.div variants={itemVariants} className="mb-6">
+              <div id="googleSignUpButton" className="flex justify-center"></div>
+            </motion.div>
 
-        {/* Divider */}
-        <motion.div variants={itemVariants} className="flex items-center my-6">
-          <div className="flex-1 border-t border-gray-600"></div>
-          <span className="px-4 text-gray-400 text-sm font-semibold">OR</span>
-          <div className="flex-1 border-t border-gray-600"></div>
-        </motion.div>
+            {/* Divider */}
+            <motion.div variants={itemVariants} className="flex items-center my-6">
+              <div className="flex-1 border-t border-gray-600"></div>
+              <span className="px-4 text-gray-400 text-sm font-semibold">OR</span>
+              <div className="flex-1 border-t border-gray-600"></div>
+            </motion.div>
+          </>
+        )}
 
-        {/* Old Signup Method - Disabled Notice */}
-        <motion.div variants={itemVariants} className="bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 p-3 rounded-lg text-center mb-6">
-          <p className="text-sm font-medium">⚠️ Use Google Sign Up (traditional registration is disabled)</p>
-        </motion.div>
-
-        <form onSubmit={handleSubmit} className="space-y-6 max-w-md opacity-50 pointer-events-none">
-          {error && <p className="bg-red-500/20 text-red-400 p-3 rounded-lg text-center font-medium">{error}</p>}
-
+        {signupStep === 1 && (
+        <form onSubmit={handleSubmit} className="space-y-6 max-w-md">
           <motion.div variants={itemVariants} className="relative">
             <input id="name" name="name" type="text" onChange={handleChange} className="peer h-12 w-full border-b-2 border-gray-600 text-white bg-transparent placeholder-transparent focus:outline-none focus:border-primary transition-colors" placeholder="Full name" required />
             <label htmlFor="name" className="absolute left-0 -top-4 text-gray-400 text-sm transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-placeholder-shown:top-3 peer-focus:-top-4 peer-focus:text-primary peer-focus:text-sm">Full name</label>
@@ -294,32 +330,49 @@ const SignupPage = () => {
           </motion.div>
 
           <motion.div variants={itemVariants}>
-            <button type="submit" disabled={isLoading} className="w-full bg-primary hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300 disabled:bg-gray-500">{isLoading ? 'Signing up...' : 'Sign Up'}</button>
+            <button type="submit" disabled={isLoading} className="w-full bg-primary hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300 disabled:bg-gray-500">{isLoading ? 'Sending OTP...' : 'Continue'}</button>
           </motion.div>
         </form>
+        )}
 
-        {/* Commented out: OTP flow disabled
         {signupStep === 2 && (
-          <div className="space-y-6 max-w-md">
-            <p className="text-sm text-gray-400">We've sent an OTP to <strong>{formData.email}</strong>. Enter it below to verify your email.</p>
-            <input value={otp} onChange={(e) => setOtp(e.target.value)} placeholder="123456" maxLength={6} type="text" className="w-full p-2 bg-transparent border rounded" />
-            <div className="flex gap-3">
-              <button onClick={() => setSignupStep(1)} className="px-4 py-2 bg-gray-700 rounded">Back</button>
-              <button onClick={handleVerifyOtp} className="px-4 py-2 bg-primary rounded text-white" disabled={isLoading || otp.trim().length === 0}>{isLoading ? 'Verifying...' : 'Verify'}</button>
+          <motion.div variants={itemVariants} className="space-y-6 max-w-md">
+            <p className="text-sm text-gray-300 bg-blue-500/10 border border-blue-500/30 p-3 rounded-lg">
+              We've sent a 6-digit code to <strong className="text-white">{formData.email}</strong>. Please check your email and enter it below.
+            </p>
+            <div className="relative">
+              <input 
+                value={otp} 
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))} 
+                placeholder="000000" 
+                maxLength={6} 
+                type="text" 
+                className="peer h-12 w-full border-b-2 border-gray-600 text-white bg-transparent placeholder-transparent focus:outline-none focus:border-primary transition-colors text-center text-2xl tracking-widest" 
+              />
+              <label className="absolute left-0 -top-4 text-gray-400 text-sm">
+                6-Digit Code
+              </label>
             </div>
-          </div>
+            <div className="flex gap-3">
+              <button onClick={() => { setSignupStep(1); setOtp(''); setError(''); }} className="flex-1 px-4 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg text-white font-semibold transition-colors">Back</button>
+              <button onClick={handleVerifyOtp} className="flex-1 px-4 py-3 bg-primary hover:bg-green-700 rounded-lg text-white font-semibold transition-colors disabled:bg-gray-500" disabled={isLoading || otp.trim().length !== 6}>{isLoading ? 'Verifying...' : 'Verify'}</button>
+            </div>
+          </motion.div>
         )}
 
         {signupStep === 3 && (
-          <div className="space-y-6 max-w-md">
-            <p className="text-sm text-gray-400">Verification successful. Click below to complete account creation.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setSignupStep(2)} className="px-4 py-2 bg-gray-700 rounded">Back</button>
-              <button onClick={handleCompleteSignup} className="px-4 py-2 bg-primary rounded text-white" disabled={isLoading}>{isLoading ? 'Completing...' : 'Complete Signup'}</button>
+          <motion.div variants={itemVariants} className="space-y-6 max-w-md">
+            <div className="text-center">
+              <div className="text-green-400 text-6xl mb-4">✓</div>
+              <p className="text-lg text-gray-300 mb-2">Email Verified Successfully!</p>
+              <p className="text-sm text-gray-400">Click below to complete your account creation.</p>
             </div>
-          </div>
+            <div className="flex gap-3">
+              <button onClick={() => { setSignupStep(2); setError(''); }} className="flex-1 px-4 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg text-white font-semibold transition-colors">Back</button>
+              <button onClick={handleCompleteSignup} className="flex-1 px-4 py-3 bg-primary hover:bg-green-700 rounded-lg text-white font-semibold transition-colors disabled:bg-gray-500" disabled={isLoading}>{isLoading ? 'Completing...' : 'Complete Signup'}</button>
+            </div>
+          </motion.div>
         )}
-        */}
 
         <motion.p variants={itemVariants} className="text-center mt-6 text-sm text-gray-400">Already have an account? <Link to="/login" className="font-semibold text-primary hover:underline">Log In</Link></motion.p>
       </motion.div>

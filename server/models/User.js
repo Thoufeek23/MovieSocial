@@ -44,14 +44,14 @@ const UserSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 UserSchema.methods.matchPassword = async function (enteredPassword) {
-  // Google users don't have passwords
-  if (this.authProvider === 'google' || !this.passwordHash) return false;
+  // Users without passwords (Google-only users) can't login with password
+  if (!this.passwordHash) return false;
   return await bcrypt.compare(enteredPassword, this.passwordHash);
 };
 
 UserSchema.pre('save', async function () {
-  // Skip password hashing for Google users
-  if (this.authProvider === 'google' || !this.passwordHash) return;
+  // Skip password hashing if no password is set
+  if (!this.passwordHash) return;
   if (!this.isModified('passwordHash')) return;
   const maybeHash = this.passwordHash || '';
   const bcryptRegex = /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/;

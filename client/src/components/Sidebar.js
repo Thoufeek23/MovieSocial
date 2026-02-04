@@ -24,7 +24,7 @@ const NavItem = ({ to, icon: Icon, label, badge }) => {
 };
 
 const Sidebar = ({ isMobileOpen, setIsMobileOpen }) => {
-  const { user, setUser, unreadCount, updateUnreadCount } = useContext(AuthContext);
+  const { user, setUser, unreadCount, updateUnreadCount, setIsLinkedInCardMinimized } = useContext(AuthContext);
   const [isCheckingAdmin, setIsCheckingAdmin] = useState(false);
   const profileLink = user ? `/profile/${user.username}` : '/login';
   
@@ -62,6 +62,10 @@ const Sidebar = ({ isMobileOpen, setIsMobileOpen }) => {
   // Close mobile sidebar when clicking a link
   const handleLinkClick = () => {
     setIsMobileOpen(false);
+  };
+
+  const handleMinimizedCardClick = () => {
+    setIsLinkedInCardMinimized(false);
   };
 
   return (
@@ -113,6 +117,23 @@ const Sidebar = ({ isMobileOpen, setIsMobileOpen }) => {
             {/*<NavItem to="/leaderboard" icon={Award} label="Leaderboard" />*/}
             <div onClick={handleLinkClick}>
               <NavItem to={profileLink} icon={User} label="Profile" />
+            </div>
+            
+            {/* LinkedIn Card Widget - Always visible */}
+            <div
+              onClick={handleMinimizedCardClick}
+              className="mt-3 mx-2 p-3 rounded-lg bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700 cursor-pointer hover:border-gray-600 transition-all duration-300 hover:shadow-lg"
+            >
+              <div className="flex flex-col items-center gap-2">
+                <img
+                  src="/Thoufeek_Funkopop.png"
+                  alt="Thoufeek"
+                  className="w-16 h-16 object-contain rounded-lg"
+                />
+                <p className="text-xs text-gray-400 text-center leading-tight">
+                  Chat with me!
+                </p>
+              </div>
             </div>
             
             {/* Admin Section */}

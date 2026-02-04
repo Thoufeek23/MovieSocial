@@ -25,7 +25,9 @@ const AuthContext = createContext({
   isNewUser: false,
   setNewUser: () => {},
   unreadCount: 0,
-  updateUnreadCount: () => {}
+  updateUnreadCount: () => {},
+  isLinkedInCardMinimized: true,
+  setIsLinkedInCardMinimized: () => {}
 });
 
 function authReducer(state, action) {
@@ -45,6 +47,7 @@ function AuthProvider(props) {
   const [state, dispatch] = useReducer(authReducer, initialState);
   const [isJustLoggedIn, setJustLoggedIn] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [isLinkedInCardMinimized, setIsLinkedInCardMinimized] = useState(true);
 
   const updateUnreadCount = useCallback(async () => {
     if (!state.user) return;
@@ -99,6 +102,7 @@ function AuthProvider(props) {
     dispatch({ type: 'LOGOUT' });
     setJustLoggedIn(false);
     setUnreadCount(0);
+    setIsLinkedInCardMinimized(true);
   };
 
   const setNewUser = (isNew) => {
@@ -117,7 +121,9 @@ function AuthProvider(props) {
         isNewUser: state.isNewUser,
         setNewUser,
         unreadCount,
-        updateUnreadCount
+        updateUnreadCount,
+        isLinkedInCardMinimized,
+        setIsLinkedInCardMinimized
       }}
       {...props}
     />

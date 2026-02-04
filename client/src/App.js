@@ -2,12 +2,14 @@ import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-route
 import { Toaster } from 'react-hot-toast';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
+import LinkedInCard from './components/LinkedInCard';
 import PrivateRoute from './components/PrivateRoute';
 import ProtectedRoute from './components/ProtectedRoute';
 import InterestsRoute from './components/InterestsRoute';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import UsernamePage from './pages/UsernamePage';
 import MovieDetailPage from './pages/MovieDetailPage';
 import SearchPage from './pages/SearchPage';
@@ -48,7 +50,7 @@ const PageWrapper = ({ children }) => {
 
 const AppRoutes = () => {
   const location = useLocation();
-  const isAuthRoute = ['/login', '/signup', '/username', '/interests'].includes(location.pathname);
+  const isAuthRoute = ['/login', '/signup', '/forgot-password', '/username', '/interests'].includes(location.pathname);
   const [isMobileOpen, setIsMobileOpen] = React.useState(false);
 
   const toggleSidebar = () => {
@@ -65,6 +67,7 @@ const AppRoutes = () => {
           <Routes>
             <Route path="/login" element={<PageWrapper><LoginPage /></PageWrapper>} />
             <Route path="/signup" element={<PageWrapper><SignupPage /></PageWrapper>} />
+            <Route path="/forgot-password" element={<PageWrapper><ForgotPasswordPage /></PageWrapper>} />
             <Route path="/username" element={
               <InterestsRoute>
                 <PageWrapper><UsernamePage /></PageWrapper>
@@ -176,6 +179,8 @@ const AppRoutes = () => {
           </AnimatePresence>
         </main>
       </div>
+      {/* LinkedIn Card Component */}
+      <LinkedInCard />
     </>
   );
 }

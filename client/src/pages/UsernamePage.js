@@ -15,7 +15,7 @@ const UsernamePage = () => {
   const navigate = useNavigate();
 
   const checkUsernameAvailability = async (value) => {
-    if (!value || value.trim().length < 5 || value.trim().length > 20) {
+    if (!value || value.trim().length < 5 || value.trim().length > 15) {
       setIsAvailable(null);
       return;
     }
@@ -59,8 +59,8 @@ const UsernamePage = () => {
       return;
     }
 
-    if (username.trim().length > 20) {
-      setError('Username cannot be more than 20 characters.');
+    if (username.trim().length > 15) {
+      setError('Username cannot be more than 15 characters.');
       return;
     }
 

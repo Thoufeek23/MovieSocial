@@ -184,15 +184,7 @@ const LoginPage = () => {
           <div className="flex-1 border-t border-gray-600"></div>
         </motion.div>
 
-        {/* Old Login Method - Disabled Notice */}
-        <motion.div variants={itemVariants} className="bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 p-3 rounded-lg text-center mb-6">
-          <p className="text-sm font-medium">⚠️ Use Google Sign In (traditional email/password login is disabled)</p>
-        </motion.div>
-
-        <form onSubmit={handleSubmit} className="space-y-8 opacity-50 pointer-events-none">
-          {success && <p className="bg-green-500/20 text-green-400 p-3 rounded-lg text-center font-medium">{success}</p>}
-          {error && <p className="bg-red-500/20 text-red-400 p-3 rounded-lg text-center font-medium">{error}</p>}
-          
+        <form onSubmit={handleSubmit} className="space-y-8">
           <motion.div variants={itemVariants} className="relative">
             <input
               id="email"
@@ -247,17 +239,11 @@ const LoginPage = () => {
           </motion.div>
         </form>
 
-        {/* Commented out: Forgot password disabled
         <div className="mt-4 text-right">
-          <button onClick={() => { setShowForgot(true); setForgotStep(1); setSuccess(''); }} className="text-sm text-primary hover:underline">Forgot password?</button>
+          <Link to="/forgot-password" className="text-sm text-primary hover:underline">
+            Forgot password?
+          </Link>
         </div>
-
-        {showForgot && (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-            ...
-          </div>
-        )}
-        */}
 
         <motion.p variants={itemVariants} className="text-center mt-8 text-sm text-gray-400">
           Don't have an account? <Link to="/signup" className="font-semibold text-primary hover:underline">Sign Up</Link>
