@@ -37,7 +37,7 @@ const ProfilePage = () => {
 
     // --- DATA FETCHING ---
     const fetchProfile = useCallback(async () => {
-        if (!profile) setLoading(true);
+        setLoading(true);
 
         try {
             const { data } = await api.getUserProfile(username);
@@ -118,7 +118,8 @@ const ProfilePage = () => {
         } finally {
             setLoading(false);
         }
-    }, [username, user, profile]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [username, user]);
 
     useEffect(() => {
         fetchProfile();

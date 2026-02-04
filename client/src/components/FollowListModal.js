@@ -1,8 +1,7 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import Avatar from './Avatar';
 import { X } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import * as api from '../api';
 import { AuthContext } from '../context/AuthContext';
@@ -25,8 +24,18 @@ const FollowListModal = ({ isOpen, onClose, title = 'Users', users = [], current
   };
 
   const [localFollowing, setLocalFollowing] = useState(() => new Set(buildFollowingKeys((currentUser && currentUser.following) || [])));
-  const navigate = useNavigate();
   const { setUser } = useContext(AuthContext);
+  const prevIsOpenRef = useRef(isOpen);
+
+  // Only reset localFollowing when modal opens (not on every currentUser change)
+  useEffect(() => {
+    if (isOpen && !prevIsOpenRef.current && currentUser) {
+      // Modal just opened, reset the following state
+      setLocalFollowing(new Set(buildFollowingKeys(currentUser.following || [])));
+    }
+    prevIsOpenRef.current = isOpen;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -59,48 +68,71 @@ const FollowListModal = ({ isOpen, onClose, title = 'Users', users = [], current
                     <div className="text-sm font-semibold group-hover:text-green-400 transition-colors">{u.username}</div>
                     <div className="text-xs text-gray-400">@{u.username}</div>
                   </div>
-                  {/* optional placeholder for follow button; hide when viewing the Following list */}
-                  {title === 'Followers' && !localFollowing.has(u.username) && !localFollowing.has(String(u._id)) && (
+                  {/* Show follow/unfollow button for all users except current user */}
+                  {currentUser && u.username !== currentUser.username && (
                     <div className="opacity-80 text-sm">
                       <button
                         onClick={async (e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          // If not logged in, send them to login
-                          if (!currentUser) {
-                            toast('Log in to follow users');
-                            navigate('/login');
-                            return;
-                          }
+                          
+                          const isCurrentlyFollowing = localFollowing.has(u.username) || localFollowing.has(String(u._id));
+                          
                           try {
-                            await api.followUser(u.username);
-                            // optimistically hide the button for this user (track both id and username)
-                            setLocalFollowing(prev => {
-                              const nxt = new Set(prev);
-                              if (u.username) nxt.add(u.username);
-                              if (u._id) nxt.add(String(u._id));
-                              return nxt;
-                            });
-                            // Update global auth cache so the change persists across navigation
-                            if (setUser && currentUser) {
-                              const updated = { ...currentUser };
-                              updated.following = updated.following ? [...updated.following] : [];
-                              // push id if not present
-                              const idKey = u._id ? String(u._id) : null;
-                              if (idKey && !updated.following.map(String).includes(idKey)) {
-                                updated.following.push(idKey);
+                            if (isCurrentlyFollowing) {
+                              // Unfollow
+                              await api.unfollowUser(u.username);
+                              // Remove from local state
+                              setLocalFollowing(prev => {
+                                const nxt = new Set(prev);
+                                if (u.username) nxt.delete(u.username);
+                                if (u._id) nxt.delete(String(u._id));
+                                return nxt;
+                              });
+                              // Update global auth cache
+                              if (setUser && currentUser) {
+                                const updated = { ...currentUser };
+                                updated.following = (updated.following || []).filter(f => {
+                                  const fId = typeof f === 'string' ? f : (f._id || f.id);
+                                  return fId !== u._id && fId !== u.username;
+                                });
+                                setUser(updated);
                               }
-                              setUser(updated);
+                              toast.success(`Unfollowed ${u.username}`);
+                            } else {
+                              // Follow
+                              await api.followUser(u.username);
+                              // Add to local state
+                              setLocalFollowing(prev => {
+                                const nxt = new Set(prev);
+                                if (u.username) nxt.add(u.username);
+                                if (u._id) nxt.add(String(u._id));
+                                return nxt;
+                              });
+                              // Update global auth cache
+                              if (setUser && currentUser) {
+                                const updated = { ...currentUser };
+                                updated.following = updated.following ? [...updated.following] : [];
+                                const idKey = u._id ? String(u._id) : null;
+                                if (idKey && !updated.following.map(String).includes(idKey)) {
+                                  updated.following.push(idKey);
+                                }
+                                setUser(updated);
+                              }
+                              toast.success(`Followed ${u.username}`);
                             }
-                            toast.success(`Followed ${u.username}`);
                           } catch (err) {
-                            console.error('Failed to follow', err);
-                            toast.error('Failed to follow user');
+                            console.error('Failed to toggle follow', err);
+                            toast.error(`Failed to ${isCurrentlyFollowing ? 'unfollow' : 'follow'} user`);
                           }
                         }}
-                        className="px-3 py-1 rounded-full bg-transparent hover:bg-green-700 hover:text-white transition-colors text-green-500"
+                        className={`px-3 py-1 rounded-full transition-colors ${
+                          localFollowing.has(u.username) || localFollowing.has(String(u._id))
+                            ? 'bg-gray-700 hover:bg-red-700 text-white'
+                            : 'bg-transparent hover:bg-green-700 hover:text-white text-green-500'
+                        }`}
                       >
-                        Follow
+                        {localFollowing.has(u.username) || localFollowing.has(String(u._id)) ? 'Unfollow' : 'Follow'}
                       </button>
                     </div>
                   )}
