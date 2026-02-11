@@ -171,6 +171,7 @@ const LoginPage = () => {
 
         {error && <motion.p variants={itemVariants} className="bg-red-500/20 text-red-400 p-3 rounded-lg text-center font-medium mb-4">{error}</motion.p>}
         {success && <motion.p variants={itemVariants} className="bg-green-500/20 text-green-400 p-3 rounded-lg text-center font-medium mb-4">{success}</motion.p>}
+        {isLoading && <motion.p variants={itemVariants} className="bg-blue-500/20 text-blue-400 p-3 rounded-lg text-center font-medium mb-4">Signing in...</motion.p>}
 
         {/* Maintenance Notice */}
         <motion.div variants={itemVariants} className="bg-yellow-500/20 border border-yellow-500/40 text-yellow-200 p-4 rounded-lg text-center mb-6">
@@ -190,7 +191,7 @@ const LoginPage = () => {
           <div className="flex-1 border-t border-gray-600"></div>
         </motion.div>
 
-        <form onSubmit={(e) => e.preventDefault()} className="space-y-8 opacity-50 pointer-events-none">
+        <form onSubmit={handleSubmit} className="space-y-8 opacity-50 pointer-events-none">
           <motion.div variants={itemVariants} className="relative">
             <input
               id="email"
