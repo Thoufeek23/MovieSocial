@@ -23,30 +23,30 @@ const WelcomeModal = ({ isOpen, onClose }) => {
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.9, opacity: 0, y: 20 }}
           transition={{ type: 'spring', duration: 0.5 }}
-          className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl max-w-lg w-full border border-gray-700 overflow-hidden"
+          className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl max-w-lg w-full border border-gray-700 overflow-hidden max-h-[90vh] overflow-y-auto"
         >
           {/* Close Button */}
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors z-10"
+            className="absolute top-3 right-3 md:top-4 md:right-4 text-gray-400 hover:text-white transition-colors z-10"
             aria-label="Close"
           >
-            <X size={24} />
+            <X size={20} className="md:w-6 md:h-6" />
           </button>
 
           {/* Content */}
-          <div className="p-8 text-center">
+          <div className="p-4 sm:p-6 md:p-8 text-center">
             {/* Thoufeek Funkopop Image */}
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
-              className="mb-6 flex justify-center"
+              className="mb-4 sm:mb-6 flex justify-center"
             >
               <img
                 src="/Thoufeek_Funkopop.png"
                 alt="Thoufeek Funkopop"
-                className="w-40 h-40 object-contain rounded-lg"
+                className="w-28 h-28 sm:w-36 sm:h-36 md:w-40 md:h-40 object-contain rounded-lg"
               />
             </motion.div>
 
@@ -55,7 +55,7 @@ const WelcomeModal = ({ isOpen, onClose }) => {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
-              className="text-3xl font-bold text-white mb-4"
+              className="text-2xl sm:text-3xl md:text-3xl font-bold text-white mb-3 md:mb-4"
             >
               Welcome to MovieSocial! 🎬
             </motion.h2>
@@ -65,7 +65,7 @@ const WelcomeModal = ({ isOpen, onClose }) => {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
-              className="text-gray-300 space-y-4 mb-6"
+              className="text-gray-300 space-y-3 sm:space-y-4 mb-4 sm:mb-6 text-sm sm:text-base"
             >
               <p className="leading-relaxed">
                 <span className="font-semibold text-primary">Thoufeek here!</span> 🚀 
@@ -91,14 +91,14 @@ const WelcomeModal = ({ isOpen, onClose }) => {
               href="https://www.linkedin.com/in/mohamedta/"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-3 bg-[#0077B5] hover:bg-[#006399] text-white font-semibold py-3 px-6 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl"
+              className="inline-flex items-center justify-center gap-2 sm:gap-3 bg-[#0077B5] hover:bg-[#006399] text-white font-semibold py-2.5 sm:py-3 px-4 sm:px-6 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl text-sm sm:text-base w-full sm:w-auto"
             >
               {/* LinkedIn Logo SVG */}
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 24 24"
                 fill="currentColor"
-                className="w-6 h-6"
+                className="w-5 h-5 sm:w-6 sm:h-6"
               >
                 <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
               </svg>
@@ -111,7 +111,7 @@ const WelcomeModal = ({ isOpen, onClose }) => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.6 }}
               onClick={onClose}
-              className="mt-4 w-full bg-primary hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-300"
+              className="mt-3 sm:mt-4 w-full bg-primary hover:bg-green-700 text-white font-semibold py-2.5 sm:py-3 px-4 sm:px-6 rounded-lg transition-all duration-300 text-sm sm:text-base"
             >
               Get Started
             </motion.button>

@@ -172,6 +172,12 @@ const LoginPage = () => {
         {error && <motion.p variants={itemVariants} className="bg-red-500/20 text-red-400 p-3 rounded-lg text-center font-medium mb-4">{error}</motion.p>}
         {success && <motion.p variants={itemVariants} className="bg-green-500/20 text-green-400 p-3 rounded-lg text-center font-medium mb-4">{success}</motion.p>}
 
+        {/* Maintenance Notice */}
+        <motion.div variants={itemVariants} className="bg-yellow-500/20 border border-yellow-500/40 text-yellow-200 p-4 rounded-lg text-center mb-6">
+          <p className="font-semibold mb-1">⚠️ Traditional Login Under Maintenance</p>
+          <p className="text-sm">Please use Google Sign In below for authentication.</p>
+        </motion.div>
+
         {/* Google Sign In Button - Primary Method */}
         <motion.div variants={itemVariants} className="mb-6">
           <div id="googleSignInButton" className="flex justify-center"></div>
@@ -184,7 +190,7 @@ const LoginPage = () => {
           <div className="flex-1 border-t border-gray-600"></div>
         </motion.div>
 
-        <form onSubmit={handleSubmit} className="space-y-8">
+        <form onSubmit={(e) => e.preventDefault()} className="space-y-8 opacity-50 pointer-events-none">
           <motion.div variants={itemVariants} className="relative">
             <input
               id="email"
@@ -193,6 +199,7 @@ const LoginPage = () => {
               onChange={handleChange}
               className="peer h-12 w-full border-b-2 border-gray-600 text-white bg-transparent placeholder-transparent focus:outline-none focus:border-primary transition-colors"
               placeholder="Email"
+              disabled
               required
             />
             <label
@@ -211,6 +218,7 @@ const LoginPage = () => {
               onChange={handleChange}
               className="peer h-12 w-full border-b-2 border-gray-600 text-white bg-transparent placeholder-transparent focus:outline-none focus:border-primary transition-colors pr-10"
               placeholder="Password"
+              disabled
               required
             />
             <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-0 top-0 h-12 w-10 flex items-center justify-center text-gray-300">
@@ -231,19 +239,13 @@ const LoginPage = () => {
           <motion.div variants={itemVariants}>
             <button
               type="submit"
-              disabled={isLoading}
-              className="w-full bg-primary hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300 disabled:bg-gray-500"
+              disabled={true}
+              className="w-full bg-gray-600 text-gray-400 font-bold py-3 px-4 rounded-lg cursor-not-allowed"
             >
-              {isLoading ? 'Logging in...' : 'Login'}
+              Login (Under Maintenance)
             </button>
           </motion.div>
         </form>
-
-        <div className="mt-4 text-right">
-          <Link to="/forgot-password" className="text-sm text-primary hover:underline">
-            Forgot password?
-          </Link>
-        </div>
 
         <motion.p variants={itemVariants} className="text-center mt-8 text-sm text-gray-400">
           Don't have an account? <Link to="/signup" className="font-semibold text-primary hover:underline">Sign Up</Link>

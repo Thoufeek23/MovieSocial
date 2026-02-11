@@ -2,8 +2,8 @@ import axios from 'axios';
 
 // In production the client should be built with REACT_APP_API_URL set to your API root 
 //const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'http://localhost:5001';
-//const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'https://moviesocial-62qe.onrender.com';
-const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'https://moviesocial-backend-khd2.onrender.com';
+const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'https://moviesocial-62qe.onrender.com';
+//const apiRoot = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/$/, '') : 'https://moviesocial-backend-khd2.onrender.com';
 const API = axios.create({ baseURL: `${apiRoot}/api` });
 
 
@@ -22,7 +22,9 @@ export const adminDeleteUser = (id) => API.delete(`/users/${id}`);
 export const login = (formData) => API.post('/auth/login', formData);
 export const register = (formData) => API.post('/auth/register', formData);
 export const googleSignIn = (idToken) => API.post('/auth/google-signin', { idToken }); // Google Sign In (login only)
-export const googleSignUp = (idToken) => API.post('/auth/google-signup', { idToken }); // Google Sign Up (create account only)
+export const googleSignUp = (idToken) => API.post('/auth/google-signup', { idToken }); // Google Sign Up (create account only - legacy)
+export const googleSignUpInit = (idToken) => API.post('/auth/google-signup-init', { idToken }); // Google Sign Up Step 1
+export const googleSignUpComplete = (tempToken, username, interests) => API.post('/auth/google-signup-complete', { tempToken, username, interests }); // Google Sign Up Step 2
 export const forgotPassword = (payload) => API.post('/auth/forgot-password', payload);
 export const verifyResetOtp = (payload) => API.post('/auth/verify-otp', payload);
 export const resetPassword = (payload) => API.post('/auth/reset-password', payload);

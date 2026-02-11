@@ -522,7 +522,140 @@ const googleSignIn = async (req, res) => {
     }
 };
 
-// @desc    Google Sign Up - Create new account ONLY
+// @desc    Google Sign Up Init - Verify Google token but DON'T create account yet
+// @route   POST /api/auth/google-signup-init
+const googleSignUpInit = async (req, res) => {
+    const { idToken } = req.body;
+
+    if (!idToken) {
+        return res.status(400).json({ msg: 'Google ID token is required' });
+    }
+
+    try {
+        // Verify the Google token
+        const ticket = await googleClient.verifyIdToken({
+            idToken,
+            audience: process.env.GOOGLE_CLIENT_ID,
+        });
+
+        const payload = ticket.getPayload();
+        const { sub: googleId, email, name, picture } = payload;
+
+        if (!email) {
+            return res.status(400).json({ msg: 'Email not provided by Google' });
+        }
+
+        // Check if user already exists
+        let user = await User.findOne({ $or: [{ email }, { googleId }] });
+
+        if (user) {
+            // User already exists - should not sign up again
+            return res.status(400).json({ 
+                msg: 'An account with this email already exists. Please sign in instead.',
+                accountExists: true
+            });
+        }
+
+        // Don't create account yet - just return a temporary token with Google data
+        const tempToken = jwt.sign(
+            { 
+                type: 'google-signup-pending',
+                googleId,
+                email,
+                name,
+                picture
+            }, 
+            process.env.JWT_SECRET, 
+            { expiresIn: '1h' } // Short expiry for signup flow
+        );
+
+        return res.status(200).json({
+            tempToken,
+            isNewUser: true,
+            googleData: { email, name, picture }
+        });
+    } catch (error) {
+        logger.error('Google sign up init error:', error);
+        
+        if (error.message && error.message.includes('Token used too late')) {
+            return res.status(401).json({ msg: 'Google token expired. Please try again.' });
+        }
+        
+        return res.status(500).json({ msg: 'Google sign up initialization failed' });
+    }
+};
+
+// @desc    Google Sign Up Complete - Create account with username and interests
+// @route   POST /api/auth/google-signup-complete
+const googleSignUpComplete = async (req, res) => {
+    const { tempToken, username, interests } = req.body;
+
+    if (!tempToken) {
+        return res.status(400).json({ msg: 'Temporary token is required' });
+    }
+
+    if (!username || username.trim().length < 5 || username.trim().length > 15) {
+        return res.status(400).json({ msg: 'Valid username is required (5-15 characters)' });
+    }
+
+    try {
+        // Verify and decode the temporary token
+        const decoded = jwt.verify(tempToken, process.env.JWT_SECRET);
+
+        if (decoded.type !== 'google-signup-pending') {
+            return res.status(401).json({ msg: 'Invalid token type' });
+        }
+
+        const { googleId, email, picture } = decoded;
+
+        // Check if user was created in the meantime
+        let user = await User.findOne({ $or: [{ email }, { googleId }] });
+
+        if (user) {
+            return res.status(400).json({ 
+                msg: 'An account with this email already exists.',
+                accountExists: true
+            });
+        }
+
+        // Check if username is taken
+        const usernameExists = await User.findOne({ username: username.trim() });
+        if (usernameExists) {
+            return res.status(400).json({ msg: 'Username is already taken' });
+        }
+
+        // Create new user with Google auth
+        user = await User.create({
+            username: username.trim(),
+            email,
+            googleId,
+            authProvider: 'google',
+            avatar: picture || '/default_dp.png',
+            passwordHash: undefined, // No password for Google users
+            interests: interests || []
+        });
+
+        // Award new user badge
+        await handleNewUser(user._id);
+
+        return res.status(201).json({
+            token: generateToken(user._id, user.username, user.isAdmin),
+            isNewUser: true,
+        });
+    } catch (error) {
+        if (error.name === 'TokenExpiredError') {
+            return res.status(401).json({ msg: 'Signup session expired. Please start over.' });
+        }
+        if (error.name === 'JsonWebTokenError') {
+            return res.status(401).json({ msg: 'Invalid signup token' });
+        }
+        
+        logger.error('Google sign up complete error:', error);
+        return res.status(500).json({ msg: 'Failed to complete signup' });
+    }
+};
+
+// @desc    Google Sign Up - Create new account ONLY (Legacy - kept for compatibility)
 // @route   POST /api/auth/google-signup
 const googleSignUp = async (req, res) => {
     const { idToken } = req.body;
@@ -603,6 +736,8 @@ module.exports = {
     getMe,
     googleSignIn,
     googleSignUp,
+    googleSignUpInit,
+    googleSignUpComplete,
     forgotPassword,
     verifyResetOtp,
     resetPassword,

@@ -4,14 +4,17 @@ import { AuthContext } from '../context/AuthContext';
 
 const InterestsRoute = ({ children }) => {
   const { user, isNewUser } = useContext(AuthContext);
+  
+  // Check if this is a Google signup flow (temp data exists)
+  const googleSignupTemp = localStorage.getItem('googleSignupTemp');
 
-  if (!user) {
-    // User is not authenticated, redirect to login
+  if (!user && !googleSignupTemp) {
+    // User is not authenticated and no pending Google signup, redirect to login
     return <Navigate to="/login" replace />;
   }
 
-  if (!isNewUser) {
-    // Not a new user, redirect to home
+  if (!isNewUser && !googleSignupTemp) {
+    // Not a new user and no pending Google signup, redirect to home
     return <Navigate to="/" replace />;
   }
 

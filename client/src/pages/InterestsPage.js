@@ -10,8 +10,18 @@ const InterestsPage = () => {
   const [selectedInterests, setSelectedInterests] = useState([]);
   const [currentBackdrop, setCurrentBackdrop] = useState(0);
   const [showWelcomeModal, setShowWelcomeModal] = useState(true);
-  const { setNewUser } = useContext(AuthContext);
+  const [isLoading, setIsLoading] = useState(false);
+  const { setNewUser, login, user } = useContext(AuthContext);
   const navigate = useNavigate();
+
+  // Check if user has access to this page
+  useEffect(() => {
+    const googleSignupTemp = localStorage.getItem('googleSignupTemp');
+    // If no temp signup data and no logged-in user, redirect to signup
+    if (!googleSignupTemp && !user) {
+      navigate('/signup');
+    }
+  }, [user, navigate]);
 
   const languages = [
     { name: 'English', flag: '🇺🇸' },
@@ -69,24 +79,73 @@ const InterestsPage = () => {
   };
 
   const handleContinue = async () => {
+    setIsLoading(true);
     try {
-      // Save top 3 interests to user profile
-      if (selectedInterests.length > 0) {
+      // Check if this is a Google signup flow
+      const googleSignupTemp = localStorage.getItem('googleSignupTemp');
+      
+      if (googleSignupTemp) {
+        // Google signup flow - complete the signup with username and interests
+        const tempData = JSON.parse(googleSignupTemp);
+        const { tempToken, username } = tempData;
+        
+        if (!tempToken || !username) {
+          throw new Error('Missing signup data. Please start over.');
+        }
+        
         const topThreeInterests = selectedInterests.slice(0, 3);
-        await api.saveInterests(topThreeInterests);
+        
+        // Complete the Google signup - this creates the account
+        const { data } = await api.googleSignUpComplete(tempToken, username, topThreeInterests);
+        
+        // Clear temp storage
+        localStorage.removeItem('googleSignupTemp');
+        
+        // Login with the new account
+        login(data, true);
+        setNewUser(false);
+        
+        // Navigate to main app
+        navigate('/');
+      } else {
+        // Regular logged-in user flow - just save interests
+        if (selectedInterests.length > 0) {
+          const topThreeInterests = selectedInterests.slice(0, 3);
+          await api.saveInterests(topThreeInterests);
+        }
+        setNewUser(false);
+        navigate('/');
       }
-      // Clear the new user flag since they've completed interests
-      setNewUser(false);
-      // Navigate to main app
-      navigate('/');
     } catch (error) {
-      // Still navigate even if saving fails
-      setNewUser(false);
-      navigate('/');
+      console.error('Error completing signup:', error);
+      
+      // Check if session expired
+      if (error.response?.status === 401 || error.message?.includes('expired')) {
+        alert('Your signup session has expired. Please sign up again.');
+        localStorage.removeItem('googleSignupTemp');
+        navigate('/signup');
+      } else {
+        // For other errors, try to continue anyway
+        alert('Failed to save your preferences, but you can set them later in settings.');
+        localStorage.removeItem('googleSignupTemp');
+        setNewUser(false);
+        navigate('/');
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleSkip = () => {
+    // Check if this is a Google signup flow
+    const googleSignupTemp = localStorage.getItem('googleSignupTemp');
+    
+    if (googleSignupTemp) {
+      // Can't skip during Google signup - need to complete it
+      alert('Please select at least one interest to continue, or go back to sign up with email instead.');
+      return;
+    }
+    
     // Clear the new user flag even when skipping
     setNewUser(false);
     navigate('/');
@@ -216,21 +275,27 @@ const InterestsPage = () => {
           >
             <button
               onClick={handleContinue}
-              disabled={selectedInterests.length === 0}
+              disabled={selectedInterests.length === 0 || isLoading}
               className={`
                 flex-1 py-4 px-8 rounded-xl font-bold text-lg transition-all duration-300 transform hover:scale-105
-                ${selectedInterests.length > 0 
+                ${selectedInterests.length > 0 && !isLoading
                   ? 'bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-600/25' 
                   : 'bg-gray-600 text-gray-400 cursor-not-allowed opacity-70'
                 }
               `}
             >
-              {selectedInterests.length === 0 ? 'Select at least 1 interest' : 'Continue to MovieSocial'}
+              {isLoading 
+                ? 'Creating your account...' 
+                : selectedInterests.length === 0 
+                ? 'Select at least 1 interest' 
+                : 'Continue to MovieSocial'
+              }
             </button>
 
             <button
               onClick={handleSkip}
-              className="py-3 px-6 text-gray-300 hover:text-white font-medium transition-colors duration-300 underline hover:no-underline"
+              disabled={isLoading}
+              className="py-3 px-6 text-gray-300 hover:text-white font-medium transition-colors duration-300 underline hover:no-underline disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Skip for now
             </button>

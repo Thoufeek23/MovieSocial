@@ -7,10 +7,8 @@ const jwt = require('jsonwebtoken');
 const path = require('path');
 const logger = require('./utils/logger');
 const badges = require('./utils/badges');
-
-
-const http = require('http'); // Add this
-const { Server } = require('socket.io'); // Add this
+const http = require('http');
+const { Server } = require('socket.io'); 
 
 // Add global error handlers to aid debugging in hosted environments
 process.on('uncaughtException', (err) => {

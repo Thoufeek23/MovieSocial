@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { AuthContext } from '../context/AuthContext';
@@ -13,6 +13,15 @@ const UsernamePage = () => {
   const [isAvailable, setIsAvailable] = useState(null);
   const { user, setUser } = useContext(AuthContext);
   const navigate = useNavigate();
+
+  // Check if user has access to this page
+  useEffect(() => {
+    const googleSignupTemp = localStorage.getItem('googleSignupTemp');
+    // If no temp signup data and no logged-in user, redirect to signup
+    if (!googleSignupTemp && !user) {
+      navigate('/signup');
+    }
+  }, [user, navigate]);
 
   const checkUsernameAvailability = async (value) => {
     if (!value || value.trim().length < 5 || value.trim().length > 15) {
@@ -71,11 +80,25 @@ const UsernamePage = () => {
 
     setIsLoading(true);
     try {
-      const { data } = await api.updateUsername(username.trim());
-      // Update user context with new username
-      setUser({ ...user, username: data.username });
-      // Navigate to interests
-      navigate('/interests');
+      // Check if this is a Google signup flow (temp token exists)
+      const googleSignupTemp = localStorage.getItem('googleSignupTemp');
+      
+      if (googleSignupTemp) {
+        // Google signup flow - just store username and move to interests
+        const tempData = JSON.parse(googleSignupTemp);
+        tempData.username = username.trim();
+        localStorage.setItem('googleSignupTemp', JSON.stringify(tempData));
+        navigate('/interests');
+      } else if (user) {
+        // Regular logged-in user updating username
+        const { data } = await api.updateUsername(username.trim());
+        setUser({ ...user, username: data.username });
+        navigate('/interests');
+      } else {
+        // No temp token and no user - shouldn't happen
+        setError('Session expired. Please sign up again.');
+        setTimeout(() => navigate('/signup'), 2000);
+      }
     } catch (err) {
       setError(err.response?.data?.msg || 'Failed to set username.');
       console.error(err);

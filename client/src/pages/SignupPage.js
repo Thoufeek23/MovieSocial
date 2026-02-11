@@ -38,17 +38,18 @@ const SignupPage = () => {
       setIsLoading(true);
       setError('');
       try {
-        const { data } = await api.googleSignUp(response.credential);
-        login(data, data.isNewUser);
-        setShowCurtains(true);
-        setTimeout(() => {
-          if (data.isNewUser) {
-            navigate('/username'); // Redirect to username page for new Google users
-          } else {
-            navigate('/');
-          }
-          setIsLoading(false);
-        }, 100);
+        // Call init endpoint - doesn't create account yet
+        const { data } = await api.googleSignUpInit(response.credential);
+        
+        // Store temporary token and Google data in localStorage
+        localStorage.setItem('googleSignupTemp', JSON.stringify({
+          tempToken: data.tempToken,
+          googleData: data.googleData
+        }));
+        
+        // Navigate to username page immediately
+        navigate('/username');
+        setIsLoading(false);
       } catch (err) {
         const errorMsg = err?.response?.data?.msg || 'Google Sign Up failed. Please try again.';
         const accountExists = err?.response?.data?.accountExists;
@@ -65,7 +66,7 @@ const SignupPage = () => {
         }
       }
     }
-  }, [login, navigate, setShowCurtains]);
+  }, [navigate]);
 
   // Initialize Google Sign In button
   useEffect(() => {
@@ -81,7 +82,6 @@ const SignupPage = () => {
           { 
             theme: 'filled_black',
             size: 'large',
-            width: '100%',
             text: 'continue_with',
             shape: 'rectangular'
           }
@@ -247,7 +247,13 @@ const SignupPage = () => {
 
         {signupStep === 1 && (
           <>
-            {/* Google Sign In Button - Primary Method */}
+            {/* Maintenance Notice */}
+            <motion.div variants={itemVariants} className="bg-yellow-500/20 border border-yellow-500/40 text-yellow-200 p-4 rounded-lg text-center mb-6">
+              <p className="font-semibold mb-1">⚠️ Traditional Sign Up Under Maintenance</p>
+              <p className="text-sm">Please use Google Sign Up below for authentication.</p>
+            </motion.div>
+
+            {/* Google Sign Up Button - Primary Method */}
             <motion.div variants={itemVariants} className="mb-6">
               <div id="googleSignUpButton" className="flex justify-center"></div>
             </motion.div>
@@ -262,26 +268,26 @@ const SignupPage = () => {
         )}
 
         {signupStep === 1 && (
-        <form onSubmit={handleSubmit} className="space-y-6 max-w-md">
+        <form onSubmit={handleSubmit} className="space-y-6 max-w-md opacity-50 pointer-events-none">
           <motion.div variants={itemVariants} className="relative">
-            <input id="name" name="name" type="text" onChange={handleChange} className="peer h-12 w-full border-b-2 border-gray-600 text-white bg-transparent placeholder-transparent focus:outline-none focus:border-primary transition-colors" placeholder="Full name" required />
+            <input id="name" name="name" type="text" onChange={handleChange} className="peer h-12 w-full border-b-2 border-gray-600 text-white bg-transparent placeholder-transparent focus:outline-none focus:border-primary transition-colors" placeholder="Full name" disabled required />
             <label htmlFor="name" className="absolute left-0 -top-4 text-gray-400 text-sm transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-placeholder-shown:top-3 peer-focus:-top-4 peer-focus:text-primary peer-focus:text-sm">Full name</label>
           </motion.div>
 
           <motion.div variants={itemVariants} className="relative">
-            <input id="age" name="age" type="text" inputMode="numeric" pattern="[0-9]*" onChange={handleChange} className="peer h-12 w-full border-b-2 border-gray-600 text-white bg-transparent placeholder-transparent focus:outline-none focus:border-primary transition-colors" placeholder="Age" required />
+            <input id="age" name="age" type="text" inputMode="numeric" pattern="[0-9]*" onChange={handleChange} className="peer h-12 w-full border-b-2 border-gray-600 text-white bg-transparent placeholder-transparent focus:outline-none focus:border-primary transition-colors" placeholder="Age" disabled required />
             <label htmlFor="age" className="absolute left-0 -top-4 text-gray-400 text-sm transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-placeholder-shown:top-3 peer-focus:-top-4 peer-focus:text-primary peer-focus:text-sm">Age</label>
           </motion.div>
 
           <motion.div variants={itemVariants} className="relative">
-            <input id="username" name="username" type="text" onChange={handleChange} className="peer h-12 w-full border-b-2 border-gray-600 text-white bg-transparent placeholder-transparent focus:outline-none focus:border-primary transition-colors" placeholder="Username" required />
+            <input id="username" name="username" type="text" onChange={handleChange} className="peer h-12 w-full border-b-2 border-gray-600 text-white bg-transparent placeholder-transparent focus:outline-none focus:border-primary transition-colors" placeholder="Username" disabled required />
             <label htmlFor="username" className="absolute left-0 -top-4 text-gray-400 text-sm transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-placeholder-shown:top-3 peer-focus:-top-4 peer-focus:text-primary peer-focus:text-sm">Username</label>
           </motion.div>
 
 
 
           <motion.div variants={itemVariants} className="relative">
-            <input id="email" name="email" type="email" onChange={handleChange} className="peer h-12 w-full border-b-2 border-gray-600 text-white bg-transparent placeholder-transparent focus:outline-none focus:border-primary transition-colors" placeholder="Email" required />
+            <input id="email" name="email" type="email" onChange={handleChange} className="peer h-12 w-full border-b-2 border-gray-600 text-white bg-transparent placeholder-transparent focus:outline-none focus:border-primary transition-colors" placeholder="Email" disabled required />
             <label htmlFor="email" className="absolute left-0 -top-4 text-gray-400 text-sm transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-placeholder-shown:top-3 peer-focus:-top-4 peer-focus:text-primary peer-focus:text-sm">Email</label>
           </motion.div>
 
@@ -294,6 +300,7 @@ const SignupPage = () => {
               onChange={handleChange}
               className="peer h-12 w-full border-b-2 border-gray-600 text-white bg-transparent placeholder-transparent focus:outline-none focus:border-primary transition-colors pr-10"
               placeholder="Password"
+              disabled
               required
             />
             <button
@@ -325,12 +332,12 @@ const SignupPage = () => {
           </motion.div>
 
           <motion.div variants={itemVariants} className="relative">
-            <input id="confirmPassword" name="confirmPassword" type="password" onChange={handleChange} className="peer h-12 w-full border-b-2 border-gray-600 text-white bg-transparent placeholder-transparent focus:outline-none focus:border-primary transition-colors" placeholder="Retype password" required />
+            <input id="confirmPassword" name="confirmPassword" type="password" onChange={handleChange} className="peer h-12 w-full border-b-2 border-gray-600 text-white bg-transparent placeholder-transparent focus:outline-none focus:border-primary transition-colors" placeholder="Retype password" disabled required />
             <label htmlFor="confirmPassword" className="absolute left-0 -top-4 text-gray-400 text-sm transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-placeholder-shown:top-3 peer-focus:-top-4 peer-focus:text-primary peer-focus:text-sm">Retype password</label>
           </motion.div>
 
           <motion.div variants={itemVariants}>
-            <button type="submit" disabled={isLoading} className="w-full bg-primary hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300 disabled:bg-gray-500">{isLoading ? 'Sending OTP...' : 'Continue'}</button>
+            <button type="submit" disabled={true} className="w-full bg-gray-600 text-gray-400 font-bold py-3 px-4 rounded-lg cursor-not-allowed">Sign Up (Under Maintenance)</button>
           </motion.div>
         </form>
         )}
